@@ -1,0 +1,611 @@
+@import "tailwindcss";
+
+/* BluInn's royal-blue brand scale, registered so `bg-brand-600`,
+   `text-brand-700` and friends exist as utilities. */
+@theme {
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dde9fe;
+  --color-brand-200: #c2d7fd;
+  --color-brand-300: #98bbfa;
+  --color-brand-400: #6596f4;
+  --color-brand-500: #3d74ec;
+  --color-brand-600: #2659d8;
+  --color-brand-700: #1f47b4;
+  --color-brand-800: #1f3d91;
+  --color-brand-900: #1d3673;
+  --color-brand-950: #142249;
+}
+
+/* Inter everywhere — the root layout loads it as --font-admin-sans. */
+@layer base {
+  :root {
+    --font-sans: var(--font-admin-sans), system-ui, sans-serif;
+  }
+}
+
+.font-sans {
+  font-family: var(--font-admin-sans), system-ui, sans-serif;
+}
+
+/* ===========================================================================
+   Motion
+   Disabled wholesale for anyone who asks for reduced motion — see the media
+   query at the end of this file.
+   =========================================================================== */
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.animate-slide-down { animation: slideDown 0.3s ease-out both; }
+
+/* Route transitions, played by template.tsx, which Next gives a fresh key on
+   every navigation. `.admin-theme .page-enter` below sets the timing. */
+.page-enter {
+  animation: adminEnter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Shared shimmer for any loading placeholder. */
+.shimmer {
+  background: linear-gradient(90deg, #eef1f5 25%, #f5f7fa 50%, #eef1f5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Consistent, visible keyboard focus. */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ===========================================================================
+   Admin theme
+   Scoped to `.admin-theme`, which wraps every screen (the protected shell,
+   sign-in, 2FA and security pages).
+
+   The admin markup is written with Tailwind's stock palette names — `slate`
+   for neutrals, `yellow` for the accent, and emerald / lime / rose / amber /
+   blue / violet for status. Tailwind v4 compiles each of those utilities to a
+   `var(--color-*)` lookup, so redefining the variables here re-themes every
+   page without renaming a class:
+
+     slate, stone, gray  → cool neutral greys on a pale grey canvas
+                           (50 #F5F7FA canvas, 200 #E3E8EE hairline,
+                           500 #637083 muted text, 900 #121722 ink)
+     yellow              → the accent, an alias of the royal-blue `brand`
+                           scale (600 #2659D8 primary button, 700 #1F47B4
+                           links). Historic name — pages already say
+                           `text-yellow-700` for links, so they turn blue here.
+     emerald, green      → success and the "all clear" states
+                           (500 #53AC58, 100 #EAF7EC success pill)
+     lime                → the reference's lime: "confirmed / arriving" pills
+                           and the lime chart swatch
+     amber               → warm yellow-orange: pending, warnings, the revenue
+                           line (500 #ECB53D)
+     rose, red           → soft red (errors, cancelled; 500 #D36C5F)
+     orange              → peach (no-show)
+     blue, sky, indigo   → muted blue (info)
+     violet, purple      → lavender (waitlist, misc.)
+
+   On top of the palette, each top-level nav section (Front Office,
+   Operations, Commercial, People, Admin) has its own tint, set under
+   `[data-group]` below and read by the hero banner, the sidebar and the
+   stat cards. See app/(bluinn)/DESIGN.md for how the tokens are meant to be
+   used.
+   =========================================================================== */
+.admin-theme {
+  /* One typeface. Headings and figures use the same Inter at a heavier
+     weight with tighter tracking, so the display variable points at it. */
+  --font-admin-display: var(--font-admin-sans);
+
+  /* Neutrals */
+  --color-slate-50: #f5f7fa;
+  --color-slate-100: #eef1f5;
+  --color-slate-200: #e3e8ee;
+  --color-slate-300: #cdd5df;
+  --color-slate-400: #94a0b0;
+  --color-slate-500: #637083;
+  --color-slate-600: #4a5566;
+  --color-slate-700: #343d4b;
+  --color-slate-800: #212833;
+  --color-slate-900: #121722;
+  --color-slate-950: #0a0e15;
+  --color-stone-50: var(--color-slate-50);
+  --color-stone-100: var(--color-slate-100);
+  --color-stone-200: var(--color-slate-200);
+  --color-stone-300: var(--color-slate-300);
+  --color-stone-400: var(--color-slate-400);
+  --color-stone-500: var(--color-slate-500);
+  --color-stone-600: var(--color-slate-600);
+  --color-stone-700: var(--color-slate-700);
+  --color-stone-800: var(--color-slate-800);
+  --color-stone-900: var(--color-slate-900);
+  --color-gray-50: var(--color-slate-50);
+  --color-gray-100: var(--color-slate-100);
+  --color-gray-200: var(--color-slate-200);
+  --color-gray-300: var(--color-slate-300);
+  --color-gray-400: var(--color-slate-400);
+  --color-gray-500: var(--color-slate-500);
+  --color-gray-600: var(--color-slate-600);
+  --color-gray-700: var(--color-slate-700);
+  --color-gray-800: var(--color-slate-800);
+  --color-gray-900: var(--color-slate-900);
+
+  /* Accent — royal blue (historic name `yellow`; same scale as `brand`) */
+  --color-yellow-50: var(--color-brand-50);
+  --color-yellow-100: var(--color-brand-100);
+  --color-yellow-200: var(--color-brand-200);
+  --color-yellow-300: var(--color-brand-300);
+  --color-yellow-400: var(--color-brand-400);
+  --color-yellow-500: var(--color-brand-500);
+  --color-yellow-600: var(--color-brand-600);
+  --color-yellow-700: var(--color-brand-700);
+  --color-yellow-800: var(--color-brand-800);
+  --color-yellow-900: var(--color-brand-900);
+  --color-yellow-950: var(--color-brand-950);
+
+  /* Success and charts — green */
+  --color-emerald-50: #f4fcf5;
+  --color-emerald-100: #eaf7ec;
+  --color-emerald-200: #d9f2e5;
+  --color-emerald-300: #b5e0bb;
+  --color-emerald-400: #6db76f;
+  --color-emerald-500: #53ac58;
+  --color-emerald-600: #3f8f45;
+  --color-emerald-700: #2e7035;
+  --color-emerald-800: #1b5424;
+  --color-emerald-900: #1c2c1d;
+  --color-emerald-950: #111c12;
+  --color-green-50: var(--color-emerald-50);
+  --color-green-100: var(--color-emerald-100);
+  --color-green-200: var(--color-emerald-200);
+  --color-green-300: var(--color-emerald-300);
+  --color-green-400: var(--color-emerald-400);
+  --color-green-500: var(--color-emerald-500);
+  --color-green-600: var(--color-emerald-600);
+  --color-green-700: var(--color-emerald-700);
+  --color-green-800: var(--color-emerald-800);
+  --color-green-900: var(--color-emerald-900);
+
+  /* Lime — "confirmed / arriving" */
+  --color-lime-50: #fafdea;
+  --color-lime-100: #f5fcd0;
+  --color-lime-200: #edf8ae;
+  --color-lime-300: #e2f482;
+  --color-lime-400: #dbf35d;
+  --color-lime-500: #c3dd3a;
+  --color-lime-600: #8ea21c;
+  --color-lime-700: #677617;
+  --color-lime-800: #4a5512;
+  --color-lime-900: #2f3509;
+
+  /* Danger — soft red */
+  --color-rose-50: #fdf3f2;
+  --color-rose-100: #fbe4e1;
+  --color-rose-200: #f5cbc6;
+  --color-rose-300: #eca79f;
+  --color-rose-400: #df8175;
+  --color-rose-500: #d36c5f;
+  --color-rose-600: #b8503f;
+  --color-rose-700: #943f32;
+  --color-rose-800: #74332a;
+  --color-rose-900: #5b2b25;
+  --color-red-50: var(--color-rose-50);
+  --color-red-100: var(--color-rose-100);
+  --color-red-200: var(--color-rose-200);
+  --color-red-300: var(--color-rose-300);
+  --color-red-400: var(--color-rose-400);
+  --color-red-500: var(--color-rose-500);
+  --color-red-600: var(--color-rose-600);
+  --color-red-700: var(--color-rose-700);
+  --color-red-800: var(--color-rose-800);
+  --color-red-900: var(--color-rose-900);
+
+  /* Warning / pending — warm amber */
+  --color-amber-50: #fffaeb;
+  --color-amber-100: #fef5da;
+  --color-amber-200: #fbe6ad;
+  --color-amber-300: #f6d27a;
+  --color-amber-400: #f0b64c;
+  --color-amber-500: #ecb53d;
+  --color-amber-600: #c98f1b;
+  --color-amber-700: #9a6a10;
+  --color-amber-800: #72500f;
+  --color-amber-900: #4d360c;
+
+  /* No-show — peach */
+  --color-orange-50: #fff6ef;
+  --color-orange-100: #feead9;
+  --color-orange-200: #fbd2b1;
+  --color-orange-300: #f5b184;
+  --color-orange-400: #ec8d57;
+  --color-orange-500: #de6f38;
+  --color-orange-600: #bd5627;
+  --color-orange-700: #974424;
+  --color-orange-800: #793822;
+  --color-orange-900: #622f1f;
+
+  /* Info — muted blue */
+  --color-blue-50: #f3f7fb;
+  --color-blue-100: #e3edf7;
+  --color-blue-200: #c9dcee;
+  --color-blue-300: #a0c1e0;
+  --color-blue-400: #6f9fcc;
+  --color-blue-500: #4a81b5;
+  --color-blue-600: #3a6896;
+  --color-blue-700: #305478;
+  --color-blue-800: #2a4662;
+  --color-blue-900: #243a51;
+  --color-sky-50: var(--color-blue-50);
+  --color-sky-100: var(--color-blue-100);
+  --color-sky-200: var(--color-blue-200);
+  --color-sky-300: var(--color-blue-300);
+  --color-sky-400: var(--color-blue-400);
+  --color-sky-500: var(--color-blue-500);
+  --color-sky-600: var(--color-blue-600);
+  --color-sky-700: var(--color-blue-700);
+  --color-sky-800: var(--color-blue-800);
+  --color-sky-900: var(--color-blue-900);
+  --color-indigo-50: var(--color-blue-50);
+  --color-indigo-100: var(--color-blue-100);
+  --color-indigo-200: var(--color-blue-200);
+  --color-indigo-300: var(--color-blue-300);
+  --color-indigo-400: var(--color-blue-400);
+  --color-indigo-500: var(--color-blue-500);
+  --color-indigo-600: var(--color-blue-600);
+  --color-indigo-700: var(--color-blue-700);
+  --color-indigo-800: var(--color-blue-800);
+  --color-indigo-900: var(--color-blue-900);
+
+  /* Misc — lavender */
+  --color-violet-50: #f7f5fd;
+  --color-violet-100: #eeeafb;
+  --color-violet-200: #ddd6f6;
+  --color-violet-300: #c3b7ee;
+  --color-violet-400: #a18fe2;
+  --color-violet-500: #836cd3;
+  --color-violet-600: #6c52bb;
+  --color-violet-700: #58429a;
+  --color-violet-800: #49397d;
+  --color-violet-900: #3d3266;
+  --color-purple-50: var(--color-violet-50);
+  --color-purple-100: var(--color-violet-100);
+  --color-purple-200: var(--color-violet-200);
+  --color-purple-300: var(--color-violet-300);
+  --color-purple-400: var(--color-violet-400);
+  --color-purple-500: var(--color-violet-500);
+  --color-purple-600: var(--color-violet-600);
+  --color-purple-700: var(--color-violet-700);
+  --color-purple-800: var(--color-violet-800);
+  --color-purple-900: var(--color-violet-900);
+
+  font-family: var(--font-admin-sans), system-ui, sans-serif;
+  color: var(--color-slate-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin-theme ::selection {
+  background: var(--color-emerald-200);
+  color: var(--color-slate-900);
+}
+
+/* Headings: Inter, semibold, tight. Unlayered, so these win over the size
+   and weight utilities the pages set and give every page one scale. */
+.admin-theme :is(h1, h2, h3) {
+  font-family: var(--font-admin-display), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--color-slate-900);
+}
+.admin-theme h1 {
+  font-size: 1.625rem;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+.admin-theme h2 {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.admin-theme h3 {
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+/* Headline figures (KPI values, wordmark). */
+.admin-theme .admin-display {
+  font-family: var(--font-admin-display), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* Small uppercase section labels, as in the sidebar groups. */
+.admin-theme .admin-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-slate-400);
+}
+
+/* Figures align in every table and stat. */
+.admin-theme :is(table, .admin-display, .tabular-nums) {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Surfaces. Cards are white on the pale grey canvas, with a hairline and a
+   soft two-step lift. `shadow-sm` is the card shadow; the larger steps are
+   for floating elements. */
+.admin-theme .shadow-sm {
+  --tw-shadow: 0 1px 2px 0 rgb(18 23 34 / 0.04), 0 1px 3px 0 rgb(18 23 34 / 0.05);
+}
+.admin-theme :is(.shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+  --tw-shadow: 0 14px 34px -12px rgb(18 23 34 / 0.18), 0 2px 6px -2px rgb(18 23 34 / 0.07);
+}
+
+/* Hairlines. Row dividers written as slate-100 would all but vanish on
+   white, so every divider and border in the lightest greys resolves to the
+   one hairline. */
+.admin-theme :is(.border-slate-100, .divide-slate-100 > :not(:last-child)) {
+  border-color: var(--color-slate-200);
+}
+
+/* Pills are solid tinted chips: any border class on them is dropped so the
+   tint alone carries the shape. */
+.admin-theme .admin-pill {
+  border-color: transparent;
+}
+
+/* Loading placeholders in the admin palette. */
+.admin-theme .shimmer {
+  background: linear-gradient(90deg, #eef1f5 25%, #f5f7fa 50%, #eef1f5 75%);
+  background-size: 200% 100%;
+}
+
+/* Motion. Route content fades up a touch on every navigation (the shared
+   `page-enter` wrapper in template.tsx). The reduced-motion rule below turns
+   all of it off. */
+.admin-theme .page-enter {
+  animation: adminEnter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes adminEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Focus: a blue outline on links and buttons; inputs show their own ring. */
+.admin-theme :where(a, button, summary):focus-visible {
+  outline-color: var(--color-brand-600);
+}
+.admin-theme :where(input, select, textarea):focus-visible {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Section tints
+   Each top-level nav section has its own colour. GroupScope sets
+   `data-group` from the current path; the hero banner, the sidebar rail and
+   the stat cards read these variables, so a server-rendered page never has
+   to say which section it is in. Front Office (blue) is the default, which
+   also covers the sign-in screens.
+     --g-*        tint steps for icon tiles, accent bars and the active nav
+     --hero-*     the banner gradient and its shadow
+   --------------------------------------------------------------------------- */
+.admin-theme,
+.admin-theme [data-group="front"] {
+  --g-50: #eff5ff;
+  --g-100: #dde9fe;
+  --g-200: #c2d7fd;
+  --g-500: #3d74ec;
+  --g-600: #2659d8;
+  --g-700: #1f47b4;
+  --g-800: #1f3d91;
+  --hero-from: #1a43ad;
+  --hero-via: #2659d8;
+  --hero-to: #4a86ec;
+  --hero-shadow: rgb(31 71 180 / 0.55);
+}
+.admin-theme [data-group="ops"] {
+  --g-50: #edfaf8;
+  --g-100: #d3f2ee;
+  --g-200: #a9e3dc;
+  --g-500: #14958e;
+  --g-600: #0f7d78;
+  --g-700: #0e6662;
+  --g-800: #0f514e;
+  --hero-from: #0b5a62;
+  --hero-via: #11807f;
+  --hero-to: #20a198;
+  --hero-shadow: rgb(14 102 98 / 0.55);
+}
+.admin-theme [data-group="commercial"] {
+  --g-50: #f5f3ff;
+  --g-100: #ebe6fd;
+  --g-200: #d8cffb;
+  --g-500: #7356e6;
+  --g-600: #5f42d0;
+  --g-700: #4f35ae;
+  --g-800: #412d8c;
+  --hero-from: #4730b8;
+  --hero-via: #6247d8;
+  --hero-to: #8b6ef0;
+  --hero-shadow: rgb(79 53 174 / 0.55);
+}
+.admin-theme [data-group="people"] {
+  --g-50: #fff7ed;
+  --g-100: #ffead2;
+  --g-200: #fdd3a6;
+  --g-500: #e3832e;
+  --g-600: #c96c1e;
+  --g-700: #a3551a;
+  --g-800: #82451a;
+  --hero-from: #a9501a;
+  --hero-via: #cf6f24;
+  --hero-to: #ea9a45;
+  --hero-shadow: rgb(163 85 26 / 0.5);
+}
+.admin-theme [data-group="admin"] {
+  --g-50: #f2f4f9;
+  --g-100: #e4e8f2;
+  --g-200: #cbd2e4;
+  --g-500: #5a6890;
+  --g-600: #485579;
+  --g-700: #3a4563;
+  --g-800: #2f3850;
+  --hero-from: #232d48;
+  --hero-via: #36446b;
+  --hero-to: #56669a;
+  --hero-shadow: rgb(35 45 72 / 0.55);
+}
+
+/* The top bar: one brand gradient on every section. */
+.admin-theme .admin-topbar {
+  background: linear-gradient(90deg, #173c9f 0%, #2252c9 55%, #2b62dc 100%);
+}
+
+/* ---------------------------------------------------------------------------
+   Hero banner (PageHeader)
+   A gradient card in the section's tint with two faint rings in the corner.
+   Glass surfaces (`admin-glass`) carry the chips, stat tiles and secondary
+   buttons that sit on it.
+   --------------------------------------------------------------------------- */
+.admin-theme .admin-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1rem;
+  color: #fff;
+  background: linear-gradient(125deg, var(--hero-from) 0%, var(--hero-via) 55%, var(--hero-to) 100%);
+  box-shadow: 0 18px 36px -24px var(--hero-shadow), 0 2px 6px -2px rgb(18 23 34 / 0.12);
+}
+.admin-theme .admin-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: -140px;
+  bottom: -260px;
+  width: 560px;
+  height: 560px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    transparent 52%,
+    rgb(255 255 255 / 0.07) 52.4%,
+    rgb(255 255 255 / 0.07) 60%,
+    transparent 60.4%,
+    transparent 72%,
+    rgb(255 255 255 / 0.05) 72.4%,
+    rgb(255 255 255 / 0.05) 80%,
+    transparent 80.4%
+  );
+}
+.admin-theme .admin-hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -120px;
+  top: -160px;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.13), transparent 65%);
+}
+.admin-theme .admin-hero :is(h1, h2, h3) {
+  color: #fff;
+}
+.admin-theme .admin-hero h1 {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+}
+.admin-theme .admin-glass {
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.admin-theme a.admin-glass:hover {
+  background: rgb(255 255 255 / 0.2);
+  border-color: rgb(255 255 255 / 0.36);
+}
+
+/* Actions handed to PageHeader were written for a white page. On the hero
+   the primary button turns white with section-coloured text, secondaries turn
+   to glass, and a plain text link or note turns white. A segmented control
+   (the tape chart's span picker) keeps its own light track. */
+.admin-theme .admin-hero .admin-btn {
+  background: #fff;
+  color: var(--g-700);
+  border-color: transparent;
+}
+.admin-theme .admin-hero .admin-btn:hover {
+  background: var(--g-50);
+  color: var(--g-800);
+}
+.admin-theme .admin-hero .admin-btn-secondary {
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.3);
+  box-shadow: none;
+}
+.admin-theme .admin-hero .admin-btn-secondary:hover {
+  background: rgb(255 255 255 / 0.2);
+  border-color: rgb(255 255 255 / 0.45);
+  color: #fff;
+}
+.admin-theme .admin-hero-actions > :is(a, span, p)[class*="text-"]:not(.admin-btn, .admin-btn-secondary) {
+  color: rgb(255 255 255 / 0.85);
+}
+.admin-theme .admin-hero-actions > a[class*="text-"]:not(.admin-btn, .admin-btn-secondary):hover {
+  color: #fff;
+}
+.admin-theme .admin-hero-actions .bg-slate-100 {
+  background: rgb(255 255 255 / 0.9);
+}
+
+@media print {
+  .admin-theme {
+    color: #000;
+  }
+  /* The hero prints as a plain title and description. */
+  .admin-theme .admin-hero {
+    background: none;
+    color: #000;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+  }
+  .admin-theme .admin-hero::before,
+  .admin-theme .admin-hero::after {
+    display: none;
+  }
+  .admin-theme .admin-hero :is(h1, h2, h3, p) {
+    color: #000;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Respect the user's motion preference: every animation and transition is
+   reduced to a no-op.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
