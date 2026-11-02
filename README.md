@@ -8,7 +8,7 @@ GSTIN, invoice prefix) lives in the database and is edited under **Settings**, s
 belongs to a particular hotel.
 
 BluInn is a staff application served from the site root (`/`, `/login`, `/bookings`, …). It has no
-public, guest-facing website; a hotel's own website is a separate project.
+public, guest-facing website; a hotel's own website is a separate project
 
 ---
 
