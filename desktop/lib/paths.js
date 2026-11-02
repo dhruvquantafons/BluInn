@@ -8,11 +8,16 @@
 const os = require("node:os");
 const path = require("node:path");
 
-// Outside Electron (scripts/smoke.js, run with ELECTRON_RUN_AS_NODE) there is
-// no `app`; BLUINN_RESOURCES and BLUINN_DATA say where things are.
+// Outside Electron (scripts/smoke.js, scripts/dev-stack.js) there is no `app`;
+// BLUINN_RESOURCES and BLUINN_DATA say where things are. Plain Node may not
+// have the electron package's binary at all, which is fine here.
 const { app } = (() => {
-  const electron = require("electron");
-  return typeof electron === "object" ? electron : {};
+  try {
+    const electron = require("electron");
+    return typeof electron === "object" ? electron : {};
+  } catch {
+    return {};
+  }
 })();
 
 const isWindows = process.platform === "win32";

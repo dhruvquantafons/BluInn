@@ -51,6 +51,7 @@ next-env.d.ts
 /desktop/dist
 /desktop/.secrets
 /desktop/demo.env
+/desktop/.devdata
 # ...except the desktop demo's licence PUBLIC key, which the app needs. The
 # private key lives outside the repo (~/.bluinn-license).
 !/desktop/license-public.pem
