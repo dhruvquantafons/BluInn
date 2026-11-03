@@ -13,8 +13,14 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 // allowed. Vercel builds are unaffected.
 const desktopDemo = process.env.DEMO_BUILD === "1";
 
+// Live updates come from Supabase Realtime, which a Neon deployment does not
+// have; LiveRefresh polls instead. Decided here because the browser cannot
+// see DATABASE_URL, and inlined into the client bundle at build time.
+const realtime = !process.env.DATABASE_URL && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+
 const nextConfig: NextConfig = {
   ...(desktopDemo ? { output: "standalone" as const } : {}),
+  env: { BLUINN_REALTIME: realtime ? "1" : "0" },
   experimental: {
     serverActions: {
       // Room photos (5 MB) and check-in ID scans (up to three of 5 MB each,

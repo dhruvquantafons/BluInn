@@ -19,9 +19,13 @@ export default function LiveRefresh({ tables = ["bookings", "rooms", "room_block
   const key = tables.join(",");
 
   useEffect(() => {
-    // The Windows desktop demo has no Realtime server; it refreshes on a timer.
-    if (process.env.NEXT_PUBLIC_LOCAL_DEMO === "1") {
-      const interval = setInterval(() => router.refresh(), 15000);
+    // No Realtime server — the Windows desktop demo, and Neon deployments
+    // (see next.config.ts) — so refresh on a timer instead, only while the
+    // tab is on screen.
+    if (process.env.NEXT_PUBLIC_LOCAL_DEMO === "1" || process.env.BLUINN_REALTIME !== "1") {
+      const interval = setInterval(() => {
+        if (document.visibilityState === "visible") router.refresh();
+      }, 15000);
       return () => clearInterval(interval);
     }
 

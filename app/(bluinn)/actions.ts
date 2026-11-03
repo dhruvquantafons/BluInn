@@ -13,6 +13,7 @@ import { parseTaxSlabs } from "../lib/tax";
 import { LANGUAGES } from "../lib/types";
 import { isDemoTwoFactor, clearDemoVerified } from "../lib/two-factor";
 import { type ActionState, str, num, int, bool, oneOf } from "./form-utils";
+import { hasServiceAccess } from "../lib/supabase/config";
 
 // ── Staff ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export async function createStaffMember(_prev: ActionState, fd: FormData): Promi
   if (problems.length) return { error: describePasswordProblems(problems) };
   if (!(await roleExists(role))) return { error: "Choose a role." };
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!hasServiceAccess()) {
     return { error: "SUPABASE_SERVICE_ROLE_KEY is not set, so accounts cannot be created from here." };
   }
 
@@ -105,7 +106,7 @@ export async function deleteStaffMember(_prev: ActionState, fd: FormData): Promi
   const id = str(fd, "id");
 
   if (id === session.staff.id) return { error: "You cannot delete your own account." };
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
+  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
   const { error } = await createAdminClient().auth.admin.deleteUser(id);
   if (error) return { error: error.message };
@@ -123,7 +124,7 @@ export async function resetStaffPassword(_prev: ActionState, fd: FormData): Prom
 
   const problems = passwordProblems(password, { minLength: settings.password_min_length, maxAgeDays: 0 });
   if (problems.length) return { error: describePasswordProblems(problems) };
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
+  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(id, { password });
@@ -137,7 +138,7 @@ export async function resetStaffPassword(_prev: ActionState, fd: FormData): Prom
 export async function resetStaffTwoFactor(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("staff.manage");
   const id = str(fd, "id");
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
+  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
   const admin = createAdminClient();
   if (isDemoTwoFactor()) {

@@ -5,6 +5,7 @@ import { alertVipArrival } from "../../../lib/staff-alerts";
 import { addDays, todayIn } from "../../../lib/dates";
 import { DEFAULT_SETTINGS } from "../../../lib/settings";
 import type { PropertySettings } from "../../../lib/types";
+import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
  * The timed guest messages (SOW Module 16).
@@ -52,7 +53,7 @@ const forMessage = (b: Row) => ({
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The notifications job is not configured." }, { status: 503 });
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });

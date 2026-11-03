@@ -2,6 +2,7 @@ import { createServiceClient } from "../../../lib/supabase/server";
 import { hasBearer } from "../../../lib/bearer";
 import { buildScheduledReport, isDue, sendScheduledReport } from "../../../lib/report-email";
 import type { ReportSchedule } from "../../../lib/types";
+import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
  * Scheduled report job (SOW Module 13: "Scheduled email reports
@@ -18,7 +19,7 @@ import type { ReportSchedule } from "../../../lib/types";
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The scheduled report job is not configured." }, { status: 503 });
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });

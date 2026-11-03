@@ -10,10 +10,11 @@ import type { PropertySettings } from "../lib/types";
 import { isDemoTwoFactor, checkDemoCode, setDemoVerified, clearDemoVerified } from "../lib/two-factor";
 import { safeNextPath } from "../lib/routes";
 import { type ActionState, str } from "./form-utils";
+import { hasServiceAccess } from "../lib/supabase/config";
 
 /** Settings readable before anyone is signed in, via the service role. */
 async function publicSecuritySettings(): Promise<PropertySettings> {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return DEFAULT_SETTINGS;
+  if (!hasServiceAccess()) return DEFAULT_SETTINGS;
   const { data } = await createServiceClient().from("property_settings").select("*").maybeSingle();
   return data ? ({ ...DEFAULT_SETTINGS, ...data } as PropertySettings) : DEFAULT_SETTINGS;
 }
@@ -31,7 +32,7 @@ export async function signIn(_prev: ActionState, fd: FormData): Promise<ActionSt
 
   const hdrs = await headers();
   const ip = (hdrs.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 64);
-  const tracking = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const tracking = hasServiceAccess();
   const settings = await publicSecuritySettings();
 
   if (tracking) {

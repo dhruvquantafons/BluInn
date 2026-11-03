@@ -1,5 +1,6 @@
 import { createServiceClient } from "../../lib/supabase/server";
 import { hasBearer } from "../../lib/bearer";
+import { hasServiceAccess } from "../../lib/supabase/config";
 
 /**
  * Integration hook for biometric attendance devices (SOW Module 12:
@@ -14,7 +15,7 @@ import { hasBearer } from "../../lib/bearer";
  */
 export async function POST(request: Request) {
   const secret = process.env.ATTENDANCE_API_SECRET;
-  if (!secret || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "Attendance integration is not configured." }, { status: 503 });
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });

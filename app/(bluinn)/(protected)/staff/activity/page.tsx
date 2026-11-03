@@ -9,6 +9,7 @@ import type { Role, Staff } from "../../../../lib/types";
 import { endStaffSessions } from "../../../actions";
 import { Card, EmptyState, PageHeader, SectionTitle, StatCard, Tag, dangerButtonClass, tableHeadClass, fmtDateTime } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
+import { hasServiceAccess } from "../../../../lib/supabase/config";
 
 type Attempt = { email: string; succeeded: boolean; ip: string; attempted_at: string };
 
@@ -30,7 +31,7 @@ export default async function StaffActivityPage() {
   ]);
   // Sign-in attempts are readable only with the service key.
   let attempts: Attempt[] = [];
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (hasServiceAccess()) {
     const { data } = await createServiceClient()
       .from("login_attempts")
       .select("email, succeeded, ip, attempted_at")
@@ -134,7 +135,7 @@ export default async function StaffActivityPage() {
           <SectionTitle>Sign-in attempts · last 7 days</SectionTitle>
         </div>
         {attempts.length === 0 ? (
-          <EmptyState message={process.env.SUPABASE_SERVICE_ROLE_KEY ? "No sign-in attempts." : "Needs the service role key."} />
+          <EmptyState message={hasServiceAccess() ? "No sign-in attempts." : "Needs the service role key."} />
         ) : (
           <ul className="divide-y divide-slate-100 text-sm">
             {attempts.slice(0, 100).map((a, i) => (

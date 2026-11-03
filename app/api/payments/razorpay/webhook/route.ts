@@ -1,5 +1,6 @@
 import { createServiceClient } from "../../../../lib/supabase/server";
 import { verifyWebhookSignature, webhookConfigured, fromPaise } from "../../../../lib/razorpay";
+import { hasServiceAccess } from "../../../../lib/supabase/config";
 
 /**
  * Razorpay webhook (SOW Module 7: online payments).
@@ -33,7 +34,7 @@ interface LinkEntity {
 }
 
 export async function POST(request: Request) {
-  if (!webhookConfigured() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!webhookConfigured() || !hasServiceAccess()) {
     return Response.json({ error: "Payment webhook is not configured." }, { status: 503 });
   }
 

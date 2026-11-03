@@ -2,6 +2,7 @@ import { createServiceClient } from "../../../lib/supabase/server";
 import { hasBearer } from "../../../lib/bearer";
 import { escalateOverdueTickets } from "../../../lib/staff-alerts";
 import { todayIn } from "../../../lib/dates";
+import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
  * Scheduled maintenance job (SOW Module 11): escalates tickets past their
@@ -12,7 +13,7 @@ import { todayIn } from "../../../lib/dates";
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The maintenance job is not configured." }, { status: 503 });
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });

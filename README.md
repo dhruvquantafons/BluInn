@@ -16,7 +16,7 @@ public, guest-facing website; a hotel's own website is a separate project
 
 1. [Module status](#module-status)
 2. [Quick start](#quick-start)
-3. [Supabase setup](#supabase-setup)
+3. [Neon setup](#neon-setup) · [Supabase setup](#supabase-setup)
 4. [Environment variables](#environment-variables)
 5. [Scripts and tests](#scripts-and-tests)
 6. [Project structure](#project-structure)
@@ -84,6 +84,37 @@ Open <http://localhost:3000>. Until Supabase is configured, BluInn shows a setup
 
 ---
 
+## Neon setup
+
+BluInn runs on either backend. With `DATABASE_URL` set it uses a plain Postgres (Neon); otherwise it
+uses Supabase (the Windows desktop build still does).
+
+On Neon there is no PostgREST, Supabase Auth or Storage, so the app provides them itself
+(`app/lib/neon/`). The existing queries, row level security policies and storage policies run
+unchanged:
+
+| Supabase piece | On Neon |
+|---|---|
+| PostgREST (`.from()`, `.rpc()`) | `rest.ts` turns the same requests into SQL, run as `authenticated` with the user's claims, so RLS decides exactly as before |
+| Auth (passwords, sessions, TOTP) | `auth.ts`: `auth.users`, `auth.sessions`, `auth.mfa_factors`; a signed httpOnly cookie |
+| Storage buckets | `storage.ts`: file bytes in `storage.objects`, served by `/api/storage/...` with signed, expiring links for private buckets |
+| Realtime | Not available: open pages refresh every 15 s instead |
+
+```bash
+DATABASE_URL=postgres://… npm run db:migrate          # db/platform.sql, then supabase/migrations
+npm run db:create-admin -- you@hotel.com 'password' "Your Name"
+```
+
+`db:migrate` records what it applied in `bluinn_meta.migrations`, so it is safe to run after every pull.
+It prefers `DATABASE_URL_UNPOOLED` (the direct connection) when set; the app itself uses the pooled
+`DATABASE_URL`. `npx vitest run tests/neon.integration.test.ts` with `NEON_TEST_DATABASE_URL` pointing at
+a throwaway, migrated database checks the whole layer end to end.
+
+Files are stored in the database, so they count towards the Neon plan's storage. Uploads also pass
+through a Vercel function, whose request body limit is 4.5 MB.
+
+---
+
 ## Supabase setup
 
 BluInn uses **its own Supabase project** — never one shared with another product or a hotel's website.
@@ -135,9 +166,12 @@ Set these in `.env.local` locally, and in **Vercel → Settings → Environment 
 
 | Variable | Needed | Purpose |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | **Yes** | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Yes** | Public Supabase key |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | Server-only key: nightly jobs, webhooks, staff accounts, sign-in lockout. Never expose it to the browser. |
+| `DATABASE_URL` | **Neon** | Pooled Neon connection string. Selects the Neon backend. |
+| `DATABASE_URL_UNPOOLED` | Neon, optional | Direct connection string, used by `npm run db:migrate` |
+| `AUTH_SECRET` | **Neon** | 32+ random characters. Signs session cookies, storage links and the demo 2FA cookie. Changing it signs everyone out. |
+| `NEXT_PUBLIC_SUPABASE_URL` | **Supabase** | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Supabase** | Public Supabase key |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Supabase** | Server-only key: nightly jobs, webhooks, staff accounts, sign-in lockout. Never expose it to the browser. |
 | `NEXT_PUBLIC_APP_URL` | Off Vercel | Where this deployment answers, for the links emailed to staff. On Vercel it defaults to the project's production domain; a staging deployment should set its own. |
 | `TWO_FACTOR_MODE` | Before go-live | `demo` (default: every code is `123456`) or `totp` (real authenticator apps) |
 | `DEMO_2FA_CODE` | No | The demo 2FA code (default `123456`) |

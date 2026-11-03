@@ -1,6 +1,6 @@
 import { Database } from "lucide-react";
 
-/** Shown in place of the app until Supabase credentials exist. */
+/** Shown in place of the app until the database is configured. */
 export default function SetupNotice() {
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -13,35 +13,31 @@ export default function SetupNotice() {
           Reservations desk not configured
         </h1>
         <p className="text-sm text-slate-700 leading-relaxed mb-5">
-          BluInn needs a Supabase project before it can run.
+          {process.env.DATABASE_URL
+            ? "DATABASE_URL is set, but AUTH_SECRET is missing or shorter than 32 characters."
+            : "BluInn needs a database before it can run."}
         </p>
 
         <ol className="text-sm text-slate-700 space-y-2.5 list-decimal pl-5 mb-5">
           <li>
-            Create a project at{" "}
+            Create a Postgres database at{" "}
             <a
-              href="https://supabase.com/dashboard"
+              href="https://console.neon.tech"
               target="_blank"
               rel="noopener noreferrer"
               className="text-yellow-700 underline"
             >
-              supabase.com/dashboard
+              console.neon.tech
             </a>
             .
           </li>
           <li>
-            Run every file in{" "}
-            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">supabase/migrations</code>, in order,
-            in the SQL editor.
+            Set <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">DATABASE_URL</code> to its connection string and{" "}
+            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">AUTH_SECRET</code> to a random string of 32+ characters.
           </li>
           <li>
-            Set <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> and{" "}
-            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">SUPABASE_SERVICE_ROLE_KEY</code>.
-          </li>
-          <li>
-            Add your first user under <strong className="font-medium">Authentication → Users</strong>. The
-            first account becomes the administrator.
+            Run <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">npm run db:migrate</code>, then{" "}
+            <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[13px]">npm run db:create-admin -- you@hotel.com &apos;password&apos;</code>.
           </li>
         </ol>
 

@@ -8,7 +8,8 @@ import { TWO_FACTOR_COOKIE, TWO_FACTOR_COOKIE_PATH } from "./session-cookies";
  *
  *   TWO_FACTOR_MODE=demo (the default)  Every code is DEMO_2FA_CODE, "123456"
  *                                       unless set. No authenticator app.
- *   TWO_FACTOR_MODE=totp                Real Supabase TOTP authenticators.
+ *   TWO_FACTOR_MODE=totp                Real TOTP authenticator apps (Supabase
+ *                                       MFA, or app/lib/neon/totp.ts on Neon).
  *
  * DEMO MODE IS NOT SECURITY. Anyone who knows the code passes. It exists so
  * the flow can be shown before staff have authenticator apps; switch to totp
@@ -30,7 +31,7 @@ export function demoCode() {
 }
 
 function secret() {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "pms-demo-2fa";
+  return process.env.AUTH_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "pms-demo-2fa";
 }
 
 function sign(userId: string, expires: number) {

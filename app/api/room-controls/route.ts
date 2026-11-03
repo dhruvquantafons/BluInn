@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServiceClient } from "../../lib/supabase/server";
+import { hasServiceAccess } from "../../lib/supabase/config";
 
 /**
  * Integration hook for in-room controls (SOW Module 5: "DND flagging synced
@@ -13,7 +14,7 @@ import { createServiceClient } from "../../lib/supabase/server";
  */
 export async function POST(request: Request) {
   const secret = process.env.ROOM_CONTROLS_SECRET;
-  if (!secret || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "Room controls integration is not configured." }, { status: 503 });
   }
 

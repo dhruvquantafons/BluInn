@@ -1,6 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { hasSupabaseConfig } from "./app/lib/supabase/config";
+import { hasSupabaseConfig, usesNeon } from "./app/lib/supabase/config";
+import {
+  SESSION_COOKIE,
+  SESSION_REFRESH_SECONDS,
+  SESSION_TTL_SECONDS,
+  decodeSession,
+  encodeSession,
+  sessionCookieOptions,
+} from "./app/lib/neon/session-token";
+import { sessionExists } from "./app/lib/neon/session-check";
 import {
   SUPABASE_COOKIE_PREFIX,
   TWO_FACTOR_COOKIE,
@@ -9,8 +18,9 @@ import {
 import { HOME_PATH, LOGIN_PATH, VERIFY_PATH } from "./app/lib/routes";
 
 /**
- * Refreshes the Supabase session cookie on every page request and bounces
- * signed-out visitors to the login page.
+ * Refreshes the session cookie on every page request and bounces signed-out
+ * visitors to the login page — a Supabase session, or on Neon the app's own
+ * (app/lib/neon/session-token.ts).
  *
  * Next.js 16 renamed the `middleware` convention to `proxy`; Supabase's own
  * docs still show the old name. Authorization is NOT decided here alone —
@@ -22,7 +32,43 @@ export async function proxy(request: NextRequest) {
   if (!hasSupabaseConfig()) return NextResponse.next({ request });
 
   let response = NextResponse.next({ request });
+  let user: { id: string } | null;
+  let authError: unknown;
 
+  if (usesNeon()) {
+    // Neon: a signed cookie whose session row still exists (see
+    // app/lib/neon/session-token.ts). Re-issued once a day so an active
+    // user is never signed out mid-shift.
+    const raw = request.cookies.get(SESSION_COOKIE)?.value;
+    const token = decodeSession(raw);
+    let alive = false;
+    if (token) {
+      try {
+        alive = await sessionExists(token.sid, token.sub);
+      } catch {
+        // Database unreachable: let the page report it rather than signing
+        // everyone out.
+        return response;
+      }
+    }
+    user = alive && token ? { id: token.sub } : null;
+    authError = raw && !user ? new Error("session expired") : null;
+    if (alive && token && Date.now() / 1000 - (token.exp - SESSION_TTL_SECONDS) > SESSION_REFRESH_SECONDS) {
+      response.cookies.set(SESSION_COOKIE, encodeSession(token.sid, token.sub, token.iat), sessionCookieOptions());
+    }
+  } else {
+    ({ user, authError } = await supabaseUser(request, (r) => (response = r)));
+  }
+
+  return decide(request, response, user, authError);
+}
+
+/**
+ * Supabase: refreshes the session cookie through @supabase/ssr. The response
+ * is rebuilt whenever cookies change, and handed back through setResponse.
+ */
+async function supabaseUser(request: NextRequest, setResponse: (r: NextResponse) => void) {
+  let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -39,6 +85,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
+          setResponse(response);
         },
       },
     },
@@ -50,7 +97,10 @@ export async function proxy(request: NextRequest) {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
+  return { user, authError };
+}
 
+function decide(request: NextRequest, response: NextResponse, user: { id: string } | null, authError: unknown) {
   // A session cookie whose refresh token no longer exists in the project —
   // after the project was swapped, its auth data reset, or the token revoked —
   // is retried on every request and never recovers on its own, because the
