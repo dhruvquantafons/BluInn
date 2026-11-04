@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="app/icon.svg" alt="BluInn logo" width="96" height="96" />
-
 # BluInn
 
 ### Hotel management, simplified.
@@ -18,7 +16,7 @@ reservations, front desk, rooms, housekeeping, outlets, banquets, billing, staff
 ![Neon Postgres](https://img.shields.io/badge/Neon-Postgres-00E599?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Hosted_on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
-**[Features](#-features)** · **[Quick start](#-quick-start)** · **[Onboard a hotel](#-onboarding-a-new-hotel)** · **[Deploy](#-deployment)** · **[Security](#-security)** · **[Roadmap](#-roadmap)**
+**[Features](#features)** · **[Quick start](#quick-start)** · **[Onboard a hotel](#onboarding-a-new-hotel)** · **[Deploy](#deployment)** · **[Security](#security)** · **[Roadmap](#roadmap)**
 
 <br />
 
@@ -30,7 +28,7 @@ reservations, front desk, rooms, housekeeping, outlets, banquets, billing, staff
 
 <br />
 
-## ✨ Why BluInn
+## Why BluInn
 
 <table>
 <tr>
@@ -73,35 +71,35 @@ audit log nobody can edit.
 
 <br />
 
-## 🧭 Features
+## Features
 
 The app has five sections, matching its top navigation.
 
 <table>
 <tr>
-<td width="20%" valign="top"><b>🛎️ Front Office</b><br /><sub>Dashboard · Front desk · Bookings · Guests · Groups · Tape chart</sub></td>
+<td width="20%" valign="top"><b>Front Office</b><br /><sub>Dashboard · Front desk · Bookings · Guests · Groups · Tape chart</sub></td>
 <td valign="top">Individual, group and split bookings, the waitlist and room moves. Check-in with ID capture, a
 registration card and an e-signature, and check-out with an emailed bill. Guest profiles and the loyalty
 programme.</td>
 </tr>
 <tr>
-<td valign="top"><b>🧹 Operations</b><br /><sub>Rooms · Housekeeping · Maintenance · Point of sale · Events</sub></td>
+<td valign="top"><b>Operations</b><br /><sub>Rooms · Housekeeping · Maintenance · Point of sale · Events</sub></td>
 <td valign="top">The live room board. Cleaning tasks, inspections, lost & found. Maintenance tickets with targets,
 assets and preventive schedules. Seven outlet types with kitchen tickets and charge to room. Banquets with a
 diary, quotations, contracts and banquet event orders.</td>
 </tr>
 <tr>
-<td valign="top"><b>📈 Commercial</b><br /><sub>Rates · Revenue · Billing · Reports · Notifications</sub></td>
+<td valign="top"><b>Commercial</b><br /><sub>Rates · Revenue · Billing · Reports · Notifications</sub></td>
 <td valign="top">Rate plans, seasons, restrictions and channel allocations. Dynamic pricing rules with approval,
 packages, promo codes and competitor rates. GST invoices, refund approval and exchange rates. Operational and
 financial reports, a custom report builder, scheduled report emails and the notification log.</td>
 </tr>
 <tr>
-<td valign="top"><b>👥 People</b><br /><sub>HR & attendance · Staff</sub></td>
+<td valign="top"><b>People</b><br /><sub>HR & attendance · Staff</sub></td>
 <td valign="top">Rosters, clock-in and attendance, leave, payroll export and staff accounts.</td>
 </tr>
 <tr>
-<td valign="top"><b>⚙️ Admin</b><br /><sub>Properties · Roles · Settings · Audit log</sub></td>
+<td valign="top"><b>Admin</b><br /><sub>Properties · Roles · Settings · Audit log</sub></td>
 <td valign="top">A group of hotels and the standards pushed to it, roles and permissions, property settings and
 message templates, and the audit log.</td>
 </tr>
@@ -124,7 +122,7 @@ at the foot.
 
 <br />
 
-## 🚀 Quick start
+## Quick start
 
 **You need:** Node.js 20+ and a Postgres database on [Neon](https://console.neon.tech) (the free plan is
 enough).
@@ -148,7 +146,7 @@ Sign in with that account. While `TWO_FACTOR_MODE=demo`, the second-step code is
 > changing framework code (see `AGENTS.md`).
 
 <details>
-<summary><b id="running-without-a-cloud-account">💻 Running without a cloud account</b></summary>
+<summary><b id="running-without-a-cloud-account">Running without a cloud account</b></summary>
 
 <br />
 
@@ -176,7 +174,7 @@ folder to start again.
 
 <br />
 
-## 🏗️ How BluInn is delivered
+## How BluInn is delivered
 
 > [!IMPORTANT]
 > **Every customer (a hotel or a hotel group) gets its own deployment and its own database.** No database
@@ -185,10 +183,10 @@ folder to start again.
 
 | Setup | Use it for | Database |
 |---|---|---|
-| ☁️ **Neon + Vercel** | Customers in production, and staging. **The standard setup** | Neon Postgres |
-| 🟩 **Supabase** | A customer hosted on Supabase instead | Supabase Postgres |
-| 💻 **Local stack** | Development, and trying BluInn without an account | PostgreSQL on your machine |
-| 🪟 **Windows desktop** | Offline sales demos on one PC | Bundled PostgreSQL |
+| **Neon + Vercel** | Customers in production, and staging. **The standard setup** | Neon Postgres |
+| **Supabase** | A customer hosted on Supabase instead | Supabase Postgres |
+| **Local stack** | Development, and trying BluInn without an account | PostgreSQL on your machine |
+| **Windows desktop** | Offline sales demos on one PC | Bundled PostgreSQL |
 
 The app picks its backend from the environment: **`DATABASE_URL` set means Neon**; otherwise it looks
 for Supabase settings.
@@ -213,7 +211,7 @@ the app supplies those pieces itself, so the same queries and security policies 
 
 <br />
 
-## 🏁 Onboarding a new hotel
+## Onboarding a new hotel
 
 ### Step 1: Create the customer's database
 
@@ -250,7 +248,7 @@ app.
 
 ### Step 3: Deploy
 
-Create the customer's Vercel project and environment variables, as in [Deployment](#-deployment).
+Create the customer's Vercel project and environment variables, as in [Deployment](#deployment).
 
 ### Step 4: Set the hotel up in BluInn
 
@@ -274,16 +272,16 @@ Sign in as that administrator and work through:
 
 <br />
 
-## 🔧 Configuration
+## Configuration
 
 Set variables in `.env.local` locally, and under **Vercel → Settings → Environment Variables** for
 Production and Preview. `.env.example` lists every one, with notes.
 
 | Variable | Needed | Purpose |
 |---|:---:|---|
-| `DATABASE_URL` | ✅ | Pooled Neon connection string |
+| `DATABASE_URL` | Yes | Pooled Neon connection string |
 | `DATABASE_URL_UNPOOLED` | Scripts | Direct connection string, for `db:migrate` and `db:create-admin` |
-| `AUTH_SECRET` | ✅ | 32+ random characters. Signs session cookies, file links and the demo 2FA cookie. Changing it signs everyone out |
+| `AUTH_SECRET` | Yes | 32+ random characters. Signs session cookies, file links and the demo 2FA cookie. Changing it signs everyone out |
 | `NEXT_PUBLIC_APP_URL` | Off Vercel | The deployment's address, for links in staff emails. On Vercel it defaults to the production domain |
 | `TWO_FACTOR_MODE` | Before go-live | `demo` (the current default: every code is `DEMO_2FA_CODE`, `123456` unless set) or `totp` (real authenticator apps) |
 | `RESEND_API_KEY`, `NOTIFY_FROM_EMAIL` | Optional | Guest and staff email, sent under the hotel's name |
@@ -304,7 +302,7 @@ Production and Preview. `.env.example` lists every one, with notes.
 
 <br />
 
-## 👩‍💻 Development
+## Development
 
 ```bash
 npm run dev               # development server, http://localhost:3000
@@ -318,7 +316,7 @@ npm run dev:db            # local backend, no Docker
 ```
 
 <details>
-<summary><b>📁 Project structure</b></summary>
+<summary><b>Project structure</b></summary>
 
 <br />
 
@@ -353,7 +351,7 @@ app/
 </details>
 
 <details>
-<summary><b>🗄️ Database changes</b></summary>
+<summary><b>Database changes</b></summary>
 
 <br />
 
@@ -372,7 +370,7 @@ Leave them alone unless you remove them on purpose in a new migration.
 </details>
 
 <details>
-<summary><b>🧪 Tests</b></summary>
+<summary><b>Tests</b></summary>
 
 <br />
 
@@ -404,14 +402,14 @@ Leave them alone unless you remove them on purpose in a new migration.
 
 <br />
 
-## 🚢 Deployment
+## Deployment
 
 Each customer deployment is a **Vercel** project built from `master`, connected to that customer's Neon
 database. Every pull request gets its own preview.
 
 ### A new customer deployment
 
-1. Set up the database as in [Onboarding a new hotel](#-onboarding-a-new-hotel).
+1. Set up the database as in [Onboarding a new hotel](#onboarding-a-new-hotel).
 2. In Vercel, **Add New → Project** and import the repository. Next.js is detected; keep the default build
    settings.
 3. Under **Settings → Environment Variables** (Production and Preview):
@@ -422,7 +420,7 @@ database. Every pull request gets its own preview.
    | `AUTH_SECRET` | A new `openssl rand -base64 48`, unique to this customer |
    | `CRON_SECRET` | Another `openssl rand -base64 48` |
    | `TWO_FACTOR_MODE` | `demo` while setting up, `totp` before real guest data goes in |
-   | Optional | The customer's own email, SMS, Razorpay and door-lock keys (see [Configuration](#-configuration)) |
+   | Optional | The customer's own email, SMS, Razorpay and door-lock keys (see [Configuration](#configuration)) |
 
    Don't set `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_BUILD` or
    `NEXT_PUBLIC_LOCAL_DEMO`; `DEMO_BUILD=1` builds the desktop version.
@@ -454,7 +452,7 @@ refuses three, merge them into one endpoint rather than dropping one.
 
 <br />
 
-## 🔌 Integrations
+## Integrations
 
 | Endpoint | Used by | Auth |
 |---|---|---|
@@ -472,7 +470,7 @@ folio is credited only when the signed webhook confirms the payment.
 
 <br />
 
-## 🔒 Security
+## Security
 
 Every request passes three checks:
 
@@ -490,33 +488,33 @@ flowchart LR
 In a group, a **restrictive** policy on every table also limits reads and writes to the property the
 person is working in. A page that forgets to filter shows too little, never too much.
 
-| | Also built in |
-|:---:|---|
-| 🔑 | **Two-factor sign-in**, required for the System Administrator and Finance roles, optional for everyone else |
-| 🧱 | **Password rules:** complexity, expiry, and lockout after repeated failures |
-| ⏱️ | **Sign-out after inactivity**, and administrators can end anyone's sessions |
-| 🪪 | **Private ID scans:** only authorised roles can view them, and every view is logged |
-| 📜 | **An audit log** with before and after values, which nobody can edit or delete |
-| 🙈 | **Not indexed:** `robots.txt` disallows everything |
+Also built in:
+
+- **Two-factor sign-in**, required for the System Administrator and Finance roles, optional for everyone else
+- **Password rules:** complexity, expiry, and lockout after repeated failures
+- **Sign-out after inactivity**, and administrators can end anyone's sessions
+- **Private ID scans:** only authorised roles can view them, and every view is logged
+- **An audit log** with before and after values, which nobody can edit or delete
+- **Not indexed:** `robots.txt` disallows everything
 
 The full model, and the traps to know before changing database code, are in
 [docs/how-it-works.md](docs/how-it-works.md#security-model).
 
 <br />
 
-## 🗺️ Roadmap
+## Roadmap
 
-| | Next up |
-|:---:|---|
-| 🌐 | **Channel manager:** two-way sync with Booking.com, Expedia and Agoda. Per-channel room allocations are already stored but not yet enforced; each hotel's extranet credentials are needed to test it |
-| 🛏️ | **Guest booking engine:** direct bookings from a hotel's own website, through a narrow API rather than direct database access. Until then, website bookings are entered by the desk with the source *website* |
-| 📱 | **Mobile apps.** Staff screens already work in a phone browser |
+**Next up:**
+
+- **Channel manager:** two-way sync with Booking.com, Expedia and Agoda. Per-channel room allocations are already stored but not yet enforced; each hotel's extranet credentials are needed to test it
+- **Guest booking engine:** direct bookings from a hotel's own website, through a narrow API rather than direct database access. Until then, website bookings are entered by the desk with the source *website*
+- **Mobile apps.** Staff screens already work in a phone browser
 
 **Not planned:** GDS connectivity, WhatsApp and push notifications, and paid competitor rate-shopping
 (competitor rates are entered by hand).
 
 <details>
-<summary><b>⚠️ Known limitations</b></summary>
+<summary><b>Known limitations</b></summary>
 
 <br />
 
@@ -545,7 +543,7 @@ The full model, and the traps to know before changing database code, are in
 
 <br />
 
-## 📚 Further reading
+## Further reading
 
 | Document | What's in it |
 |---|---|
@@ -557,8 +555,6 @@ The full model, and the traps to know before changing database code, are in
 <br />
 
 <div align="center">
-
-<img src="app/icon.svg" alt="" width="40" height="40" />
 
 **BluInn** · Hotel management, simplified.
 
