@@ -17,7 +17,8 @@ import {
   lines,
 } from "./form-utils";
 
-const RATE_TYPES: RateType[] = ["bar", "corporate", "package", "promotional", "group"];
+// "corporate" plans belonged to company accounts, which BluInn no longer has.
+const RATE_TYPES: RateType[] = ["bar", "package", "promotional", "group"];
 const PENALTIES: PenaltyKind[] = ["none", "first_night", "full_stay", "percent"];
 /** Channels that can be capped; staff-entered bookings are limited only by inventory. */
 const CHANNELS: BookingSource[] = ["website", "ota", "travel_agent", "corporate", "mobile_app"];
@@ -167,7 +168,7 @@ function storagePathFromUrl(url: string): string | null {
 
 /**
  * Uploads a room photo. "cover" replaces the main image shown on the site;
- * "gallery" adds to the room type's photo set (SOW: room types "with photos").
+ * "gallery" adds to the room type's photo set (Module 3: room types "with photos").
  */
 export async function uploadRoomPhoto(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("rates.manage");
@@ -263,8 +264,6 @@ export async function saveRatePlan(_prev: ActionState, fd: FormData): Promise<Ac
   if (validFrom && validTo && validTo < validFrom) return { error: "Check the validity dates." };
 
   const rateType = oneOf(fd, "rate_type", RATE_TYPES, "bar");
-  const companyId = uuidOrNull(fd, "company_id");
-  if (rateType === "corporate" && !companyId) return { error: "A corporate plan needs a company." };
 
   const isRefundable = bool(fd, "is_refundable");
   const payload = {
@@ -276,7 +275,7 @@ export async function saveRatePlan(_prev: ActionState, fd: FormData): Promise<Ac
     adjustment_kind: oneOf(fd, "adjustment_kind", ["percent", "amount", "fixed"] as const, "percent"),
     adjustment_value: num(fd, "adjustment_value") ?? 0,
     room_type_ids: fd.getAll("room_type_ids").map(String).filter((v) => /^[0-9a-f-]{36}$/i.test(v)),
-    company_id: rateType === "corporate" ? companyId : null,
+    company_id: null,
     inclusions: lines(fd, "inclusions", 20),
     is_refundable: isRefundable,
     free_cancellation_hours: isRefundable ? int(fd, "free_cancellation_hours", 48, 0, 8760) : 0,
@@ -441,43 +440,4 @@ export async function saveAllocations(_prev: ActionState, fd: FormData): Promise
 
   revalidateRates();
   return { success: "Allocations saved." };
-}
-
-// ── Corporate accounts ──────────────────────────────────────────────────────
-
-export async function saveCompany(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("companies.manage");
-  const supabase = await createClient();
-  const id = uuidOrNull(fd, "id");
-  const name = str(fd, "name", 200);
-  if (!name) return { error: "Company name is required." };
-
-  const gstin = str(fd, "gstin", 15).toUpperCase();
-  if (gstin && !/^[0-9]{2}[A-Z0-9]{13}$/.test(gstin)) {
-    return { error: "A GSTIN is 15 characters, starting with the 2-digit state code." };
-  }
-
-  const payload = {
-    name,
-    gstin,
-    contact_name: str(fd, "contact_name", 200),
-    email: str(fd, "email", 200).toLowerCase(),
-    phone: str(fd, "phone", 50),
-    billing_address: str(fd, "billing_address", 1000),
-    credit_limit: numOrNull(fd, "credit_limit", 0, 1_000_000_000),
-    payment_terms_days: int(fd, "payment_terms_days", 30, 0, 365),
-    notes: str(fd, "notes", 1000),
-    is_active: bool(fd, "is_active"),
-  };
-
-  const { error } = id
-    ? await supabase.from("companies").update(payload).eq("id", id)
-    : await supabase.from("companies").insert(payload);
-  if (error) {
-    return { error: error.code === "23505" ? `${name} already exists.` : friendlyDbError(error.message) };
-  }
-
-  revalidatePath("/companies");
-  revalidatePath("/bookings/new");
-  return { success: id ? "Company saved." : `${name} added.` };
 }

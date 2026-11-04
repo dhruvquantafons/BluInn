@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { requireSession, accessForClient } from "../../lib/auth";
-import { can } from "../../lib/permissions";
 import { getSettings } from "../../lib/settings";
 import { getProperties, getCurrentProperty } from "../../lib/properties";
 import { hasSupabaseConfig } from "../../lib/supabase/config";
@@ -52,12 +51,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           currentProperty={currentProperty?.id ?? null}
         />
         <IdleTimer minutes={settings.session_timeout_minutes} />
-        <div className="lg:pl-60 print:pl-0">
+        <div className="admin-canvas lg:pl-60 min-h-[calc(100vh-3.5rem)] print:pl-0 print:min-h-0">
           <StatusStrip
-            businessDate={settings.business_date}
             today={todayIn(settings.timezone)}
             propertyName={currentProperty?.name ?? (properties.length === 1 ? properties[0].name : null)}
-            canAudit={can(session, "frontdesk.night_audit")}
           />
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-7 print:p-0 print:max-w-none">{children}</main>
         </div>

@@ -3,7 +3,7 @@ import { verifyWebhookSignature, webhookConfigured, fromPaise } from "../../../.
 import { hasServiceAccess } from "../../../../lib/supabase/config";
 
 /**
- * Razorpay webhook (SOW Module 7: online payments).
+ * Razorpay webhook (Module 7: online payments).
  *
  *   POST /api/payments/razorpay/webhook
  *   X-Razorpay-Signature: <HMAC SHA256 of the raw body, RAZORPAY_WEBHOOK_SECRET>

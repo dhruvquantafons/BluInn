@@ -38,7 +38,7 @@ export default async function IdentityPage({ params }: { params: Promise<{ id: s
   const back = (
     <Link
       href={`/bookings/${id}`}
-      className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4"
+      className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4"
     >
       <ArrowLeft className="w-3.5 h-3.5" /> {booking.reference}
     </Link>
@@ -96,7 +96,7 @@ export default async function IdentityPage({ params }: { params: Promise<{ id: s
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="h-48 flex flex-col items-center justify-center gap-2 text-sm text-yellow-800 hover:text-yellow-900"
+                className="h-48 flex flex-col items-center justify-center gap-2 text-sm text-brand-800 hover:text-brand-900"
               >
                 <FileText className="w-8 h-8" /> Open PDF
               </a>

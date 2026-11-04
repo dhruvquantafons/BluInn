@@ -18,7 +18,7 @@ primitives in `components/ui.tsx` rather than writing markup by hand.
 
 The tokens live in the `.admin-theme` block of `app/globals.css`. Pages use
 Tailwind's standard colour names, and that block redefines the variables
-behind them. So a class such as `text-yellow-700` or `bg-emerald-100` inside
+behind them. So a class such as `text-brand-700` or `bg-emerald-100` inside
 a page gets the BluInn palette without renaming anything. Do not add a
 `tailwind.config`, and do not hard-code hex values in pages. The one
 exception is chart colours (see Charts).
@@ -26,7 +26,7 @@ exception is chart colours (see Charts).
 | Tailwind name | Role | Key steps |
 |---|---|---|
 | `brand` | Royal blue: primary buttons, links, focus, top bar. Registered in `@theme`, so `bg-brand-600` etc. exist | 50 `#EFF5FF` · 100 `#DDE9FE` · 600 `#2659D8` primary · 700 `#1F47B4` links |
-| `yellow` | An alias of `brand` (the name is historic) | same steps as `brand` |
+| `yellow` | A legacy alias of `brand`. Don't use it | same steps as `brand` |
 | `slate` (also `stone`, `gray`) | Cool neutrals | 50 `#F5F7FA` canvas · 100 `#EEF1F5` · 200 `#E3E8EE` hairline · 500 `#637083` muted text · 900 `#121722` ink |
 | `emerald` (also `green`) | Success, "all clear", live dots | 100 `#EAF7EC` success pill · 500 `#53AC58` |
 | `lime` | Confirmed or arriving | 100 `#F5FCD0` pill · 900 text |
@@ -34,12 +34,13 @@ exception is chart colours (see Charts).
 | `rose` (also `red`) | Error or cancelled | 100 tint · 500 `#D36C5F` · 800 text |
 | `blue` / `orange` / `violet` | Info / no-show / waitlist | 100 tint · 800 text |
 
-### Why the accent is called `yellow`
+### The legacy `yellow` alias
 
-In the original gold theme the accent really was yellow, and about 180
-links across the panel are still written as `text-yellow-700` or
-`text-yellow-800`. Keeping the name lets all of them follow the accent
-without editing each page. New code should prefer `brand`.
+In the original gold theme the accent really was yellow, so for a while the
+pages wrote the accent as `text-yellow-700` and `.admin-theme` mapped
+`yellow` onto `brand`. Every page now writes `brand-*`. The alias stays in
+`globals.css` only so a stray `yellow-*` still renders blue. Write `brand`,
+which also works outside `.admin-theme`, where the alias does not apply.
 
 ### Section tints
 
@@ -67,8 +68,7 @@ and status on the status palette.
 - **Primary action:** `buttonClass`, brand blue with white text. Use it for
   one per view.
 - **Secondary action:** `secondaryButtonClass`, white with a hairline.
-- **Links:** `text-brand-700 hover:text-brand-900` (older pages write
-  `text-yellow-700`, which renders the same).
+- **Links:** `text-brand-700 hover:text-brand-900`.
 - **Row hover:** `hover:bg-slate-50` (`tableRowClass`).
 - **Keyboard focus:** a blue outline, set globally. Inputs show their own
   soft blue ring.
@@ -116,8 +116,9 @@ Keep motion small, and use CSS only (no animation library).
     sections. `groupFor(pathname)` picks the section holding the longest
     matching href.
 - **Top bar** (`TopBar.tsx`, every breakpoint)
-  - The wordmark, then the section tabs. A tab opens the first page of that
-    section the person may see.
+  - The wordmark, then the section tabs: pills in a recessed track, the
+    active one white with brand-blue text, each with its section icon from
+    1536px. A tab opens the first page of that section the person may see.
   - The search box: the Bookings search (or Guests for staff without
     booking access), a plain GET form focused with ⌘K / Ctrl+K. Hidden
     between 1024 and 1280px, where the tabs need the room.
@@ -125,15 +126,36 @@ Keep motion small, and use CSS only (no animation library).
     can open it), the signed-in person (links to Password & 2FA) and Sign
     out. Name and the Sign out label show from 1536px.
   - Below 1024px the tabs give way to a menu button that opens the drawer.
-- **Status strip** (`StatusStrip.tsx`): the business date and property on a
-  green bar; amber with a "Night audit" button when the business date has
-  fallen behind and the person can close it.
+- **Status strip** (`StatusStrip.tsx`): a translucent white bar with an
+  "Open" pill (pulsing green dot), today's date at the hotel and the property.
+- **Canvas**: the content column carries `admin-canvas`, a faint wash of the
+  section's `--g-100` at the top over the slate-50 canvas. It prints plain.
 - **Rail** (`Sidebar.tsx`)
   - A header card in the section's tint (icon tile, name, subtitle), the
     property switcher, then the section's pages, and "My account" at the
     foot.
   - The mobile drawer lists every allowed section with its pages.
   - Pages outside the nav (Password & 2FA) show a "My account" rail.
+
+## Signed-out screens
+
+Sign-in (`login/page.tsx`), two-step verification (`login/verify/page.tsx`),
+the setup notice (`components/SetupNotice.tsx`, shown until a database is
+configured), and the fallback screens (`app/not-found.tsx`, `app/error.tsx`,
+`app/global-error.tsx`) share `components/AuthShell.tsx`: the brand panel on the left from 1024px
+(the hero gradient with colour blooms, a masked grid, and four module
+highlights; copy only, never figures) and the form in a white card on the
+right. Below 1024px the panel collapses to a short gradient header the card
+overlaps. Pass `badge` for an icon tile above the title.
+
+- **Inputs** carry a leading icon that turns brand blue on focus; the
+  password has a show/hide toggle.
+- **The one big action** uses `buttonClass` plus `admin-btn-glow` (a
+  gradient fill with a soft blue glow) and shows a spinner while pending.
+- **The code field** (`login/verify/CodeInput.tsx`) is one real input named
+  `code` laid transparently over six drawn slots, so autofill, paste and
+  screen readers work on a plain field. It keeps digits only and submits the
+  form when the sixth arrives.
 
 ## Components (`components/ui.tsx`)
 
@@ -154,6 +176,35 @@ Keep motion small, and use CSS only (no animation library).
 | `inputClass`, `buttonClass`, `secondaryButtonClass`, `dangerButtonClass` | Class strings for form controls and buttons |
 | `tableHeadClass`, `tableRowClass` | The table header row (faint grey band, small uppercase labels) and body rows |
 | `SearchInput`, `FilterChips`, `Pagination` | List controls (see below) |
+
+### Printed documents
+
+Invoices, the folio, the registration card, the POS bill and KOT, the event
+documents (`events/[id]/shared.tsx` `DocumentShell`: quotation, contract and
+BEO) end with `components/PrintFooter.tsx`, a
+single muted "Powered by BluInn" line. The hotel's name, address and GSTIN
+stay in the document header, read from Settings. Add the footer to any new
+document a guest or client receives. Guest emails never carry it.
+
+Product identity (name, tagline, descriptor, company, theme colour) comes
+from `PRODUCT` in `app/lib/app-config.ts`. Never type "BluInn" into a page.
+
+### Wordmark and type details
+
+- **The wordmark is two-tone** (`Wordmark` in `components/BrandMark.tsx`):
+  "Blu" in the surface colour, "Inn" in pale blue. In Inter a capital I and a
+  lower-case l are the same stroke, so a one-colour "BluInn" reads "Blulnn".
+  The Google-hosted Inter has no serifed-I alternate (`cv08`), so the colour
+  break does that job. Use the component; don't set the name by hand.
+- **Tabular figures only in tables** (and `.tabular-nums`). Inter's tabular
+  setting also widens the hyphen, so on display text "two-factor" read as
+  "two - factor". Headline figures stay proportional.
+- **Show dates with `fmtDate`**, never a bare `yyyy-mm-dd`. CSV exports keep
+  ISO.
+- **References never wrap**: inline `font-mono` text (BK-1001, invoice
+  numbers) is `nowrap` globally.
+- **Every `EmptyState` has an icon**: an inbox by default, or pass the
+  section's own.
 
 Every pill carries the `admin-pill` class, which drops its border. Add it to
 any pill you write by hand.

@@ -62,7 +62,7 @@ export default async function MyWorkPage() {
               const type = s?.shift_type_id ? typeById.get(s.shift_type_id) : null;
               const leaveDay = onLeave(d);
               return (
-                <li key={d} className={`p-3 border-b sm:border-b-0 sm:border-r border-slate-100 ${d === today ? "bg-yellow-50" : ""}`}>
+                <li key={d} className={`p-3 border-b sm:border-b-0 sm:border-r border-slate-100 ${d === today ? "bg-brand-50" : ""}`}>
                   <p className="text-xs text-slate-500">{new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric" })}</p>
                   <p className="text-sm font-medium text-slate-900 mt-1">
                     {leaveDay ? "Leave" : type ? type.name : s ? "Off" : "—"}

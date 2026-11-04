@@ -26,7 +26,7 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
   const supabase = await createClient();
 
   const [{ data: group }, { data: bookings }, { data: types }] = await Promise.all([
-    supabase.from("booking_groups").select("*, companies(name), rate_plans(name)").eq("id", id).maybeSingle(),
+    supabase.from("booking_groups").select("*, rate_plans(name)").eq("id", id).maybeSingle(),
     supabase
       .from("bookings")
       .select("*, room_types(id, name), rooms(id, room_number)")
@@ -36,7 +36,7 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
   ]);
   if (!group) notFound();
 
-  const g = group as BookingGroup & { companies: { name: string } | null; rate_plans: { name: string } | null };
+  const g = group as BookingGroup & { rate_plans: { name: string } | null };
   const rooms = (bookings ?? []) as Booking[];
   const live = rooms.filter((b) => !["cancelled", "no_show"].includes(b.status));
   const total = live.reduce((s, b) => s + Number(b.total_amount ?? 0), 0);
@@ -44,14 +44,13 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <Link href="/groups" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4">
+      <Link href="/groups" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Groups
       </Link>
       <h1 className="text-xl font-semibold tracking-tight text-slate-900">{g.name}</h1>
       <p className="text-xs text-slate-500 mt-1 mb-6">
         <span className="font-mono">{g.reference}</span> · {fmtDate(g.check_in)} → {fmtDate(g.check_out)} ·{" "}
-        {g.rate_plans?.name ?? "No plan"}
-        {g.companies ? ` · ${g.companies.name}` : ""} · {live.length} room(s) · {fmtMoney(total)}
+        {g.rate_plans?.name ?? "No plan"} · {live.length} room(s) · {fmtMoney(total)}
         {g.organiser_name && ` · organiser ${g.organiser_name} ${g.organiser_phone}`}
       </p>
 

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- What a Supabase project provides, recreated on a plain Postgres (Neon).
 --
--- Applied by `npm run db:migrate` before supabase/migrations/*.sql, and safe to
+-- Applied by `npm run db:migrate` before neon/migrations/*.sql, and safe to
 -- re-run: every statement is idempotent. The migrations and their row level
 -- security policies then run unchanged, because the pieces they rely on exist
 -- under the same names:

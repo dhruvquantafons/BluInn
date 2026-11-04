@@ -66,7 +66,7 @@ export default function SignaturePad({ name }: { name: string }) {
 
   return (
     <div>
-      <div className="relative rounded-lg border-2 border-dashed border-yellow-300 bg-white">
+      <div className="relative rounded-lg border-2 border-dashed border-brand-300 bg-white">
         <canvas
           ref={canvas}
           aria-label="Signature area: sign with a finger, pen or mouse"

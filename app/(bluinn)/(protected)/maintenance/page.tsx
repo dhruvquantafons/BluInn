@@ -120,7 +120,7 @@ export default async function MaintenanceBoard({
             <Link
               key={v}
               href={link(v, priority)}
-              className={`text-xs px-2.5 py-1 rounded-md border ${v === view ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              className={`text-xs px-2.5 py-1 rounded-md border ${v === view ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
             >
               {VIEWS[v]}
             </Link>
@@ -130,7 +130,7 @@ export default async function MaintenanceBoard({
             <Link
               key={p}
               href={link(view, priority === p ? null : p)}
-              className={`text-xs px-2.5 py-1 rounded-md border ${p === priority ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              className={`text-xs px-2.5 py-1 rounded-md border ${p === priority ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
             >
               {MT_PRIORITY_LABELS[p]}
             </Link>
@@ -155,7 +155,7 @@ export default async function MaintenanceBoard({
                 {tickets.map((t) => (
                   <tr key={t.id} className="align-top">
                     <td className="px-4 py-2.5">
-                      <Link href={`/maintenance/${t.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                      <Link href={`/maintenance/${t.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                         {t.title}
                       </Link>
                       <span className="block text-xs text-slate-500">
@@ -188,7 +188,7 @@ export default async function MaintenanceBoard({
                               </option>
                             ))}
                           </select>
-                          <button className="text-xs text-yellow-800 cursor-pointer">Save</button>
+                          <button className="text-xs text-brand-800 cursor-pointer">Save</button>
                         </form>
                       ) : (
                         <span className={t.assigned_to ? "" : "text-amber-700"}>{nameOf(engineers, t.assigned_to)}</span>

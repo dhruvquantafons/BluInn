@@ -25,13 +25,12 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
 
   const { data, error, count } = await supabase
     .from("booking_groups")
-    .select("*, companies(name), bookings(id, status, contact_name)", { count: "exact" })
+    .select("*, bookings(id, status, contact_name)", { count: "exact" })
     .order("check_in", { ascending: false })
     .range(...pageRange(page));
   if (outOfRange(error)) redirect(pageHref("/groups", {}, 1));
 
   type Row = BookingGroup & {
-    companies: { name: string } | null;
     bookings: { id: string; status: string; contact_name: string }[];
   };
   const groups = (data ?? []) as Row[];
@@ -70,12 +69,11 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
                 return (
                   <tr key={g.id} className="hover:bg-slate-50">
                     <td className="px-5 py-3">
-                      <Link href={`/groups/${g.id}`} className="font-medium text-slate-900 hover:text-yellow-700">
+                      <Link href={`/groups/${g.id}`} className="font-medium text-slate-900 hover:text-brand-700">
                         {g.name}
                       </Link>
                       <span className="block text-[11px] text-slate-500">
                         <span className="font-mono">{g.reference}</span>
-                        {g.companies ? ` · ${g.companies.name}` : ""}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-slate-700 whitespace-nowrap">

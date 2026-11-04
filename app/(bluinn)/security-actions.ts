@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient, createEphemeralClient } from "../lib/supabase/server";
+import { PRODUCT } from "../lib/app-config";
 import { getSession } from "../lib/auth";
 import { getSettings, DEFAULT_SETTINGS } from "../lib/settings";
 import { passwordProblems, describePasswordProblems, isLockedOut } from "../lib/password-policy";
@@ -20,7 +21,7 @@ async function publicSecuritySettings(): Promise<PropertySettings> {
 }
 
 /**
- * Password sign-in with account lockout (SOW Module 15: "lockout after
+ * Password sign-in with account lockout (Module 15: "lockout after
  * repeated failed attempts"). Attempts are recorded with the service role,
  * so the count cannot be read or reset by the person signing in.
  */
@@ -122,7 +123,9 @@ export async function startTotpEnrolment(): Promise<EnrolState> {
 
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: "totp",
-    friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)}`,
+    // What the authenticator app shows above the code.
+    issuer: PRODUCT.name,
+    friendlyName: `${PRODUCT.name} ${new Date().toISOString().slice(0, 10)}`,
   });
   if (error) {
     return {

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { reportByKind, type ReportDefinition } from "./reports";
+import type { ReportDefinition } from "./reports";
 
 /**
- * Running a report (SOW Module 13).
+ * Running a report (Module 13).
  *
  * Every report is a permission-checked database function, so this is a thin,
  * uniform way to call whichever one was asked for. The permission check lives
@@ -32,15 +32,4 @@ export async function runReport(
   // A function returning a single row hands back an object, not an array.
   const rows = Array.isArray(data) ? data : data ? [data] : [];
   return { rows: rows as Record<string, unknown>[], error: null };
-}
-
-export async function runReportByKind(
-  db: SupabaseClient,
-  kind: string,
-  range: { from: string; to: string },
-) {
-  const definition = reportByKind(kind);
-  if (!definition) return { definition: null, rows: [], error: "No such report." };
-  const { rows, error } = await runReport(db, definition, range);
-  return { definition, rows, error };
 }

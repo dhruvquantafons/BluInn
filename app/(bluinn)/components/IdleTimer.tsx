@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signOutIdle } from "../actions";
+import { buttonClass } from "./ui";
 
 const WARN_SECONDS = 60;
 const EVENTS = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
 
 /**
- * Signs the desk out after a period without input (SOW Module 15:
+ * Signs the desk out after a period without input (Module 15:
  * "auto-logout after inactivity"). A minute before, it warns and offers to
  * stay signed in. Activity in any tab of the panel counts, via storage events.
  */
@@ -24,14 +25,14 @@ export default function IdleTimer({ minutes }: { minutes: number }) {
       if (now - lastActivity.current < 5000) return;
       lastActivity.current = now;
       try {
-        localStorage.setItem("admin:lastActivity", String(lastActivity.current));
+        localStorage.setItem("bluinn:lastActivity", String(lastActivity.current));
       } catch {
         // Storage can be unavailable; the timer still works in this tab.
       }
       setSecondsLeft(null);
     };
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "admin:lastActivity" && e.newValue) lastActivity.current = Number(e.newValue);
+      if (e.key === "bluinn:lastActivity" && e.newValue) lastActivity.current = Number(e.newValue);
     };
 
     mark();
@@ -71,7 +72,7 @@ export default function IdleTimer({ minutes }: { minutes: number }) {
             lastActivity.current = Date.now();
             setSecondsLeft(null);
           }}
-          className="mt-5 px-4 py-2 text-xs font-medium rounded-lg bg-yellow-400 text-slate-900 hover:bg-yellow-500 cursor-pointer"
+          className={`${buttonClass} mt-5`}
         >
           Stay signed in
         </button>

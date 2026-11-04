@@ -1,9 +1,8 @@
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
-import { loadCompanies } from "../../../../lib/rate-data";
 import { describePenalty } from "../../../../lib/policies";
-import type { Company, RatePlan, RoomType } from "../../../../lib/types";
+import type { RatePlan, RoomType } from "../../../../lib/types";
 import { RATE_TYPE_LABELS, MEAL_PLAN_LABELS, PENALTY_LABELS } from "../../../../lib/types";
 import { saveRatePlan } from "../../../rates-actions";
 import { Card, Field, Check, Tag, inputClass } from "../../../components/ui";
@@ -14,10 +13,9 @@ export default async function RatePlansPage() {
   const supabase = await createClient();
   const manage = can(session, "rates.manage");
 
-  const [{ data: plans }, { data: types }, companies] = await Promise.all([
+  const [{ data: plans }, { data: types }] = await Promise.all([
     supabase.from("rate_plans").select("*").order("sort_order").order("name"),
     supabase.from("room_types").select("id, name").order("sort_order"),
-    loadCompanies(supabase),
   ]);
   const planList = (plans ?? []) as RatePlan[];
   const typeList = (types ?? []) as Pick<RoomType, "id" | "name">[];
@@ -27,10 +25,10 @@ export default async function RatePlansPage() {
       {manage && (
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Create a rate plan</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Create a rate plan</summary>
             <div className="mt-5">
               <ActionForm action={saveRatePlan} submitLabel="Create plan">
-                <PlanFields roomTypes={typeList} companies={companies} />
+                <PlanFields roomTypes={typeList} />
               </ActionForm>
             </div>
           </details>
@@ -42,13 +40,13 @@ export default async function RatePlansPage() {
           <details>
             <summary className="list-none cursor-pointer">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs text-yellow-800">{plan.code}</span>
+                <span className="font-mono text-xs text-brand-800">{plan.code}</span>
                 <span className="text-base font-semibold text-slate-900">{plan.name}</span>
                 <Tag tone="gold">{RATE_TYPE_LABELS[plan.rate_type]}</Tag>
                 <Tag>{plan.meal_plan}</Tag>
                 {!plan.is_active && <Tag tone="red">Inactive</Tag>}
                 {plan.is_public && plan.is_active && <Tag tone="green">On website</Tag>}
-                {manage && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+                {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
               </div>
               <p className="text-xs text-slate-600 mt-1">
                 {plan.adjustment_kind === "fixed"
@@ -65,14 +63,13 @@ export default async function RatePlansPage() {
                 {Number(plan.deposit_percent) > 0 && ` · ${Number(plan.deposit_percent)}% deposit`}
                 {plan.min_los && ` · min ${plan.min_los} nights`}
                 {plan.los_discount_min_nights && ` · ${Number(plan.los_discount_percent)}% off ${plan.los_discount_min_nights}+ nights`}
-                {plan.company_id && ` · ${companies.find((c) => c.id === plan.company_id)?.name ?? "company"}`}
               </p>
             </summary>
             {manage && (
               <div className="mt-5 pt-5 border-t border-slate-100">
                 <ActionForm action={saveRatePlan} submitLabel="Save plan">
                   <input type="hidden" name="id" value={plan.id} />
-                  <PlanFields plan={plan} roomTypes={typeList} companies={companies} />
+                  <PlanFields plan={plan} roomTypes={typeList} />
                 </ActionForm>
               </div>
             )}
@@ -86,17 +83,15 @@ export default async function RatePlansPage() {
 function PlanFields({
   plan,
   roomTypes,
-  companies,
 }: {
   plan?: RatePlan;
   roomTypes: Pick<RoomType, "id" | "name">[];
-  companies: Company[];
 }) {
-  const legend = "text-xs font-medium text-yellow-700";
+  const legend = "text-xs font-medium text-brand-700";
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Field label="Code" hint="Short, unique. e.g. NRF, CORP-TCS">
+        <Field label="Code" hint="Short, unique. e.g. NRF, BB-WKND">
           <input name="code" required defaultValue={plan?.code} className={`${inputClass} uppercase`} />
         </Field>
         <div className="sm:col-span-2">
@@ -106,16 +101,18 @@ function PlanFields({
         </div>
         <Field label="Rate type">
           <select name="rate_type" defaultValue={plan?.rate_type ?? "bar"} className={inputClass}>
-            {Object.entries(RATE_TYPE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
+            {Object.entries(RATE_TYPE_LABELS)
+              .filter(([v]) => v !== "corporate")
+              .map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
           </select>
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Field label="Meals">
           <select name="meal_plan" defaultValue={plan?.meal_plan ?? "CP"} className={inputClass}>
             {Object.entries(MEAL_PLAN_LABELS).map(([v, l]) => (
@@ -134,16 +131,6 @@ function PlanFields({
         </Field>
         <Field label="Adjustment" hint="-10 = 10% off. +1500 for a package. With a fixed rate, the nightly price itself.">
           <input type="number" name="adjustment_value" step="0.01" defaultValue={plan?.adjustment_value ?? 0} className={inputClass} />
-        </Field>
-        <Field label="Company" hint="Corporate plans only.">
-          <select name="company_id" defaultValue={plan?.company_id ?? ""} className={inputClass}>
-            <option value="">—</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
         </Field>
       </div>
 

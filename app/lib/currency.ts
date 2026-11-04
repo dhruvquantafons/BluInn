@@ -1,11 +1,11 @@
 import type { Currency } from "./types";
 
 /**
- * Multi-currency support (SOW Module 7: "Currency conversion support for
+ * Multi-currency support (Module 7: "Currency conversion support for
  * international guests").
  *
  * The property keeps one base currency and every stored amount — folio lines,
- * invoices, the city ledger, every report — is in it. A foreign currency is
+ * invoices, every report — is in it. A foreign currency is
  * only ever a *presentation and settlement* layer on top: we show a guest
  * what a bill comes to in their own money, and when they pay we record what
  * they handed over alongside the base-currency amount it converted to.

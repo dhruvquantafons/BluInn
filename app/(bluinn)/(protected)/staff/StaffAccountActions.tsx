@@ -31,7 +31,7 @@ export default function StaffAccountActions({ member }: { member: Staff }) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-yellow-700 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-brand-700 transition-colors cursor-pointer"
         >
           <KeyRound className="w-3.5 h-3.5" />
           <span>Set a new password</span>
@@ -45,7 +45,7 @@ export default function StaffAccountActions({ member }: { member: Staff }) {
           <button
             type="submit"
             disabled={tfaPending}
-            className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-yellow-700 transition-colors cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 hover:text-brand-700 transition-colors cursor-pointer disabled:opacity-50"
           >
             <ShieldOff className="w-3.5 h-3.5" />
             <span>{tfaPending ? "Resetting…" : "Reset 2FA"}</span>

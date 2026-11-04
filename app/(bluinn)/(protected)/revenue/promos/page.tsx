@@ -189,7 +189,7 @@ export default async function PromoCodesPage() {
       {manage && (
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Create a promo code</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Create a promo code</summary>
             <div className="mt-5">
               <ActionForm action={savePromoCode} submitLabel="Create code">
                 <Fields typeList={typeList} planList={planList} />
@@ -216,7 +216,7 @@ export default async function PromoCodesPage() {
                   {p.max_redemptions !== null ? ` of ${p.max_redemptions}` : ""} time(s)
                   {p.valid_to ? ` · expires ${p.valid_to}` : ""}
                 </span>
-                {manage && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+                {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
               </summary>
               {manage && (
                 <div className="mt-5 pt-5 border-t border-slate-100 space-y-3">

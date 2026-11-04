@@ -1,5 +1,4 @@
 import type {
-  Company,
   EventBooking,
   EventLayout,
   EventEquipment,
@@ -11,7 +10,7 @@ import type {
 } from "./types";
 
 /**
- * Banquet, conference and event arithmetic (SOW Module 10).
+ * Banquet, conference and event arithmetic (Module 10).
  *
  * These are pure mirrors of the SQL in 0019_events.sql, in the same order and
  * with the same rounding, so the screen can price an event as the desk types
@@ -230,7 +229,7 @@ export function isBilled(payments: Pick<EventPayment, "kind" | "voided_at">[]): 
 // ── The quotation approval workflow ─────────────────────────────────────────
 
 /**
- * SOW Module 10: a quotation above a configured value needs approval before
+ * Module 10: a quotation above a configured value needs approval before
  * it may be sent. A threshold of zero means every quotation does — the same
  * rule, and the same reading of it, as refunds in Module 7.
  */
@@ -350,7 +349,7 @@ export const hhmm = (time: string) => time.slice(0, 5);
 // ── Equipment ───────────────────────────────────────────────────────────────
 
 /**
- * The equipment that can be offered for a space (SOW: "available equipment"
+ * The equipment that can be offered for a space (Module 10: "available equipment"
  * is an attribute of the space). An item tied to a space is only offered
  * there; one with no space travels, so it is offered everywhere.
  */
@@ -364,22 +363,11 @@ export function equipmentForSpace<T extends Pick<EventEquipment, "space_id" | "i
 // ── Payment terms ───────────────────────────────────────────────────────────
 
 /**
- * The payment terms an event starts with (SOW booking data: "payment terms").
+ * The payment terms an event starts with (Module 10 booking data: "payment terms").
  *
- * A corporate client already has agreed terms on their account, so those are
- * what the quotation should say rather than something typed again. Anyone
- * else gets the hotel's usual deposit sentence, which whoever is selling can
- * then edit.
+ * The hotel's usual deposit sentence, which whoever is selling can then edit.
  */
-export function defaultPaymentTerms(
-  company: Pick<Company, "name" | "payment_terms_days"> | null,
-  advancePercent: number,
-): string {
-  if (company) {
-    return company.payment_terms_days > 0
-      ? `Billed to ${company.name} on account, due ${company.payment_terms_days} days from invoice.`
-      : `Billed to ${company.name} on account, due on invoice.`;
-  }
+export function defaultPaymentTerms(advancePercent: number): string {
   return advancePercent > 0
     ? `${advancePercent}% deposit to confirm the booking; balance due on or before the day of the event.`
     : "Balance due on or before the day of the event.";
@@ -387,14 +375,13 @@ export function defaultPaymentTerms(
 
 // ── Documents ───────────────────────────────────────────────────────────────
 
-/** Who the event is for, from whichever of the three the desk filled in. */
+/** Who the event is for: the guest on file, or the contact the desk named. */
 export function clientName(
   e: Pick<EventBooking, "contact_name"> & {
-    companies?: { name: string } | null;
     guests?: { full_name: string } | null;
   },
 ): string {
-  return e.companies?.name || e.guests?.full_name || e.contact_name || "—";
+  return e.guests?.full_name || e.contact_name || "—";
 }
 
 /** The printed reference for an event's quotation, contract and BEO. */

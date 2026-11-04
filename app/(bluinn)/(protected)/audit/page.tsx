@@ -86,7 +86,7 @@ export default async function AuditPage({
                     <td className="px-4 py-2">
                       <Tag tone="gold">{e.module}</Tag> {e.action} {e.table_name}
                       {e.table_name === "bookings" && e.record_id ? (
-                        <Link href={`/bookings/${e.record_id}`} className="block text-yellow-700">
+                        <Link href={`/bookings/${e.record_id}`} className="block text-brand-700">
                           open booking
                         </Link>
                       ) : (
@@ -112,8 +112,8 @@ export default async function AuditPage({
         )}
       </Card>
       <div className="flex justify-between mt-4 text-sm">
-        {page > 0 ? <Link href={qs(page - 1)} className="text-yellow-700">← Newer</Link> : <span />}
-        {rows.length === PAGE && <Link href={qs(page + 1)} className="text-yellow-700">Older →</Link>}
+        {page > 0 ? <Link href={qs(page - 1)} className="text-brand-700">← Newer</Link> : <span />}
+        {rows.length === PAGE && <Link href={qs(page + 1)} className="text-brand-700">Older →</Link>}
       </div>
     </>
   );

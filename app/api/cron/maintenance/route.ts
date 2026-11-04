@@ -5,11 +5,11 @@ import { todayIn } from "../../../lib/dates";
 import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
- * Scheduled maintenance job (SOW Module 11): escalates tickets past their
+ * Scheduled maintenance job (Module 11): escalates tickets past their
  * resolution target and raises preventive tickets that have fallen due.
  * Call it every 15–30 minutes from a scheduler (e.g. Vercel Cron, which
  * sends "Authorization: Bearer <CRON_SECRET>"). Disabled until CRON_SECRET
- * is set. Night audit and the maintenance board also do this work.
+ * is set. The maintenance board also does this work.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;

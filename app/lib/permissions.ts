@@ -1,9 +1,9 @@
 /**
- * Every permission a role can hold, grouped by module (SOW Module 15:
+ * Every permission a role can hold, grouped by module (Module 15:
  * "configurable at the module and action level").
  *
  * The keys are also referenced by row level security policies in
- * supabase/migrations, so renaming one means changing it there too.
+ * neon/migrations, so renaming one means changing it there too.
  */
 
 export const PERMISSION_GROUPS = [
@@ -29,7 +29,6 @@ export const PERMISSION_GROUPS = [
       { key: "frontdesk.view", label: "View arrivals, departures and in-house" },
       { key: "frontdesk.checkin", label: "Check guests in" },
       { key: "frontdesk.checkout", label: "Check guests out" },
-      { key: "frontdesk.night_audit", label: "Run night audit" },
       { key: "frontdesk.requests", label: "Log and complete guest requests" },
     ],
   },
@@ -40,7 +39,6 @@ export const PERMISSION_GROUPS = [
       { key: "guests.edit", label: "Edit guest profiles" },
       { key: "guests.view_id", label: "View identity documents" },
       { key: "guests.privacy", label: "Merge duplicates, export and erase guest data" },
-      { key: "companies.manage", label: "Manage corporate accounts" },
       { key: "loyalty.manage", label: "Loyalty programme: tiers, enrolment and corrections" },
       { key: "loyalty.redeem", label: "Redeem loyalty points against a bill" },
     ],
@@ -54,7 +52,6 @@ export const PERMISSION_GROUPS = [
       { key: "folio.adjust", label: "Adjustments and voids" },
       { key: "folio.invoice", label: "Issue and cancel tax invoices" },
       { key: "folio.refund_approve", label: "Approve refunds" },
-      { key: "folio.city_ledger", label: "City ledger: bill companies and record receipts" },
     ],
   },
   {

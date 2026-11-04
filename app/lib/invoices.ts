@@ -1,7 +1,7 @@
 import type { FolioEntry, InvoiceLine, TaxBand } from "./types";
 
 /**
- * Turning a folio into a tax invoice (SOW Module 7).
+ * Turning a folio into a tax invoice (Module 7).
  *
  * An invoice bills the *charges* on a folio — rooms, fees, extras, penalties.
  * Payments are not lines on it; they decide how much of it is still owed. The
@@ -86,7 +86,7 @@ export function financialYearOf(date: string): string {
 }
 
 /**
- * SOW Module 7: "Refunds above a set amount require manager or finance-head
+ * Module 7: "Refunds above a set amount require manager or finance-head
  * approval before processing." At or above the threshold, someone else has to
  * approve. A threshold of zero means every refund does.
  */

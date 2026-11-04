@@ -55,7 +55,6 @@ export async function updateGuestProfile(_prev: ActionState, fd: FormData): Prom
       preferences: str(fd, "preferences", 1000),
       preferred_room_type_id: uuidOrNull(fd, "preferred_room_type_id"),
       preferred_floor: floor !== null && Number.isInteger(floor) && floor >= -5 && floor <= 200 ? floor : null,
-      company_id: uuidOrNull(fd, "company_id"),
       notes: str(fd, "notes", 4000),
       marketing_opt_in: bool(fd, "marketing_opt_in"),
       tags: [...tags],

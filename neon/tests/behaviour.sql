@@ -1091,40 +1091,31 @@ update bookings set status = 'cancelled' where contact_name = 'Promo Guest';
 select redemption_count as redeemed_expect_0 from promo_codes where code = 'MONSOON25';
 select count(*) as redemption_rows_expect_0 from promo_redemptions;
 
-\echo '--- the public may read a live rate and a public code, but not a private one'
+\echo '--- an anonymous caller reads no price and no promo code: EXPECT 0, 0'
 -- Clear the signed-in identity as well as the role: has_permission() reads the
 -- JWT subject, so leaving a manager's uuid in place would answer as them.
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
 set role anon;
-select count(*) as anon_sees_applied_expect_1 from pricing_adjustments;
-select code as codes_expect_monsoon25_only from promo_codes order by code;
+select count(*) as anon_sees_adjustments_expect_0 from pricing_adjustments;
+select count(*) as anon_sees_codes_expect_0 from promo_codes;
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 
--- ── Module 17: guest portal accounts ────────────────────────────────────────
+-- ── Staff only: a login is not access ───────────────────────────────────────
 
-\echo '=== MODULE 17: guest accounts and self-service'
--- Seeded as the superuser: auth.users is the auth schema's, and in a real
--- project only Supabase's own sign-up writes it.
+\echo '=== STAFF ONLY: logins without a staff row, and anonymous callers'
+-- Seeded as the superuser: auth.users is the auth schema's.
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 
--- Two guest logins, and a stay for each, booked by the desk. The portal marks
--- its sign-ups, exactly as signInWithOtp does.
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-0000000000a1', 'aisha@guest.test', '{"is_guest": true}'),
-  ('00000000-0000-0000-0000-0000000000a2', 'other@guest.test', '{"is_guest": true}');
-
-\echo '--- signing up as a guest does NOT make you staff: EXPECT 0'
-select count(*) as guest_staff_rows_expect_0 from staff
- where id in ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a2');
-
-\echo '--- nor does an unmarked sign-up once the hotel has staff: EXPECT 0'
 insert into auth.users (id, email) values
-  ('00000000-0000-0000-0000-0000000000a3', 'sneaky@guest.test');
-select count(*) as unmarked_staff_rows_expect_0 from staff
- where id = '00000000-0000-0000-0000-0000000000a3';
+  ('00000000-0000-0000-0000-0000000000a1', 'aisha@guest.test'),
+  ('00000000-0000-0000-0000-0000000000a2', 'other@guest.test');
+
+\echo '--- a sign-up once the hotel has staff does NOT make you staff: EXPECT 0'
+select count(*) as login_staff_rows_expect_0 from staff
+ where id in ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000a2');
 
 \echo '--- and metadata claiming staff is ignored, since a browser can set it: EXPECT 0'
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -1136,7 +1127,7 @@ insert into guests (id, full_name, email, phone) values
   ('00000000-0000-0000-0000-0000000000b1', 'Aisha Guest', 'aisha@guest.test', '9000000001'),
   ('00000000-0000-0000-0000-0000000000b2', 'Someone Else', 'other@guest.test', '9000000002');
 
--- Aisha's stay, on the refundable BAR plan, far enough out to cancel free.
+-- Stays booked by the desk, which Module 16 below sends messages about.
 insert into bookings (id, guest_id, room_type_id, rate_plan_id, check_in, check_out, status,
   contact_name, contact_email, rooms_count, quoted_rate, total_amount, rate_breakdown, deposit_required)
 select '00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1',
@@ -1155,115 +1146,25 @@ select '00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-00000000
        rt.id, current_date + 70, current_date + 71, 'confirmed', 'Someone Else', 1, 9000, 9000
   from room_types rt where rt.slug = 'premier-room';
 
-\echo '--- an unlinked login is nobody: EXPECT null'
+\echo '--- a login with no staff row sees no bookings, guests or tariff: EXPECT 0, 0, 0'
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
 set role authenticated;
-select current_guest() as current_guest_expect_null;
+select count(*) as login_sees_bookings_expect_0 from bookings;
+select count(*) as login_sees_guests_expect_0 from guests;
+select count(*) as login_sees_room_types_expect_0 from room_types;
 
-\echo '--- and can see no bookings at all: EXPECT 0'
-select count(*) as sees_expect_0 from bookings;
-
-\echo '--- because a guest login holds no permissions: EXPECT f, f'
+\echo '--- because it holds no permissions: EXPECT f, f'
 select has_permission('bookings.view') as can_view_expect_f, is_staff() as is_staff_expect_f;
 
-\echo '--- linking the account adopts the profile already on that address: EXPECT Aisha'
-select guest_link_account() = '00000000-0000-0000-0000-0000000000b1' as adopted_existing_expect_t;
-select full_name, account_created_at is not null as has_account from guests
- where id = '00000000-0000-0000-0000-0000000000b1';
-
-\echo '--- linking twice is the same profile, not a second one: EXPECT t'
-select guest_link_account() = '00000000-0000-0000-0000-0000000000b1' as idempotent_expect_t;
-
-\echo '--- now she sees exactly her own stay, and nobody else''s: EXPECT 1, Aisha'
-select count(*) as sees_expect_1 from bookings;
-select distinct contact_name as name_expect_aisha from bookings;
-
-\echo '--- her own guest row, and only hers: EXPECT 1'
-select count(*) as guest_rows_expect_1 from guests;
-
-\echo '--- she cannot cancel a stranger''s booking: EXPECT GUEST_BOOKING_NOT_FOUND'
-select guest_cancel_booking('00000000-0000-0000-0000-0000000000c2');
-
-\echo '--- she cannot edit her row directly to award herself VIP: EXPECT UPDATE 0'
-update guests set tags = array['VIP'] where id = '00000000-0000-0000-0000-0000000000b1';
-
-\echo '--- nor read anyone else''s profile: EXPECT 1'
-select count(*) as guest_rows_expect_1_again from guests;
-
-\echo '--- the profile function writes only what it should: name changes, tags do not'
-select guest_update_profile('Aisha Rahman', '9000000009', 'ur', 'No nuts', 'High floor', true);
-select full_name, phone, language, dietary, marketing_opt_in, tags
-  from guests where id = '00000000-0000-0000-0000-0000000000b1';
-
-\echo '--- cancelling 60 days out on a refundable rate is free: EXPECT 0'
-select guest_cancel_booking('00000000-0000-0000-0000-0000000000c1', 'Change of plans') as penalty_expect_0;
-select status, cancellation_reason, penalty_amount, cancelled_by is null as no_staff_involved
-  from bookings where id = '00000000-0000-0000-0000-0000000000c1';
-
-\echo '--- and no penalty line was posted to the folio: EXPECT 0'
-select count(*) as penalty_lines_expect_0 from folio_entries
- where booking_id = '00000000-0000-0000-0000-0000000000c1' and kind = 'penalty';
-
-\echo '--- cancelling it again: EXPECT GUEST_ALREADY_CANCELLED'
-select guest_cancel_booking('00000000-0000-0000-0000-0000000000c1');
-
-\echo '--- a non-refundable stay tomorrow is charged the first night: EXPECT 9000'
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
-insert into rate_plans (code, name, rate_type, is_refundable, free_cancellation_hours,
-  cancellation_penalty, is_public)
-values ('NONREF', 'Non-refundable', 'promotional', false, 0, 'first_night', true);
-
-insert into bookings (id, guest_id, room_type_id, rate_plan_id, check_in, check_out, status,
-  contact_name, rooms_count, quoted_rate, total_amount, rate_breakdown)
-select '00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-0000000000b1',
-       rt.id, rp.id, current_date + 1, current_date + 3, 'confirmed',
-       'Aisha Rahman', 1, 9000, 18000,
-       jsonb_build_array(
-         jsonb_build_object('date', (current_date + 1)::text, 'rate', 9000),
-         jsonb_build_object('date', (current_date + 2)::text, 'rate', 9000))
-  from room_types rt, rate_plans rp
- where rt.slug = 'premier-room' and rp.code = 'NONREF';
-
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
-set role authenticated;
-select guest_cancel_booking('00000000-0000-0000-0000-0000000000c3') as penalty_expect_9000;
-
-\echo '--- which is on the folio, so the desk and the reports see it: EXPECT 9000'
-select kind, amount from folio_entries
- where booking_id = '00000000-0000-0000-0000-0000000000c3' and kind = 'penalty';
-
-\echo '--- a stay already under way is the desk''s business: EXPECT GUEST_STAY_STARTED'
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
-update bookings set status = 'checked_in' where id = '00000000-0000-0000-0000-0000000000c2';
-update bookings set guest_id = '00000000-0000-0000-0000-0000000000b1'
- where id = '00000000-0000-0000-0000-0000000000c2';
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
-set role authenticated;
-select guest_cancel_booking('00000000-0000-0000-0000-0000000000c2');
-
-\echo '--- a login with no profile of its own gets a fresh one: EXPECT a new guest'
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a2', false);
-set role authenticated;
-select guest_link_account() = '00000000-0000-0000-0000-0000000000b2' as adopted_other_expect_t;
-
-\echo '--- the portal settings the public may read: EXPECT the hotel, INR, no secrets'
+\echo '--- an anonymous caller reads no settings, bookings, guests, rooms or currencies: EXPECT 0 x5'
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
 set role anon;
-select property_name, currency, default_language, length(best_rate_message) > 0 as has_message
-  from portal_settings();
-
-\echo '--- but not the settings row itself: EXPECT 0'
 select count(*) as anon_reads_settings_expect_0 from property_settings;
-
-\echo '--- nor anybody''s bookings or guests: EXPECT 0, 0'
 select count(*) as anon_bookings_expect_0 from bookings;
 select count(*) as anon_guests_expect_0 from guests;
+select count(*) as anon_room_types_expect_0 from room_types;
+select count(*) as anon_currencies_expect_0 from currencies;
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 
@@ -1315,83 +1216,12 @@ select kind, template, staff_id is not null as has_recipient,
        created_by <> staff_id as recipient_differs_from_actor
   from notifications where template = 'staff_new_booking';
 
-\echo '--- the guest sees the messages sent to her, and no staff alerts: EXPECT 4, 0'
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
-set role authenticated;
-select count(*) as own_messages_expect_4 from notifications;
-select count(*) as staff_alerts_expect_0 from notifications where kind = 'staff';
-
 \echo '--- the timing settings the nightly job reads: EXPECT 3, 1, 1'
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 set role authenticated;
 select notify_pre_arrival_days, notify_checkin_days, notify_post_stay_days from property_settings;
 reset role;
-
--- ── Module 17: the password option must not inherit a stranger's history ────
-
-\echo '=== MODULE 17b: password sign-in'
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
-
--- A guest who booked by phone. Nobody has ever signed in as them.
-insert into guests (id, full_name, email, phone) values
-  ('00000000-0000-0000-0000-0000000000b9', 'Rich Regular', 'regular@guest.test', '9000000009');
-insert into bookings (id, guest_id, room_type_id, check_in, check_out, status, contact_name, rooms_count, quoted_rate)
-select '00000000-0000-0000-0000-0000000000c9', '00000000-0000-0000-0000-0000000000b9',
-       rt.id, current_date + 80, current_date + 81, 'confirmed', 'Rich Regular', 1, 9000
-  from room_types rt where rt.slug = 'premier-room';
-
--- Somebody signs up with a password, claiming that address.
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-0000000000a9', 'regular@guest.test', '{"is_guest": true}');
-
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a9', false);
-select set_config('request.jwt.claims', '{"amr": [{"method": "password"}]}', false);
-set role authenticated;
-
-\echo '--- a password session is recognised as one: EXPECT t'
-select auth_used_password() as used_password_expect_t;
-
-\echo '--- and does NOT inherit the existing profile: EXPECT a different guest'
-select guest_link_account() <> '00000000-0000-0000-0000-0000000000b9' as fresh_profile_expect_t;
-
-\echo '--- so it sees none of that guest''s stays: EXPECT 0'
-select count(*) as sees_expect_0 from bookings;
-
-\echo '--- the phone booking is still attached to the original profile: EXPECT 1'
-reset role;
-select set_config('request.jwt.claims', '', false);
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
-set role authenticated;
-select count(*) as original_keeps_it_expect_1 from bookings
- where guest_id = '00000000-0000-0000-0000-0000000000b9';
-
-\echo '--- a one-time code session DOES inherit, which is the whole point: EXPECT t'
-reset role;
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-0000000000aa', 'proved@guest.test', '{"is_guest": true}');
-insert into guests (id, full_name, email) values
-  ('00000000-0000-0000-0000-0000000000ba', 'Proved Guest', 'proved@guest.test');
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000aa', false);
-select set_config('request.jwt.claims', '{"amr": [{"method": "otp"}]}', false);
-set role authenticated;
-select auth_used_password() as used_password_expect_f;
-select guest_link_account() = '00000000-0000-0000-0000-0000000000ba' as adopted_expect_t;
-
-\echo '--- and a session with no amr at all still adopts, so the main way in cannot regress: EXPECT t'
-reset role;
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-0000000000ab', 'noamr@guest.test', '{"is_guest": true}');
-insert into guests (id, full_name, email) values
-  ('00000000-0000-0000-0000-0000000000bb', 'No Amr', 'noamr@guest.test');
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000ab', false);
-select set_config('request.jwt.claims', '', false);
-set role authenticated;
-select guest_link_account() = '00000000-0000-0000-0000-0000000000bb' as adopted_expect_t;
-reset role;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
 
 -- ── Module 14: one system, two hotels, kept apart ───────────────────────────
 

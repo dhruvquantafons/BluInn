@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { signOut } from "../actions";
-import BrandMark from "./BrandMark";
+import BrandMark, { Wordmark } from "./BrandMark";
+import { PRODUCT } from "../../lib/app-config";
 import { Avatar } from "./ui";
 import { allowedGroups, groupFor, OPEN_MENU_EVENT, type Access } from "./nav";
 
@@ -36,7 +37,7 @@ export default function TopBar({
   const groups = allowedGroups(access);
   const current = groupFor(pathname, groups);
   const search = can("bookings.view")
-    ? { action: "/bookings", placeholder: "Search bookings, guests, rooms…" }
+    ? { action: "/bookings", placeholder: "Search bookings…" }
     : can("guests.view")
       ? { action: "/guests", placeholder: "Search guests…" }
       : null;
@@ -70,23 +71,27 @@ export default function TopBar({
           <BrandMark className="w-7 h-7" />
         </span>
         <span className="hidden sm:block">
-          <span className="admin-display block text-[15px] leading-none">BluInn</span>
-          <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 leading-none mt-1.5">Property management</span>
+          <Wordmark className="block text-[15px] leading-none" />
+          <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 leading-none mt-1.5">{PRODUCT.descriptor}</span>
         </span>
       </Link>
 
-      <nav aria-label="Sections" className="hidden lg:flex shrink-0 items-stretch self-stretch gap-1">
+      <nav aria-label="Sections" className="hidden lg:flex shrink-0 items-center gap-0.5 p-1 rounded-xl bg-black/10 ring-1 ring-white/10">
         {groups.map((g) => {
           const active = current?.key === g.key;
+          const Icon = g.icon;
           return (
             <Link
               key={g.key}
               href={g.items[0].href}
               aria-current={active ? "true" : undefined}
-              className={`relative flex items-center px-2.5 xl:px-3 text-[13.5px] whitespace-nowrap transition-colors duration-150 after:absolute after:left-2.5 after:right-2.5 after:bottom-0 after:h-[3px] after:rounded-t-full after:transition-colors ${
-                active ? "text-white font-semibold after:bg-white" : "text-white/75 hover:text-white after:bg-transparent"
+              className={`flex items-center gap-2 h-8 px-2.5 xl:px-3 rounded-lg text-[13.5px] whitespace-nowrap transition-colors duration-150 ${
+                active
+                  ? "bg-white text-brand-700 font-semibold shadow-[0_1px_2px_rgb(10_20_60/0.25)]"
+                  : "text-white/80 hover:text-white hover:bg-white/10"
               }`}
             >
+              <Icon aria-hidden="true" strokeWidth={1.9} className="hidden 2xl:block w-4 h-4 shrink-0" />
               {g.label}
             </Link>
           );

@@ -12,7 +12,7 @@ export default async function MaintenanceLayout({ children }: { children: React.
   const session = await requireAnyPermission(["maintenance.report", "maintenance.work", "maintenance.manage"]);
   const supabase = await createClient();
   // Tickets past their target are escalated whenever the board is in use;
-  // the scheduled job and night audit catch the rest.
+  // the scheduled maintenance job catches the rest.
   after(() => escalateOverdueTickets(supabase, session.staff.id));
 
   const work = can(session, "maintenance.work");

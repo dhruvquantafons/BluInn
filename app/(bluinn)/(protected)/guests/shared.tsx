@@ -1,11 +1,10 @@
 import type { GuestTag } from "../../../lib/types";
 import { Tag } from "../../components/ui";
 
-const TONE: Record<GuestTag, "gold" | "red" | "blue" | "violet"> = {
+const TONE: Record<GuestTag, "gold" | "red" | "blue"> = {
   VIP: "gold",
   Blacklisted: "red",
   "Repeat Guest": "blue",
-  Corporate: "violet",
 };
 
 export function GuestTags({ tags }: { tags: GuestTag[] }) {

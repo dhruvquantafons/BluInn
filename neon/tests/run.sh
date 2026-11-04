@@ -3,7 +3,7 @@
 # own transaction, as `supabase db push` does — after seeding data the way a
 # pre-upgrade production database looks, then runs the behaviour checks.
 #
-#   PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres supabase/tests/run.sh
+#   PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres neon/tests/run.sh
 #
 # Needs a local Postgres 15+ superuser. It creates and drops a database named
 # pms_test; it never touches a Supabase project. Lines marked EXPECT in the

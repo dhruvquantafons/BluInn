@@ -169,7 +169,7 @@ describe("quoting a line", () => {
 
 describe("order totals", () => {
   it("matches what the database computes for the same bill", () => {
-    // The same fixture as the behaviour test in supabase/tests/behaviour.sql:
+    // The same fixture as the behaviour test in neon/tests/behaviour.sql:
     // Rista 1000 x1 and Kahwa 500 x2 at 5%, service charge 10%.
     const totals = orderTotals(
       [
@@ -304,21 +304,6 @@ describe("charging to a room", () => {
 
   it("treats a zero limit as no limit", () => {
     expect(checkChargeToRoom({ ...base, limit: 0, alreadyCharged: 999999 }).allowed).toBe(true);
-  });
-
-  it("enforces a company's credit limit on a company-billed folio", () => {
-    const check = checkChargeToRoom({
-      ...base,
-      company: { name: "Dal Travels", credit_limit: 1000, balance: 900 },
-    });
-    expect(check.allowed).toBe(false);
-    expect(check.reason).toContain("Dal Travels");
-  });
-
-  it("lets a company with no limit carry the charge", () => {
-    expect(
-      checkChargeToRoom({ ...base, company: { name: "Group HQ", credit_limit: null, balance: 999999 } }).allowed,
-    ).toBe(true);
   });
 });
 

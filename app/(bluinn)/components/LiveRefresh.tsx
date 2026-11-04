@@ -6,11 +6,11 @@ import { createClient } from "../../lib/supabase/client";
 
 /**
  * Re-renders the page when another desk changes bookings, rooms or blocks
- * (SOW §3.2: "room status, bookings and dashboards update live across all
+ * (Module 3: "room status, bookings and dashboards update live across all
  * connected users without a page refresh").
  *
  * Uses Supabase Realtime, which applies row level security to the events it
- * delivers. Bursts of changes (night audit, a group booking) are coalesced
+ * delivers. Bursts of changes (a group booking, a check-out) are coalesced
  * into one refresh.
  */
 export default function LiveRefresh({ tables = ["bookings", "rooms", "room_blocks"] }: { tables?: string[] }) {

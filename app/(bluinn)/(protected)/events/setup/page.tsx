@@ -162,7 +162,7 @@ export default async function EventSetupPage() {
                               submitLabel="Save"
                               pendingLabel="…"
                               className="flex flex-wrap items-end gap-2"
-                              submitClassName="text-[11px] text-yellow-700 hover:underline cursor-pointer"
+                              submitClassName="text-[11px] text-brand-700 hover:underline cursor-pointer"
                             >
                               <input type="hidden" name="id" value={l.id} />
                               <input name="name" defaultValue={l.name} maxLength={60} className={`${inputClass} w-32`} />
@@ -385,7 +385,7 @@ export default async function EventSetupPage() {
                         submitLabel="Save"
                         pendingLabel="…"
                         className="flex flex-wrap items-end gap-2"
-                        submitClassName="text-[11px] text-yellow-700 hover:underline cursor-pointer"
+                        submitClassName="text-[11px] text-brand-700 hover:underline cursor-pointer"
                       >
                         <input type="hidden" name="id" value={e.id} />
                         <input name="name" defaultValue={e.name} maxLength={80} className={`${inputClass} w-44`} />

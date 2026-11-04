@@ -7,6 +7,12 @@
 export const PRODUCT = {
   name: "BluInn",
   tagline: "Hotel management, simplified",
+  /** The line under the wordmark. */
+  descriptor: "Property management",
+  /** Who makes BluInn. */
+  company: "Blu Margins",
+  /** Brand blue (brand-700): browser chrome and the accents in emails. */
+  themeColor: "#1f47b4",
 } as const;
 
 /**

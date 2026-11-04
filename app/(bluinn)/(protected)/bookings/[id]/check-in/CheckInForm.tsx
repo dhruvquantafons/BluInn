@@ -3,12 +3,12 @@
 import { useActionState, useState } from "react";
 import { checkIn } from "../../../../frontdesk-actions";
 import type { ActionState } from "../../../../form-utils";
-import { ID_TYPE_LABELS, PAYMENT_METHOD_LABELS } from "../../../../../lib/types";
+import { ID_TYPE_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../../lib/types";
 import { Field, Check, Banner, inputClass, buttonClass } from "../../../../components/ui";
 import { keepFormOnSubmit } from "../../../../components/useKeepForm";
 import SignaturePad from "../../../../components/SignaturePad";
 
-const legend = "text-xs font-medium text-yellow-700 mb-2 pt-3";
+const legend = "text-xs font-medium text-brand-700 mb-2 pt-3";
 
 export default function CheckInForm({
   bookingId,
@@ -146,7 +146,7 @@ export default function CheckInForm({
         <legend className={legend}>4 · Payment</legend>
         <p className="text-sm text-slate-700">
           Deposit required {fmt.deposit} · received {fmt.paid}
-          {guaranteed && " · guaranteed by company billing or OTA prepayment"}
+          {guaranteed && " · guaranteed by OTA prepayment"}
         </p>
         {canTakePayment && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -163,7 +163,7 @@ export default function CheckInForm({
             <Field label="Method">
               <select name="payment_method" defaultValue="" className={inputClass}>
                 <option value="">—</option>
-                {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+                {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>

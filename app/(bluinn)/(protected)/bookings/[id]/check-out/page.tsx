@@ -11,7 +11,7 @@ import { rateForNight } from "../../../../../lib/pricing";
 import { splitRoomTax } from "../../../../../lib/tax";
 import { todayIn, nowTimeIn, eachNight, addDays } from "../../../../../lib/dates";
 import type { Booking } from "../../../../../lib/types";
-import { PAYMENT_METHOD_LABELS } from "../../../../../lib/types";
+import { PAYMENT_METHOD_CHOICES } from "../../../../../lib/types";
 import { checkOut } from "../../../../frontdesk-actions";
 import { Card, Field, Check, Notice, fmtDate, fmtMoney, inputClass } from "../../../../components/ui";
 import ActionForm from "../../../../components/ActionForm";
@@ -24,7 +24,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
 
   const { data } = await supabase
     .from("bookings")
-    .select("*, rooms(id, room_number), room_types(id, name), companies(id, name)")
+    .select("*, rooms(id, room_number), room_types(id, name)")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
@@ -57,13 +57,12 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
     : 0;
 
   const projected = Math.round((folio.totals.balance + unpostedTotal) * 100) / 100;
-  const toCompany = booking.payment_method === "corporate_billing" && booking.company_id;
 
   return (
     <>
       <Link
         href={`/bookings/${id}`}
-        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> {booking.reference}
       </Link>
@@ -105,7 +104,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
             </div>
           </dl>
           <p className="mt-3 text-[11px] text-slate-500">
-            <Link href={`/bookings/${id}/folio`} className="text-yellow-700">
+            <Link href={`/bookings/${id}/folio`} className="text-brand-700">
               View the itemised bill
             </Link>
           </p>
@@ -131,14 +130,14 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
                     name="payment_amount"
                     min={0}
                     step="0.01"
-                    defaultValue={projected > 0 && !toCompany ? projected : undefined}
+                    defaultValue={projected > 0 ? projected : undefined}
                     className={inputClass}
                   />
                 </Field>
                 <Field label="Method">
                   <select name="payment_method" defaultValue="" className={inputClass}>
                     <option value="">—</option>
-                    {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+                    {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
                       <option key={v} value={v}>
                         {l}
                       </option>
@@ -151,16 +150,10 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
               </div>
             )}
 
-            {toCompany ? (
-              <Notice>
-                Billed to {booking.companies?.name}. Any balance is left on the company&apos;s account for invoicing.
-              </Notice>
-            ) : (
-              can(session, "folio.adjust") && (
-                <Field label="Allow departure with a balance — reason" hint="Only if the balance cannot be settled now. Recorded in the audit log.">
-                  <input name="balance_reason" className={inputClass} />
-                </Field>
-              )
+            {can(session, "folio.adjust") && (
+              <Field label="Allow departure with a balance — reason" hint="Only if the balance cannot be settled now. Recorded in the audit log.">
+                <input name="balance_reason" className={inputClass} />
+              </Field>
             )}
 
             <Check

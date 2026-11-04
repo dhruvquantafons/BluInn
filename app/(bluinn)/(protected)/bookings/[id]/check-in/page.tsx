@@ -88,7 +88,7 @@ export default async function CheckInPage({ params }: { params: Promise<{ id: st
     <>
       <Link
         href={`/bookings/${id}`}
-        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> {booking.reference}
       </Link>
@@ -126,7 +126,7 @@ export default async function CheckInPage({ params }: { params: Promise<{ id: st
             suggestedRoom={suggested}
             depositRequired={Number(booking.deposit_required)}
             paid={folio.totals.payments}
-            guaranteed={booking.payment_method === "corporate_billing" || booking.payment_method === "ota_prepaid"}
+            guaranteed={booking.payment_method === "ota_prepaid"}
             earlyFee={earlyFee}
             earlyTime={early ? now : null}
             canTakePayment={can(session, "folio.payment")}

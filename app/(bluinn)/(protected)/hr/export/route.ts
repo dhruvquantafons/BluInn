@@ -6,7 +6,7 @@ import { payrollSummary, toCsv } from "../../../../lib/hr";
 import type { AttendanceRecord, Department, LeaveRequest, ShiftType, StaffShift } from "../../../../lib/types";
 
 /**
- * Payroll export (SOW Module 12: "export-ready data for payroll systems").
+ * Payroll export (Module 12: "export-ready data for payroll systems").
  * GET /hr/export?from=yyyy-mm-dd&to=yyyy-mm-dd → CSV.
  */
 export async function GET(request: Request) {

@@ -23,7 +23,7 @@ import {
 } from "../../../components/ui";
 
 /**
- * Every tax invoice raised, newest first (SOW Module 7). Cancelled invoices
+ * Every tax invoice raised, newest first (Module 7). Cancelled invoices
  * stay listed with their number: an invoice series has to be continuous for
  * the auditor, so nothing is ever removed or renumbered.
  */
@@ -89,7 +89,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                             ? `/events/${i.event_id}/invoice/${i.id}`
                             : `/bookings/${i.booking_id}/invoice/${i.id}`
                         }
-                        className="font-mono text-yellow-700 hover:underline"
+                        className="font-mono text-brand-700 hover:underline"
                       >
                         {i.number}
                       </Link>
@@ -101,11 +101,11 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap">
                       {i.event_id ? (
-                        <Link href={`/events/${i.event_id}`} className="font-mono text-yellow-700 hover:underline">
+                        <Link href={`/events/${i.event_id}`} className="font-mono text-brand-700 hover:underline">
                           {i.event_bookings?.number ?? "Event"}
                         </Link>
                       ) : (
-                        <Link href={`/bookings/${i.booking_id}`} className="font-mono text-yellow-700 hover:underline">
+                        <Link href={`/bookings/${i.booking_id}`} className="font-mono text-brand-700 hover:underline">
                           {i.bookings?.reference ?? "—"}
                         </Link>
                       )}

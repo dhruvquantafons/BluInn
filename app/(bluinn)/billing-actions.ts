@@ -34,7 +34,7 @@ import { type ActionState, str, num, uuidOrNull, oneOf, oneOfOrNull } from "./fo
  */
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
 
 function revalidateBilling(bookingId?: string) {
@@ -46,20 +46,19 @@ function revalidateBilling(bookingId?: string) {
 
 // ── Split folios ────────────────────────────────────────────────────────────
 
-/** Opens a second bill on a stay, e.g. "Company" or "Extras". */
+/** Opens a second bill on a stay, e.g. "Extras". */
 export async function createFolio(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("folio.adjust");
   const supabase = await createClient();
   const bookingId = uuidOrNull(fd, "booking_id");
   const label = str(fd, "label", 60);
   if (!bookingId) return { error: "Booking not found." };
-  if (!label) return { error: "Give the folio a name, such as “Company” or “Extras”." };
+  if (!label) return { error: "Give the folio a name, such as “Extras”." };
 
   const { error } = await supabase.from("folios").insert({
     booking_id: bookingId,
     kind: "split",
     label,
-    company_id: uuidOrNull(fd, "company_id"),
     created_by: session.staff.id,
   });
   if (error) return { error: friendlyDbError(error.message) };
@@ -121,7 +120,7 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
 
   const { data: folio } = await supabase
     .from("folios")
-    .select("id, booking_id, label, company_id, companies(name, gstin, billing_address)")
+    .select("id, booking_id, label")
     .eq("id", folioId)
     .maybeSingle();
   if (!folio) return { error: "Folio not found." };
@@ -154,10 +153,6 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
   const totals = invoiceTotals(lines);
   const bands = taxBreakdown(lines);
 
-  const company = folio.companies as unknown as
-    | { name: string; gstin: string; billing_address: string }
-    | null;
-
   // The number is claimed inside the database so two people issuing at the
   // same moment cannot take the same sequence.
   const fy = financialYearOf(todayIn(settings.timezone));
@@ -184,10 +179,9 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
       seq,
       booking_id: folio.booking_id,
       folio_id: folioId,
-      bill_to_name: company?.name || booking.contact_name,
-      bill_to_address: company?.billing_address ?? "",
-      bill_to_gstin: company?.gstin ?? "",
-      company_id: folio.company_id,
+      bill_to_name: booking.contact_name,
+      bill_to_address: "",
+      bill_to_gstin: "",
       place_of_supply: settings.state,
       currency: settings.currency,
       net_total: totals.net,
@@ -337,7 +331,7 @@ export async function cancelPaymentRequest(_prev: ActionState, fd: FormData): Pr
 /**
  * Asks for a refund. Below the property's threshold it is paid out straight
  * away; at or above it, it waits for someone with approval rights — and never
- * the person who asked (SOW Module 7 "Refund Rules").
+ * the person who asked (Module 7 "Refund Rules").
  */
 export async function requestRefund(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("folio.payment");

@@ -19,7 +19,7 @@ import ActionForm from "../../../components/ActionForm";
 import { TierTag } from "../loyalty/shared";
 
 /**
- * A guest's loyalty membership (SOW Module 8): their tier and what it earns
+ * A guest's loyalty membership (Module 8): their tier and what it earns
  * them, the points they can spend and when those points die, and the history
  * behind the balance.
  *
@@ -144,7 +144,7 @@ export default function LoyaltyPanel({
           {progress.next ? (
             <>
               <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden" aria-hidden>
-                <div className="h-full bg-yellow-500" style={{ width: `${Math.round(progress.fraction * 100)}%` }} />
+                <div className="h-full bg-brand-500" style={{ width: `${Math.round(progress.fraction * 100)}%` }} />
               </div>
               <p className="mt-1.5 text-[11px] text-slate-500">
                 {progress.nightsToNext === 0 && progress.spendToNext === 0
@@ -191,7 +191,7 @@ export default function LoyaltyPanel({
       {/* ── History ── */}
       {transactions.length > 0 && (
         <details className="mt-4 pt-4 border-t border-slate-100">
-          <summary className="text-xs font-medium text-yellow-700 cursor-pointer">
+          <summary className="text-xs font-medium text-brand-700 cursor-pointer">
             Points history ({transactions.length})
           </summary>
           <ul className="space-y-1.5 text-xs mt-3">
@@ -225,7 +225,7 @@ export default function LoyaltyPanel({
 
       {history.length > 0 && (
         <details className="mt-3">
-          <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Tier history ({history.length})</summary>
+          <summary className="text-xs font-medium text-brand-700 cursor-pointer">Tier history ({history.length})</summary>
           <ul className="space-y-1 text-xs mt-2 text-slate-600">
             {history.map((h) => (
               <li key={h.id}>
@@ -239,7 +239,7 @@ export default function LoyaltyPanel({
       {/* ── Manager tools ── */}
       {canManage && (
         <details className="mt-4 pt-4 border-t border-slate-100">
-          <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Correct the balance</summary>
+          <summary className="text-xs font-medium text-brand-700 cursor-pointer">Correct the balance</summary>
           <ActionForm action={adjustPoints} submitLabel="Apply correction" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
             <input type="hidden" name="guest_id" value={guest.id} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

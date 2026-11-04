@@ -5,7 +5,7 @@ import type { ReportSchedule } from "../../../lib/types";
 import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
- * Scheduled report job (SOW Module 13: "Scheduled email reports
+ * Scheduled report job (Module 13: "Scheduled email reports
  * (daily/weekly/monthly) to management").
  *
  * Call it once a morning from a scheduler (e.g. Vercel Cron, which sends

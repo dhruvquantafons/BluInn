@@ -146,7 +146,7 @@ export default async function FrontDeskPage({ searchParams }: { searchParams: Pr
         <Card>
           <CardHeader icon={<LogIn />} title="Arrivals" count={arrivals.length} />
           {arrivals.length === 0 ? (
-            <EmptyState icon={<LogIn />} message="No one else is due today." />
+            <EmptyState icon={<LogIn />} message="No more arrivals due today." />
           ) : (
             <BookingRows bookings={arrivals} today={today} canCheckIn={canCheckIn} canCheckOut={canCheckOut} />
           )}
@@ -289,7 +289,7 @@ function BookingRows({
           <li key={b.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
             <Avatar name={b.guests?.full_name || b.contact_name} />
             <Link href={`/bookings/${b.id}`} className="flex-1 min-w-[200px] group">
-              <p className="text-sm font-medium text-slate-900 group-hover:text-yellow-700 flex items-center gap-1.5">
+              <p className="text-sm font-medium text-slate-900 group-hover:text-brand-700 flex items-center gap-1.5">
                 {b.is_vip && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" aria-label="VIP" />}
                 {b.guests?.full_name || b.contact_name || "Unnamed guest"}
               </p>

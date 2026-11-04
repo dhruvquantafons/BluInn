@@ -6,7 +6,6 @@ import { getSettings } from "../../../lib/settings";
 import { todayIn } from "../../../lib/dates";
 import { billablePax, clientName, eventHours, hhmm, layoutsFor } from "../../../lib/events";
 import type {
-  Company,
   EventBooking,
   EventLayout,
   EventPackage,
@@ -81,25 +80,23 @@ export default async function EventsPage({
     ? (show as Filter)
     : "upcoming";
 
-  const [{ data: eventRows }, { data: spaceRows }, { data: layoutRows }, { data: packageRows }, { data: companyRows }] =
+  const [{ data: eventRows }, { data: spaceRows }, { data: layoutRows }, { data: packageRows }] =
     await Promise.all([
       supabase
         .from("event_bookings")
-        .select("*, event_spaces(name, code, tax_rate), event_layouts(name, capacity), companies(name, gstin, billing_address), guests(full_name, phone, email)")
+        .select("*, event_spaces(name, code, tax_rate), event_layouts(name, capacity), guests(full_name, phone, email)")
         .order("event_date", { ascending: filter !== "past" })
         .order("start_time")
         .limit(400),
       supabase.from("event_spaces").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("event_layouts").select("*").eq("is_active", true).order("sort_order"),
       supabase.from("event_packages").select("*").eq("is_active", true).order("sort_order"),
-      supabase.from("companies").select("id, name").eq("is_active", true).order("name"),
     ]);
 
   const all = (eventRows ?? []) as EventBooking[];
   const spaces = (spaceRows ?? []) as EventSpace[];
   const layouts = (layoutRows ?? []) as EventLayout[];
   const packages = (packageRows ?? []) as EventPackage[];
-  const companies = (companyRows ?? []) as Pick<Company, "id" | "name">[];
 
   const live = all.filter((e) => e.status !== "cancelled");
   const events =
@@ -223,16 +220,6 @@ export default async function EventsPage({
                 <input type="number" name="rental_override" min={0} step="0.01" className={inputClass} />
               </Field>
 
-              <Field label="Company" hint="For corporate business, billed on account">
-                <select name="company_id" defaultValue="" className={inputClass}>
-                  <option value="">Not a company booking</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
               <Field label="Contact name">
                 <input name="contact_name" maxLength={120} className={inputClass} placeholder="Who is organising it" />
               </Field>
@@ -241,7 +228,7 @@ export default async function EventsPage({
               </Field>
               <Field
                 label="Payment terms"
-                hint="Left blank, a company's account terms or the hotel's usual deposit sentence is used"
+                hint="Left blank, the hotel's usual deposit sentence is used"
               >
                 <input name="payment_terms" maxLength={500} className={inputClass} />
               </Field>
@@ -269,7 +256,7 @@ export default async function EventsPage({
               href={`/events?show=${f}`}
               className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
                 filter === f
-                  ? "border-yellow-500 bg-yellow-50 text-yellow-800"
+                  ? "border-brand-500 bg-brand-50 text-brand-800"
                   : "border-slate-200 text-slate-600 hover:border-slate-300"
               }`}
             >
@@ -299,7 +286,7 @@ export default async function EventsPage({
                 {shown.map((e) => (
                   <tr key={e.id} className={e.status === "cancelled" ? "text-slate-400" : "hover:bg-slate-50/60"}>
                     <td className="py-2 px-4 whitespace-nowrap">
-                      <Link href={`/events/${e.id}`} className="font-mono text-yellow-700 hover:underline">
+                      <Link href={`/events/${e.id}`} className="font-mono text-brand-700 hover:underline">
                         {e.number}
                       </Link>
                     </td>

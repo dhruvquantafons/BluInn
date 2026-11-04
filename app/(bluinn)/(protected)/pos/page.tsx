@@ -14,6 +14,7 @@ import {
   SectionTitle,
   StatCard,
   Tag,
+  fmtDate,
   fmtDateTime,
   fmtMoney,
   tableHeadClass,
@@ -56,7 +57,7 @@ export default async function PosPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Open bills" value={open.length} hint={fmtMoney(openValue)} />
-        <StatCard label="Settled today" value={fmtMoney(takings)} hint={todayIn(settings.timezone)} />
+        <StatCard label="Settled today" value={fmtMoney(takings)} hint={fmtDate(todayIn(settings.timezone))} />
         <StatCard label="Outlets open" value={summary.length} hint={`${outlets.length} set up`} />
         <StatCard
           label="Outlet limit per stay"
@@ -77,7 +78,7 @@ export default async function PosPage() {
           <Link
             key={outlet.id}
             href={order ? `/pos/${outlet.id}` : "/pos"}
-            className="block border border-slate-200 rounded-xl p-4 bg-white hover:border-yellow-400 transition-colors"
+            className="block border border-slate-200 rounded-xl p-4 bg-white hover:border-brand-400 transition-colors"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -132,7 +133,7 @@ export default async function PosPage() {
                 {open.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-50/60">
                     <td className="py-2 px-4">
-                      <Link href={`/pos/orders/${o.id}`} className="font-mono text-yellow-700 hover:underline">
+                      <Link href={`/pos/orders/${o.id}`} className="font-mono text-brand-700 hover:underline">
                         {o.number}
                       </Link>
                     </td>

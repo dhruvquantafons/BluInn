@@ -8,9 +8,9 @@ import type { PropertySettings } from "../../../lib/types";
 import { hasServiceAccess } from "../../../lib/supabase/config";
 
 /**
- * The timed guest messages (SOW Module 16).
+ * The timed guest messages (Module 16).
  *
- * Three of the messages the SOW asks for are not caused by anything the desk
+ * Three of the guest messages are not caused by anything the desk
  * does — they are due because a date has arrived:
  *
  *   pre_arrival           notify_pre_arrival_days before check-in

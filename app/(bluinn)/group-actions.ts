@@ -13,14 +13,14 @@ import type { PaymentMethod } from "../lib/types";
 import { type ActionState, str, int, oneOf, oneOfOrNull, dateStr, uuidOrNull } from "./form-utils";
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
 
 /** Largest block one form can create; bigger groups add rooms afterwards. */
 const MAX_ROOMS = 120;
 
 /**
- * Blocks rooms under one master booking (SOW: "block 10+ rooms under one
+ * Blocks rooms under one master booking (Module 1: "block 10+ rooms under one
  * master booking with individual guest names added later"). Each room is its
  * own booking so it can be assigned, checked in and billed separately; the
  * rooming list fills in the names later.
@@ -74,7 +74,7 @@ export async function createGroup(_prev: ActionState, fd: FormData): Promise<Act
       rooms.push({
         room_type_id: type.id,
         rate_plan_id: plan.id,
-        company_id: uuidOrNull(fd, "company_id") ?? "",
+        company_id: "",
         check_in: checkIn,
         check_out: checkOut,
         adults: adultsPerRoom,
@@ -99,7 +99,7 @@ export async function createGroup(_prev: ActionState, fd: FormData): Promise<Act
   const { data: groupId, error } = await supabase.rpc("create_booking_group", {
     p_group: {
       name,
-      company_id: uuidOrNull(fd, "company_id") ?? "",
+      company_id: "",
       rate_plan_id: plan.id,
       organiser_name: str(fd, "organiser_name", 200),
       organiser_phone: str(fd, "organiser_phone", 50),

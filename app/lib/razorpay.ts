@@ -2,8 +2,8 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Razorpay, the property's payment gateway (SOW Module 7: "integration-ready
- * payment gateway connection", §6.1 PCI-DSS).
+ * Razorpay, the property's payment gateway (Module 7: "integration-ready
+ * payment gateway connection"; card data never touches BluInn, for PCI-DSS).
  *
  *   RAZORPAY_KEY_ID          Public key id, "rzp_test_…" or "rzp_live_…"
  *   RAZORPAY_KEY_SECRET      Server-only secret. Never sent to the browser.

@@ -2,7 +2,6 @@
 
 import { useActionState, useState } from "react";
 import type {
-  Company,
   ExtraCharge,
   RatePlan,
   RateRestriction,
@@ -11,7 +10,7 @@ import type {
 } from "../../../../lib/types";
 import {
   BOOKING_SOURCE_LABELS,
-  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_CHOICES,
   ID_TYPE_LABELS,
   MEAL_PLAN_LABELS,
   RATE_TYPE_LABELS,
@@ -22,7 +21,7 @@ import type { ActionState } from "../../../form-utils";
 import { Field, inputClass, buttonClass, Banner, Check, fmtMoney, fmtDate } from "../../../components/ui";
 import { keepFormOnSubmit } from "../../../components/useKeepForm";
 
-const legend = "text-xs font-medium text-yellow-700 mb-2 pt-3";
+const legend = "text-xs font-medium text-brand-700 mb-2 pt-3";
 
 export default function NewBookingForm({
   roomTypes,
@@ -31,7 +30,6 @@ export default function NewBookingForm({
   restrictions,
   extraCharges,
   adjustments,
-  companies,
   defaults,
   canOverbook,
   canOverrideRate,
@@ -43,7 +41,6 @@ export default function NewBookingForm({
   restrictions: RateRestriction[];
   extraCharges: ExtraCharge[];
   adjustments: LiveAdjustment[];
-  companies: Company[];
   defaults: { checkIn: string; checkOut: string; source: string; roomTypeId: string; walkIn: boolean };
   canOverbook: boolean;
   canOverrideRate: boolean;
@@ -52,7 +49,6 @@ export default function NewBookingForm({
   const [state, formAction, pending] = useActionState<ActionState, FormData>(createBooking, {});
 
   const [roomTypeId, setRoomTypeId] = useState(defaults.roomTypeId || roomTypes[0]?.id || "");
-  const [companyId, setCompanyId] = useState("");
   const [planId, setPlanId] = useState(plans.find((p) => p.rate_type === "bar")?.id ?? plans[0]?.id ?? "");
   const [checkIn, setCheckIn] = useState(defaults.checkIn);
   const [checkOut, setCheckOut] = useState(defaults.checkOut);
@@ -63,11 +59,10 @@ export default function NewBookingForm({
   const [status, setStatus] = useState("confirmed");
 
   const roomType = roomTypes.find((t) => t.id === roomTypeId) ?? null;
-  // Corporate plans only for their own company.
+  // Corporate plans belonged to a company account; with corporate accounts
+  // gone they are not offered.
   const availablePlans = plans.filter(
-    (p) =>
-      (p.room_type_ids.length === 0 || p.room_type_ids.includes(roomTypeId)) &&
-      (p.rate_type !== "corporate" || p.company_id === companyId),
+    (p) => (p.room_type_ids.length === 0 || p.room_type_ids.includes(roomTypeId)) && p.rate_type !== "corporate",
   );
   const plan = availablePlans.find((p) => p.id === planId) ?? null;
 
@@ -110,7 +105,7 @@ export default function NewBookingForm({
             <input name="contact_email" type="email" required className={inputClass} />
           </Field>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="ID type">
             <select name="id_type" className={inputClass} defaultValue="">
               <option value="">Collect at check-in</option>
@@ -126,21 +121,6 @@ export default function NewBookingForm({
           </Field>
           <Field label="Nationality">
             <input name="nationality" defaultValue="Indian" className={inputClass} />
-          </Field>
-          <Field label="Company">
-            <select
-              name="company_id"
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Individual</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
           </Field>
         </div>
         <Check name="is_vip" label="VIP guest" hint="Gets the best-ranked room at assignment." />
@@ -301,7 +281,7 @@ export default function NewBookingForm({
               <option value="" disabled>
                 Choose…
               </option>
-              {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+              {PAYMENT_METHOD_CHOICES.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -325,7 +305,7 @@ export default function NewBookingForm({
             <Field label="Deposit method">
               <select name="deposit_method" defaultValue="" className={inputClass}>
                 <option value="">Same as payment method</option>
-                {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                {PAYMENT_METHOD_CHOICES.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>

@@ -9,7 +9,7 @@ import { Card, EmptyState, SectionTitle, StatCard, Tag, fmtMoney, tableHeadClass
 import { RangePicker, ReportTable } from "../shared";
 
 /**
- * Guest reports (SOW Module 13): repeat guest ratio, loyalty performance and
+ * Guest reports (Module 13): repeat guest ratio, loyalty performance and
  * feedback scores — the three that say whether guests come back.
  */
 export default async function GuestReportsPage({

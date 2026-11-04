@@ -31,14 +31,13 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
 
   let query = supabase
     .from("guests")
-    .select("id, full_name, email, phone, tags, company_id, erased_at, nationality, updated_at", { count: "exact" })
+    .select("id, full_name, email, phone, tags, erased_at, nationality, updated_at", { count: "exact" })
     .is("erased_at", null)
     .order("updated_at", { ascending: false })
     .range(...pageRange(page));
   const term = q.replace(/[%,()]/g, "").trim();
   if (term) query = query.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
   if (activeTag === "VIP" || activeTag === "Blacklisted") query = query.contains("tags", [activeTag]);
-  if (activeTag === "Corporate") query = query.not("company_id", "is", null);
   if (activeTag === "Repeat Guest") {
     const { data: repeat } = await supabase.from("guest_stats").select("guest_id").gte("stays", 2).limit(1000);
     query = query.in("id", (repeat ?? []).map((r) => r.guest_id));
@@ -47,7 +46,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
   const { data, error, count } = await query;
   const listParams = { q: term, tag: activeTag };
   if (outOfRange(error)) redirect(pageHref("/guests", listParams, 1));
-  const guests = (data ?? []) as Pick<Guest, "id" | "full_name" | "email" | "phone" | "tags" | "company_id" | "nationality">[];
+  const guests = (data ?? []) as Pick<Guest, "id" | "full_name" | "email" | "phone" | "tags" | "nationality">[];
   const { data: statRows } = guests.length
     ? await supabase.from("guest_stats").select("*").in("guest_id", guests.map((g) => g.id))
     : { data: [] };
@@ -72,7 +71,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
             <Link
               key={t ?? "all"}
               href={href(t)}
-              className={`text-xs px-2.5 py-1 rounded-md border ${t === activeTag ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              className={`text-xs px-2.5 py-1 rounded-md border ${t === activeTag ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
             >
               {t ?? "All"}
             </Link>
@@ -102,7 +101,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
                   return (
                     <tr key={g.id}>
                       <td className="px-4 py-2.5">
-                        <Link href={`/guests/${g.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                        <Link href={`/guests/${g.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                           {g.full_name}
                         </Link>
                         <span className="flex flex-wrap gap-1 mt-0.5">

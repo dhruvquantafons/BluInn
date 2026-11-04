@@ -109,9 +109,9 @@ function ensureRoles(config) {
 }
 
 /**
- * platform.sql, then every supabase/migrations file not yet applied, each in
+ * platform.sql, then every neon/migrations file not yet applied, each in
  * its own transaction — the same order and atomicity as `supabase db push`
- * and supabase/tests/run.sh.
+ * and neon/tests/run.sh.
  */
 function migrate(config, onProgress) {
   return withClient(config, async (db) => {

@@ -3,7 +3,7 @@ import { hasBearer } from "../../lib/bearer";
 import { hasServiceAccess } from "../../lib/supabase/config";
 
 /**
- * Integration hook for biometric attendance devices (SOW Module 12:
+ * Integration hook for biometric attendance devices (Module 12:
  * "biometric integration-ready"). The device or its middleware posts:
  *
  *   POST /api/attendance

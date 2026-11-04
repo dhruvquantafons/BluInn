@@ -1,6 +1,6 @@
 -- What a Supabase project provides around the app's own migrations, for the
 -- desktop demo. Runs after Supabase Auth has created the auth schema and
--- before supabase/migrations/*.sql. Idempotent: it runs on every start.
+-- before neon/migrations/*.sql. Idempotent: it runs on every start.
 --
 -- The roles themselves (anon, authenticated, service_role, authenticator,
 -- supabase_auth_admin) are created by desktop/lib/database.js, because their

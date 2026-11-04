@@ -7,6 +7,7 @@ import { getSettings } from "../../../../../../lib/settings";
 import { hhmm } from "../../../../../../lib/events";
 import type { EventBooking, Invoice } from "../../../../../../lib/types";
 import { fmtDate, fmtDateTime, fmtMoney } from "../../../../../components/ui";
+import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
 
 /**
@@ -51,7 +52,7 @@ export default async function EventInvoicePage({
       <div className="flex justify-between items-center mb-6 print:hidden">
         <Link
           href={`/events/${id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to the event
         </Link>
@@ -191,6 +192,7 @@ export default async function EventInvoicePage({
           This is a computer-generated invoice. Deposits and payments received against this event are recorded on the
           event itself.
         </p>
+        <PrintFooter />
       </div>
     </div>
   );

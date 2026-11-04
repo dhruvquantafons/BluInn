@@ -6,7 +6,7 @@ import { Pool, type PoolClient } from "pg";
  * The connection to Neon, and the one rule every query follows: it runs in a
  * transaction under the role and claims of whoever asked, exactly as Supabase's
  * PostgREST does. That is what lets the row level security policies in
- * supabase/migrations keep doing all the authorization.
+ * neon/migrations keep doing all the authorization.
  *
  *   anon           signed out (the login page)
  *   authenticated  a signed-in staff member; auth.uid() is their id

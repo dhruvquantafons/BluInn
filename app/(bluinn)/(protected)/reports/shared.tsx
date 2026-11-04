@@ -2,12 +2,15 @@ import Link from "next/link";
 import { Download } from "lucide-react";
 import {
   RANGE_LABELS,
-  describeRange,
   toGrid,
   type RangePreset,
   type ReportDefinition,
 } from "../../../lib/reports";
-import { Card, EmptyState, Notice, SectionTitle, Tag, fmtMoney, tableHeadClass } from "../../components/ui";
+import { Card, EmptyState, Notice, SectionTitle, fmtDate, fmtMoney, tableHeadClass } from "../../components/ui";
+
+/** A bare yyyy-mm-dd reads as "06 Oct 2026" on screen; the CSV keeps ISO. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const shown = (value: unknown) => (typeof value === "string" && ISO_DATE.test(value) ? fmtDate(value) : String(value));
 
 /**
  * The pieces every report page shares: choosing a period, and rendering a
@@ -52,7 +55,7 @@ export function RangePicker({
               href={`${basePath}?preset=${p}`}
               className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
                 preset === p
-                  ? "border-yellow-500 bg-yellow-50 text-yellow-800"
+                  ? "border-brand-500 bg-brand-50 text-brand-800"
                   : "border-slate-200 text-slate-600 hover:border-slate-300"
               }`}
             >
@@ -88,7 +91,7 @@ export function RangePicker({
           </button>
         </div>
       </form>
-      <p className="mt-2 text-[11px] text-slate-500">Showing {describeRange(resolved.from, resolved.to)}.</p>
+      <p className="mt-2 text-[11px] text-slate-500">Showing {resolved.from === resolved.to ? fmtDate(resolved.from) : `${fmtDate(resolved.from)} to ${fmtDate(resolved.to)}`}.</p>
     </Card>
   );
 }
@@ -99,7 +102,7 @@ export function ExportLink({ kind, from, to }: { kind: string; from: string; to:
     <Link
       href={`/reports/export?kind=${kind}&from=${from}&to=${to}`}
       prefetch={false}
-      className="inline-flex items-center gap-1.5 text-[11px] text-yellow-700 hover:underline"
+      className="inline-flex items-center gap-1.5 text-[11px] text-brand-700 hover:underline"
     >
       <Download className="w-3.5 h-3.5" /> CSV
     </Link>
@@ -162,17 +165,12 @@ export function ReportTable({
                 <tr key={i} className="hover:bg-slate-50/60">
                   {row.map((value, j) => {
                     const column = definition.columns[j];
-                    const isSource = column.key === "source" && definition.kind === "daily_revenue";
                     return (
                       <td key={column.key} className={`py-2 px-3 ${column.money ? "text-right" : ""}`}>
-                        {isSource ? (
-                          <Tag tone={value === "audit" ? "green" : "neutral"}>
-                            {value === "audit" ? "Closed" : "Live"}
-                          </Tag>
-                        ) : column.money && typeof value === "number" ? (
+                        {column.money && typeof value === "number" ? (
                           fmtMoney(value)
                         ) : (
-                          String(value)
+                          shown(value)
                         )}
                       </td>
                     );
@@ -184,27 +182,5 @@ export function ReportTable({
         </div>
       )}
     </Card>
-  );
-}
-
-/**
- * The note that explains a mixed report. Dates the night audit has closed are
- * fixed for ever; dates it has not are still moving, and a manager should know
- * which is which before quoting a figure to an owner.
- */
-export function SourceNote({ audited, days }: { audited: number; days: number }) {
-  if (days === 0) return null;
-  if (audited === days) {
-    return (
-      <p className="text-[11px] text-slate-500">
-        Every day in this period is closed by a night audit, so these figures will not change.
-      </p>
-    );
-  }
-  return (
-    <p className="text-[11px] text-slate-500">
-      {audited} of {days} day(s) are closed by a night audit and fixed. The rest are computed live and may still
-      change as charges are posted.
-    </p>
   );
 }

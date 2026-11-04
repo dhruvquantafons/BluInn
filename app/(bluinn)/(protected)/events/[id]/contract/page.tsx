@@ -7,7 +7,7 @@ import { fmtDate, fmtMoney } from "../../../../components/ui";
 import { AddressedTo, ChargeTable, DocumentShell, loadEventDocument } from "../shared";
 
 /**
- * The contract the client signs (SOW Module 10 "contract generation").
+ * The contract the client signs (Module 10 "contract generation").
  *
  * The same figures as the quotation, with the terms the hotel actually holds
  * the client to and a place for both signatures. The terms come from property
@@ -94,8 +94,7 @@ export default async function EventContractPage({ params }: { params: Promise<{ 
           </p>
         )}
         <p>
-          The balance of {fmtMoney(Number(event.grand_total) - paid)} is payable as agreed. Where the hotel has
-          extended credit to a company, the amount falls due on that company&rsquo;s own terms.
+          The balance of {fmtMoney(Number(event.grand_total) - paid)} is payable as agreed.
         </p>
         <p>
           The final bill is raised on the guaranteed head count of{" "}

@@ -3,7 +3,7 @@ import type { MessageTemplateKey, Notification } from "../../lib/types";
 import { Tag, fmtDateTime } from "./ui";
 
 /**
- * The notification history (SOW Module 16: "notification history log per
+ * The notification history (Module 16: "notification history log per
  * guest and per staff member").
  *
  * Shows skipped attempts as plainly as successful ones. That matters more

@@ -40,14 +40,9 @@ describe("pickTemplate", () => {
 });
 
 describe("guestTags", () => {
-  it("derives Repeat Guest and Corporate and keeps a fixed order", () => {
-    expect(guestTags({ tags: ["Blacklisted", "VIP", "odd"], company_id: "c" }, { stays: 3 })).toEqual([
-      "VIP",
-      "Blacklisted",
-      "Repeat Guest",
-      "Corporate",
-    ]);
-    expect(guestTags({ tags: [], company_id: null }, { stays: 1 })).toEqual([]);
+  it("derives Repeat Guest and keeps a fixed order", () => {
+    expect(guestTags({ tags: ["Blacklisted", "VIP", "odd"] }, { stays: 3 })).toEqual(["VIP", "Blacklisted", "Repeat Guest"]);
+    expect(guestTags({ tags: [] }, { stays: 1 })).toEqual([]);
   });
 });
 
@@ -66,7 +61,7 @@ describe("the notification engine's templates", () => {
     "booking_modified",
   ] as const;
 
-  it("covers every message the SOW names", () => {
+  it("covers every guest message BluInn sends", () => {
     for (const key of KEYS) {
       expect(DEFAULT_TEMPLATES[key], `missing default for ${key}`).toBeTruthy();
       expect(TEMPLATE_LABELS[key], `missing label for ${key}`).toBeTruthy();

@@ -5,9 +5,10 @@ import type { Booking, MessageTemplate, MessageTemplateKey, PropertySettings } f
 import { MEAL_PLAN_LABELS } from "./types";
 import { hhmm } from "./settings";
 import { pickTemplate, renderTemplate } from "./message-templates";
+import { PRODUCT } from "./app-config";
 
 /**
- * Guest messages about a booking (SOW Module 1: "automatic booking
+ * Guest messages about a booking (Module 1: "automatic booking
  * confirmation email/SMS with a unique reservation ID"; Module 2: express
  * check-out bill). Every attempt, including skipped ones, is written to the
  * notifications table so the desk can see what the guest was actually sent.
@@ -152,7 +153,7 @@ function compose(
 
   const html = `<!doctype html><html><body style="margin:0;background:#f5f7fa;font-family:Arial,Helvetica,sans-serif;color:#121722">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px">
-<p style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#1f47b4;margin:0 0 20px">${esc(hotel.name)}</p>
+<p style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:${PRODUCT.themeColor};margin:0 0 20px">${esc(hotel.name)}</p>
 <p style="font-size:16px">Dear ${esc(first)},</p>
 ${paragraphs(intro)}
 <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
@@ -167,7 +168,7 @@ ${paragraphs(outro)}
 
 /** Makes https links in already-escaped text clickable. */
 const linkify = (escaped: string) =>
-  escaped.replace(/https:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:#1f47b4">${url}</a>`);
+  escaped.replace(/https:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:${PRODUCT.themeColor}">${url}</a>`);
 
 /** Composes a message without sending it — for the template editor's preview. */
 export function previewMessage(

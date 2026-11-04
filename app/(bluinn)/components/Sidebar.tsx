@@ -7,7 +7,8 @@ import { KeyRound, LogOut, Settings, X } from "lucide-react";
 import type { Staff } from "../../lib/types";
 import { signOut } from "../actions";
 import PropertySwitcher from "./PropertySwitcher";
-import BrandMark from "./BrandMark";
+import BrandMark, { Wordmark } from "./BrandMark";
+import { PRODUCT } from "../../lib/app-config";
 import { Avatar } from "./ui";
 import { allowedGroups, groupFor, isActive, OPEN_MENU_EVENT, type Access, type NavGroup, type NavItem } from "./nav";
 
@@ -40,7 +41,7 @@ export default function Sidebar({
   staff: Staff;
   roleName: string;
   access: Access;
-  /** The hotels this person may work at (SOW Module 14). */
+  /** The hotels this person may work at (Module 14). */
   properties?: { id: string; code: string; name: string }[];
   currentProperty?: string | null;
 }) {
@@ -86,8 +87,8 @@ export default function Sidebar({
               <span className="flex items-center gap-2.5">
                 <BrandMark className="w-8 h-8" />
                 <span>
-                  <span className="admin-display block text-[15px] leading-none">BluInn</span>
-                  <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 mt-1.5">Property management</span>
+                  <Wordmark className="block text-[15px] leading-none" />
+                  <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 mt-1.5">{PRODUCT.descriptor}</span>
                 </span>
               </span>
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="p-1 rounded-lg hover:bg-white/10 cursor-pointer">
@@ -138,7 +139,7 @@ function GroupHeader({ group }: { group: NavGroup }) {
   const Icon = group.icon;
   return (
     <div className="flex items-start gap-3 px-2 pb-4 border-b border-(--g-200)/70">
-      <span className="w-10 h-10 shrink-0 rounded-xl bg-(--g-600) text-white flex items-center justify-center shadow-sm">
+      <span className="w-10 h-10 shrink-0 rounded-xl bg-linear-to-br from-(--g-500) to-(--g-700) text-white flex items-center justify-center shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_6px_14px_-6px_var(--hero-shadow)]">
         <Icon className="w-5 h-5" strokeWidth={1.75} />
       </span>
       <span className="min-w-0">

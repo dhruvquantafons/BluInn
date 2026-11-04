@@ -1,5 +1,5 @@
-import type { Booking, Company, RatePlan, RoomType } from "../../../../lib/types";
-import { BOOKING_SOURCE_LABELS, PAYMENT_METHOD_LABELS } from "../../../../lib/types";
+import type { Booking, RatePlan, RoomType } from "../../../../lib/types";
+import { BOOKING_SOURCE_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import { updateBookingDetails } from "../../../booking-actions";
 import { Field, Check, inputClass } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
@@ -13,13 +13,11 @@ export default function EditBookingForm({
   booking,
   roomTypes,
   plans,
-  companies,
   canOverbook,
 }: {
   booking: Booking;
   roomTypes: RoomType[];
   plans: RatePlan[];
-  companies: Company[];
   canOverbook: boolean;
 }) {
   const inHouse = booking.status === "checked_in";
@@ -108,19 +106,9 @@ export default function EditBookingForm({
         <Field label="Payment method">
           <select name="payment_method" defaultValue={booking.payment_method ?? ""} className={inputClass}>
             <option value="">Not set</option>
-            {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+            {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Company">
-          <select name="company_id" defaultValue={booking.company_id ?? ""} className={inputClass}>
-            <option value="">Individual</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
               </option>
             ))}
           </select>

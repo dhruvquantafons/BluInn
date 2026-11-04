@@ -38,7 +38,7 @@ export default async function HousekeepingSetupPage() {
         </p>
         {cleaners.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No staff have the Housekeeping Staff role yet. Add them on the <Link href="/staff" className="text-yellow-800">Staff</Link> page.
+            No staff have the Housekeeping Staff role yet. Add them on the <Link href="/staff" className="text-brand-800">Staff</Link> page.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -120,7 +120,7 @@ export default async function HousekeepingSetupPage() {
                     key={i.id}
                     action={saveChecklistItem}
                     submitLabel="Save"
-                    submitClassName="text-xs text-yellow-800 cursor-pointer"
+                    submitClassName="text-xs text-brand-800 cursor-pointer"
                     className="flex flex-wrap items-center gap-2"
                   >
                     <input type="hidden" name="id" value={i.id} />
@@ -158,12 +158,12 @@ export default async function HousekeepingSetupPage() {
         <p>
           Default turnaround: <strong>{settings.hk_default_minutes} minutes</strong>; deep clean every{" "}
           <strong>{settings.hk_deep_clean_days} days</strong> (set on{" "}
-          <Link href="/settings" className="text-yellow-800">Settings</Link>). Deep cleans get three times the target.
+          <Link href="/settings" className="text-brand-800">Settings</Link>). Deep cleans get three times the target.
         </p>
         <p className="mt-1">
           Per room type:{" "}
           {(types ?? []).map((t) => `${t.name} ${t.cleaning_minutes ?? settings.hk_default_minutes} min`).join(" · ")} (set on{" "}
-          <Link href="/rates" className="text-yellow-800">Rates → Room types</Link>).
+          <Link href="/rates" className="text-brand-800">Rates → Room types</Link>).
         </p>
       </Card>
     </div>

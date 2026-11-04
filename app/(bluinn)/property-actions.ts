@@ -70,7 +70,7 @@ export async function saveProperty(_prev: ActionState, fd: FormData): Promise<Ac
   const { error } = await supabase
     .from("properties")
     .update({
-      name: str(fd, "name", 200) || "Hotel",
+      name: str(fd, "name", 200) || "Your Hotel",
       brand: str(fd, "brand", 100),
       is_active: bool(fd, "is_active"),
       sort_order: int(fd, "sort_order", 0, 0, 999),
@@ -117,7 +117,6 @@ export async function saveGroupSettings(_prev: ActionState, fd: FormData): Promi
     .from("group_settings")
     .update({
       group_name: str(fd, "group_name", 200) || "Group",
-      best_rate_message: str(fd, "best_rate_message", 500),
       invoice_terms: str(fd, "invoice_terms", 1000),
       event_terms: str(fd, "event_terms", 4000),
       default_language: defaultLanguage,
@@ -154,7 +153,7 @@ export async function pushCentralConfig(_prev: ActionState, fd: FormData): Promi
   if (items.length === 0) return { error: "Choose at least one thing to push." };
 
   // No properties chosen means every active one, which is the common case and
-  // what the SOW asks for ("pushed from head office to all properties").
+  // what Module 14 asks for ("pushed from head office to all properties").
   const chosen = fd
     .getAll("properties")
     .map(String)

@@ -12,7 +12,7 @@ import ActionForm from "../../../../components/ActionForm";
 import AssetFields from "../AssetFields";
 import { PRIORITY_TONE, STATUS_TONE } from "../../shared";
 
-/** One asset and its maintenance history (SOW: "its own maintenance history log"). */
+/** One asset and its maintenance history (Module 11: "its own maintenance history log"). */
 export default async function AssetPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireAnyPermission(["maintenance.work", "maintenance.manage"]);
   const { id } = await params;
@@ -32,7 +32,7 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Link href="/maintenance/assets" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+      <Link href="/maintenance/assets" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
         <ArrowLeft className="w-3.5 h-3.5" /> Assets
       </Link>
       <div>
@@ -74,7 +74,7 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
                 <tr key={t.id} className="align-top">
                   <td className="px-4 py-2.5 whitespace-nowrap text-xs text-slate-600">{fmtDateTime(t.created_at)}</td>
                   <td className="px-4 py-2.5">
-                    <Link href={`/maintenance/${t.id}`} className="text-slate-900 hover:text-yellow-800">
+                    <Link href={`/maintenance/${t.id}`} className="text-slate-900 hover:text-brand-800">
                       {t.title}
                     </Link>
                     <span className="block text-xs text-slate-500">{t.reference}</span>

@@ -54,7 +54,7 @@ const EVENT_TYPES: EventType[] = [
 const RENTAL_BASES: RentalBasis[] = ["full_day", "half_day", "hourly", "custom", "waived"];
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
 
 const LINE_KINDS = ["equipment", "food_extra", "decor", "other"] as const;
@@ -94,7 +94,6 @@ export async function createEvent(_prev: ActionState, fd: FormData): Promise<Act
   const pax = int(fd, "pax_expected", 0, 0, 100000);
   const contactName = str(fd, "contact_name", 120);
   const guestId = uuidOrNull(fd, "guest_id");
-  const companyId = uuidOrNull(fd, "company_id");
 
   if (!spaceId) return { error: "Choose the space the event is in." };
   if (!title) return { error: "Give the event a name, such as “Khan wedding reception”." };
@@ -102,8 +101,8 @@ export async function createEvent(_prev: ActionState, fd: FormData): Promise<Act
   if (!startTime || !endTime) return { error: "Give the times the event starts and finishes." };
   if (endTime <= startTime) return { error: "The event has to finish after it starts." };
   if (pax < 1) return { error: "How many people are expected?" };
-  if (!guestId && !companyId && !contactName) {
-    return { error: "Say who the event is for: a guest, a company, or a contact name." };
+  if (!guestId && !contactName) {
+    return { error: "Say who the event is for: a guest or a contact name." };
   }
 
   const { data: spaceRow } = await supabase
@@ -126,16 +125,9 @@ export async function createEvent(_prev: ActionState, fd: FormData): Promise<Act
 
   const basis = oneOf(fd, "rental_basis", RENTAL_BASES, "full_day");
 
-  // Payment terms are booking data in the SOW. A corporate client already has
-  // agreed terms on their account, so those are what the quotation says
-  // rather than something typed again; whoever is selling can edit it after.
-  let paymentTerms = str(fd, "payment_terms", 500);
-  if (!paymentTerms) {
-    const { data: company } = companyId
-      ? await supabase.from("companies").select("name, payment_terms_days").eq("id", companyId).maybeSingle()
-      : { data: null };
-    paymentTerms = defaultPaymentTerms(company, settings.event_advance_percent);
-  }
+  // Payment terms are part of an event booking (Module 10). Left blank, the
+  // hotel's usual deposit sentence is used; whoever is selling can edit it after.
+  const paymentTerms = str(fd, "payment_terms", 500) || defaultPaymentTerms(settings.event_advance_percent);
 
   const { data, error } = await supabase
     .from("event_bookings")
@@ -148,7 +140,6 @@ export async function createEvent(_prev: ActionState, fd: FormData): Promise<Act
       title,
       event_type: oneOf(fd, "event_type", EVENT_TYPES, "conference"),
       guest_id: guestId,
-      company_id: companyId,
       contact_name: contactName,
       contact_phone: str(fd, "contact_phone", 30),
       contact_email: str(fd, "contact_email", 120),
@@ -226,7 +217,6 @@ export async function updateEvent(_prev: ActionState, fd: FormData): Promise<Act
       title,
       event_type: oneOf(fd, "event_type", EVENT_TYPES, event.event_type),
       guest_id: uuidOrNull(fd, "guest_id"),
-      company_id: uuidOrNull(fd, "company_id"),
       contact_name: str(fd, "contact_name", 120),
       contact_phone: str(fd, "contact_phone", 30),
       contact_email: str(fd, "contact_email", 120),
@@ -530,27 +520,6 @@ export async function billEventToRoom(_prev: ActionState, fd: FormData): Promise
   return { success: "Event billed to the room. It is now on the guest's folio and will appear on their invoice." };
 }
 
-/** Bills the event to a company, which is how corporate conferences settle. */
-export async function billEventToCompany(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("events.bill");
-  const supabase = await createClient();
-  const id = uuidOrNull(fd, "id");
-  if (!id) return { error: "Event not found." };
-
-  const { error } = await supabase.rpc("event_to_city_ledger", {
-    p_event: id,
-    p_company: uuidOrNull(fd, "company_id"),
-  });
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateEvent(id);
-  revalidatePath("/billing/city-ledger");
-  return {
-    success:
-      "Event billed to the company. It is on the city ledger now, due on the company's terms, and ages with the rest of their debt.",
-  };
-}
-
 /**
  * Issues a GST invoice for an event, from the property's own invoice series —
  * the same run of numbers as a room invoice, because the tax law wants one
@@ -565,7 +534,7 @@ export async function issueEventInvoice(_prev: ActionState, fd: FormData): Promi
 
   const { data: row } = await supabase
     .from("event_bookings")
-    .select("*, companies(name, gstin, billing_address), guests(full_name), event_spaces(name)")
+    .select("*, guests(full_name), event_spaces(name)")
     .eq("id", id)
     .maybeSingle();
   if (!row) return { error: "Event not found." };
@@ -627,9 +596,8 @@ export async function issueEventInvoice(_prev: ActionState, fd: FormData): Promi
       seq,
       event_id: id,
       bill_to_name: clientName(event),
-      bill_to_address: event.companies?.billing_address ?? "",
-      bill_to_gstin: event.companies?.gstin ?? "",
-      company_id: event.company_id,
+      bill_to_address: "",
+      bill_to_gstin: "",
       place_of_supply: settings.state,
       currency: settings.currency,
       net_total: totals.net,

@@ -32,7 +32,7 @@ const SENDABLE = [
 ];
 
 /**
- * Scheduled email reports (SOW Module 13). The sending is done by
+ * Scheduled email reports (Module 13). The sending is done by
  * /api/cron/reports so a report goes out whether or not anyone is signed in.
  */
 export default async function ReportSchedulesPage() {

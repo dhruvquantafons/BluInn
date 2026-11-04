@@ -5,7 +5,7 @@ import { LANGUAGES } from "../../../lib/types";
 import { getSettings, hhmm, taxSlabsOf } from "../../../lib/settings";
 import { emailConfigured, smsConfigured } from "../../../lib/integrations";
 import { saveSettings } from "../../actions";
-import { PageHeader, Card, Field, Check, Notice, Tag, SectionTitle, inputClass, fmtDate } from "../../components/ui";
+import { PageHeader, Card, Field, Check, Notice, Tag, SectionTitle, inputClass } from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
 
 export default async function SettingsPage() {
@@ -25,7 +25,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader icon={<Settings />} title="Settings" description="Property details, policies, tax and security. Business date is moved only by night audit." />
+      <PageHeader icon={<Settings />} title="Settings" description="Property details, policies, tax and security." />
       <ActionForm action={saveSettings} submitLabel="Save settings" className="space-y-6">
         <Card className="p-5 space-y-4">
           <SectionTitle>Property</SectionTitle>
@@ -71,7 +71,6 @@ export default async function SettingsPage() {
               <input name="timezone" defaultValue={s.timezone} className={inputClass} />
             </Field>
           </div>
-          <p className="text-xs text-slate-600">Business date: {fmtDate(s.business_date)}</p>
         </Card>
 
         <Card className="p-5 space-y-4">
@@ -83,7 +82,7 @@ export default async function SettingsPage() {
             <Field label="Check-out by">
               <input type="time" name="check_out_time" defaultValue={hhmm(s.check_out_time)} className={inputClass} />
             </Field>
-            <Field label="Tentative hold (hours)" hint="Night audit releases unconfirmed holds after this.">
+            <Field label="Tentative hold (hours)" hint="How long a tentative booking is held. Confirm or cancel it before then; it is not released automatically.">
               <input type="number" name="hold_hours" min={1} max={720} defaultValue={s.hold_hours} className={inputClass} />
             </Field>
             <Field label="Cleaning target (minutes)" hint="Default turnaround per room; room types can override.">
@@ -152,16 +151,6 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Chase accounts overdue by (days)" hint="Used by the city ledger chase list.">
-              <input
-                type="number"
-                name="ar_reminder_days"
-                min={0}
-                max={180}
-                defaultValue={s.ar_reminder_days}
-                className={inputClass}
-              />
-            </Field>
             <div className="pt-6 sm:col-span-2">
               <Check
                 name="multi_currency_enabled"
@@ -216,7 +205,7 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Thank-you & feedback (days after)" hint="Sent after departure with the feedback link. 0 = off.">
+            <Field label="Thank-you & feedback (days after)" hint="Sent after departure to thank the guest. 0 = off.">
               <input
                 type="number"
                 name="notify_post_stay_days"
@@ -247,28 +236,13 @@ export default async function SettingsPage() {
           <Notice>
             The three timed guest messages go out from the nightly job, which needs{" "}
             <span className="font-mono">CRON_SECRET</span> set. Wording for every message is edited under{" "}
-            <Link href="/settings/templates" className="text-yellow-700 underline">
+            <Link href="/settings/templates" className="text-brand-700 underline">
               Templates
             </Link>
             , per language. Email needs <span className="font-mono">RESEND_API_KEY</span> and SMS needs the Twilio
             keys; without them each attempt is still recorded as &ldquo;not configured&rdquo; so nothing is lost
             silently.
           </Notice>
-        </Card>
-
-        <Card className="p-5 space-y-4">
-          <SectionTitle>Online booking</SectionTitle>
-          <Field
-            label="Best-rate guarantee message"
-            hint="For your hotel website or booking engine to show beside its rates. Leave empty to show nothing."
-          >
-            <textarea
-              name="best_rate_message"
-              rows={2}
-              defaultValue={s.best_rate_message}
-              className={inputClass}
-            />
-          </Field>
         </Card>
 
         <Card className="p-5 space-y-4">
@@ -395,7 +369,7 @@ export default async function SettingsPage() {
             <Field label="Lockout (minutes)">
               <input type="number" name="lockout_minutes" min={1} max={1440} defaultValue={s.lockout_minutes} className={inputClass} />
             </Field>
-            <Field label="Keep ID scans (days)" hint="Purged at night audit.">
+            <Field label="Keep ID scans (days)" hint="Your retention policy. Scans are not deleted automatically.">
               <input type="number" name="id_document_retention_days" min={30} max={3650} defaultValue={s.id_document_retention_days} className={inputClass} />
             </Field>
           </div>
@@ -404,7 +378,7 @@ export default async function SettingsPage() {
         <Card className="p-5 space-y-4">
           <SectionTitle
             action={
-              <Link href="/settings/templates" className="text-xs text-yellow-800 hover:text-yellow-900">
+              <Link href="/settings/templates" className="text-xs text-brand-800 hover:text-brand-900">
                 Edit message templates →
               </Link>
             }

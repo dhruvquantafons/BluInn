@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MessagesSquare } from "lucide-react";
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
@@ -14,7 +14,7 @@ import ActionForm from "../../../components/ActionForm";
 const KEYS = Object.keys(TEMPLATE_LABELS) as MessageTemplateKey[];
 
 /**
- * Guest message templates per language (SOW Module 15: "email templates";
+ * Guest message templates per language (Module 15: "email templates";
  * Module 16: edit "without needing a developer, using placeholders").
  */
 export default async function TemplatesPage({ searchParams }: { searchParams: Promise<{ lang?: string }> }) {
@@ -28,11 +28,12 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <Link href="/settings" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4">
+      <Link href="/settings" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Settings
       </Link>
       <PageHeader
         title="Message templates"
+        icon={<MessagesSquare />}
         description="The words of every email and SMS sent to guests. The booking details table is added automatically between the opening and closing paragraphs."
       />
 
@@ -41,13 +42,13 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
           <Link
             key={code}
             href={`/settings/templates?lang=${code}`}
-            className={`text-xs px-2.5 py-1 rounded-md border ${code === language ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+            className={`text-xs px-2.5 py-1 rounded-md border ${code === language ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
           >
             {LANGUAGES[code] ?? code}
             {code === settings.default_language && " (default)"}
           </Link>
         ))}
-        <Link href="/settings" className="text-xs text-yellow-800 ml-2">
+        <Link href="/settings" className="text-xs text-brand-800 ml-2">
           Add languages in Settings
         </Link>
       </div>

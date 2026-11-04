@@ -36,7 +36,7 @@ import ActionForm from "../../../components/ActionForm";
 import { TierTag } from "./shared";
 
 /**
- * The loyalty programme (SOW Module 8): its rules, its tiers, and who is in it.
+ * The loyalty programme (Module 8): its rules, its tiers, and who is in it.
  *
  * Points are earned automatically when an invoice is issued, at the earning
  * rate of the tier the guest held at the time. They are spent from the guest's
@@ -181,7 +181,7 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
         </SectionTitle>
         <p className="text-[11px] text-slate-500 -mt-2 mb-4">
           A guest holds the highest tier whose nights <em>and</em> spend they meet over a rolling twelve months. The
-          lowest tier is the entry tier, and must sit at zero so every member has one. Night audit re-checks everybody.
+          lowest tier is the entry tier, and must sit at zero so every member has one. After changing a tier, use Review every member.
         </p>
 
         <div className="overflow-x-auto">
@@ -233,7 +233,7 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
 
         {manage && (
           <details className="mt-4 pt-4 border-t border-slate-100">
-            <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Add or edit a tier</summary>
+            <summary className="text-xs font-medium text-brand-700 cursor-pointer">Add or edit a tier</summary>
             <ActionForm
               action={saveLoyaltyTier}
               submitLabel="Save tier"
@@ -307,7 +307,7 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
                 {members.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50/60">
                     <td className="py-2 px-4">
-                      <Link href={`/guests/${m.id}`} className="text-slate-900 hover:text-yellow-700">
+                      <Link href={`/guests/${m.id}`} className="text-slate-900 hover:text-brand-700">
                         {m.full_name}
                       </Link>
                     </td>
@@ -338,7 +338,7 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
                   <Tag tone={t.kind === "earn" ? "green" : t.kind === "redeem" ? "blue" : t.kind === "expire" ? "neutral" : "amber"}>
                     {LOYALTY_TX_LABELS[t.kind]}
                   </Tag>{" "}
-                  <Link href={`/guests/${t.guest_id}`} className="text-slate-900 hover:text-yellow-700">
+                  <Link href={`/guests/${t.guest_id}`} className="text-slate-900 hover:text-brand-700">
                     {t.guests?.full_name ?? "Guest"}
                   </Link>
                   <span className="text-slate-500">

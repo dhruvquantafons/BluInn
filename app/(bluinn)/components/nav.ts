@@ -17,7 +17,6 @@ import {
   BellRing,
   ReceiptIndianRupee,
   Building2,
-  MoonStar,
   UserCog,
   ShieldCheck,
   Settings,
@@ -68,7 +67,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/guests", label: "Guests", icon: Contact, any: ["guests.view"] },
       { href: "/groups", label: "Groups", icon: UsersRound, any: ["bookings.groups"] },
       { href: "/tape-chart", label: "Tape chart", icon: GanttChart, any: ["bookings.view", "frontdesk.view"] },
-      { href: "/night-audit", label: "Night audit", icon: MoonStar, any: ["frontdesk.night_audit"] },
     ],
   },
   {
@@ -121,9 +119,8 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/billing/invoices",
         label: "Billing",
         icon: ReceiptIndianRupee,
-        any: ["folio.invoice", "folio.refund_approve", "folio.city_ledger"],
+        any: ["folio.invoice", "folio.refund_approve"],
       },
-      { href: "/companies", label: "Companies", icon: Building2, any: ["companies.manage"] },
       {
         href: "/reports",
         label: "Reports",
@@ -168,7 +165,7 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 /** Fired by the top bar's hamburger; the Sidebar owns the drawer and listens for it. */
-export const OPEN_MENU_EVENT = "admin:open-menu";
+export const OPEN_MENU_EVENT = "bluinn:open-menu";
 
 export type Access = { isSuperuser: boolean; permissions: string[] };
 

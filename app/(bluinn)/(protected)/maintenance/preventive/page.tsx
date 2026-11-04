@@ -105,7 +105,7 @@ export default async function PreventivePage() {
         <Card className="p-4 flex flex-wrap items-start gap-4">
           <ActionForm action={generatePreventive} submitLabel="Raise due tickets now" pendingLabel="Checking…" className="space-y-2">
             <p className="text-sm text-slate-600 max-w-md">
-              Night audit raises a ticket for every job that falls due. A job with an open ticket waits until that one is resolved.
+              The nightly maintenance job raises a ticket for every job that falls due. A job with an open ticket waits until that one is resolved.
             </p>
           </ActionForm>
           <details className="ml-auto w-full lg:w-auto">
@@ -148,7 +148,7 @@ export default async function PreventivePage() {
                 </div>
                 {manage && (
                   <details className="mt-2">
-                    <summary className="text-xs text-yellow-800 cursor-pointer">Edit</summary>
+                    <summary className="text-xs text-brand-800 cursor-pointer">Edit</summary>
                     <div className="mt-3 space-y-3">
                       <ActionForm action={saveSchedule} submitLabel="Save" className="space-y-3">
                         <input type="hidden" name="id" value={s.id} />

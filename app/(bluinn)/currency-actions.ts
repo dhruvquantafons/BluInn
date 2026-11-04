@@ -5,151 +5,18 @@ import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
-import { todayIn } from "../lib/dates";
 import { toBase, impliedRate } from "../lib/currency";
 import type { Currency, PaymentMethod } from "../lib/types";
 import { type ActionState, str, num, bool, uuidOrNull, oneOf, int } from "./form-utils";
 
 /**
- * Module 7 — city ledger (corporate accounts receivable) and multi-currency.
- *
- * Transferring a stay onto a company's account and voiding that transfer both
- * touch two books at once, so they run inside database functions where they
- * are atomic. Everything else — receipts, credit notes, write-offs and the
- * exchange rate table — is an ordinary insert guarded by RLS.
+ * Module 7 — multi-currency: payments taken in a foreign currency, and the
+ * exchange rate table they convert at.
  */
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
-
-function revalidateLedger(companyId?: string | null, bookingId?: string | null) {
-  revalidatePath("/billing/city-ledger");
-  if (companyId) revalidatePath(`/billing/city-ledger/${companyId}`);
-  if (bookingId) revalidatePath(`/bookings/${bookingId}`);
-  revalidatePath("/companies");
-}
-
-// ── Transfer a stay onto a company's account ────────────────────────────────
-
-/**
- * Bills an unpaid folio to a company (SOW Module 7). The database settles the
- * folio and opens the receivable in one transaction, and refuses the transfer
- * if it would take the company past its credit limit.
- */
-export async function transferToCityLedger(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("folio.city_ledger");
-  const supabase = await createClient();
-  const settings = await getSettings();
-
-  const folioId = uuidOrNull(fd, "folio_id");
-  const companyId = uuidOrNull(fd, "company_id");
-  const bookingId = uuidOrNull(fd, "booking_id");
-  if (!folioId) return { error: "Choose a folio to transfer." };
-  if (!companyId) return { error: "Choose the company to bill." };
-
-  const { data, error } = await supabase.rpc("city_ledger_transfer", {
-    p_folio: folioId,
-    p_company: companyId,
-    p_date: todayIn(settings.timezone),
-    p_note: str(fd, "note", 200),
-  });
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateLedger(companyId, bookingId);
-  return {
-    success: data
-      ? "Billed to the company's account. The stay now reads as settled and the balance is on the city ledger."
-      : "Transferred to the city ledger.",
-  };
-}
-
-/** Undoes a transfer, putting the balance back on the guest's folio. */
-export async function voidCityLedgerEntry(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("folio.city_ledger");
-  const supabase = await createClient();
-  const entryId = uuidOrNull(fd, "entry_id");
-  const reason = str(fd, "reason", 300);
-  if (!entryId) return { error: "Entry not found." };
-  if (!reason) return { error: "Give a reason for voiding this entry." };
-
-  const { data: entry } = await supabase
-    .from("city_ledger_entries")
-    .select("company_id, booking_id")
-    .eq("id", entryId)
-    .maybeSingle();
-
-  const { error } = await supabase.rpc("city_ledger_void", { p_entry: entryId, p_reason: reason });
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateLedger(entry?.company_id, entry?.booking_id);
-  return { success: "Entry voided. The balance is back on the guest's folio." };
-}
-
-// ── Receipts, credit notes and write-offs ──────────────────────────────────
-
-/**
- * Records money received from a company. Payments are taken against the
- * account rather than a named invoice — one cheque usually covers several
- * stays — and the aging report applies them to the oldest charge first.
- */
-export async function recordCityLedgerPayment(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const session = await requirePermission("folio.city_ledger");
-  const supabase = await createClient();
-
-  const companyId = uuidOrNull(fd, "company_id");
-  const amount = num(fd, "amount");
-  if (!companyId) return { error: "Company not found." };
-  if (amount === null || amount <= 0) return { error: "Enter the amount received." };
-
-  const { error } = await supabase.from("city_ledger_entries").insert({
-    company_id: companyId,
-    kind: "payment",
-    amount,
-    method: oneOf(fd, "method", PAYMENT_METHODS, "bank_transfer"),
-    reference: str(fd, "reference", 120),
-    description: str(fd, "description", 300) || "Payment received on account",
-    created_by: session.staff.id,
-  });
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateLedger(companyId);
-  return { success: "Payment recorded against the account." };
-}
-
-/**
- * A credit note or a write-off. Both reduce what the company owes; the
- * difference is why, which the statement and the audit log keep.
- */
-export async function creditCityLedger(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const session = await requirePermission("folio.city_ledger");
-  const supabase = await createClient();
-
-  const companyId = uuidOrNull(fd, "company_id");
-  const amount = num(fd, "amount");
-  const reason = str(fd, "description", 300);
-  const kind = oneOf(fd, "kind", ["adjustment", "writeoff"] as const, "adjustment");
-  if (!companyId) return { error: "Company not found." };
-  if (amount === null || amount <= 0) return { error: "Enter the amount to credit." };
-  if (!reason) {
-    return {
-      error: kind === "writeoff" ? "Give a reason for writing this off." : "Say what the credit note is for.",
-    };
-  }
-
-  const { error } = await supabase.from("city_ledger_entries").insert({
-    company_id: companyId,
-    kind,
-    amount,
-    description: reason,
-    reference: str(fd, "reference", 120),
-    created_by: session.staff.id,
-  });
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateLedger(companyId);
-  return { success: kind === "writeoff" ? "Written off." : "Credit note recorded." };
-}
 
 // ── Foreign-currency settlement ────────────────────────────────────────────
 

@@ -6,10 +6,11 @@ import { requireAnyPermission } from "../../../../../../lib/auth";
 import { getSettings } from "../../../../../../lib/settings";
 import type { Booking, Invoice } from "../../../../../../lib/types";
 import { fmtDate, fmtDateTime, fmtMoney } from "../../../../../components/ui";
+import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
 
 /**
- * The tax invoice as issued (SOW Module 7). Everything shown here comes from
+ * The tax invoice as issued (Module 7). Everything shown here comes from
  * the invoice row rather than from the live folio, because a tax document has
  * to keep saying what it said on the day it was given to the guest — even if
  * the folio, the guest's name or the tariff changes afterwards.
@@ -47,7 +48,7 @@ export default async function InvoicePage({
       <div className="flex justify-between items-center mb-6 print:hidden">
         <Link
           href={`/bookings/${id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to booking
         </Link>
@@ -202,6 +203,7 @@ export default async function InvoicePage({
         <p className="mt-4 text-[11px] text-slate-500">
           This is a computer-generated invoice. Payments received against this stay are shown on the guest folio.
         </p>
+        <PrintFooter />
       </div>
     </div>
   );

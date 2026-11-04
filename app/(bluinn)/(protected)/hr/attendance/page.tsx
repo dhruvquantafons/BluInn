@@ -74,7 +74,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
               </Link>
             )}
             {date !== today && (
-              <Link href={nav(today)} className="text-xs text-yellow-800 ml-1">
+              <Link href={nav(today)} className="text-xs text-brand-800 ml-1">
                 Today
               </Link>
             )}
@@ -135,7 +135,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                           {edit &&
                             mine.map((r) => (
                               <details key={r.id} className="mt-1">
-                                <summary className="text-xs text-yellow-800 cursor-pointer">Edit {t(r.clock_in)}</summary>
+                                <summary className="text-xs text-brand-800 cursor-pointer">Edit {t(r.clock_in)}</summary>
                                 <div className="mt-2 w-64 space-y-2">
                                   <ActionForm action={saveAttendance} submitLabel="Save" className="space-y-2">
                                     <input type="hidden" name="id" value={r.id} />

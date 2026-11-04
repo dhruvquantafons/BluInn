@@ -3,9 +3,10 @@ import { sendEmail } from "./integrations";
 import { kpisFrom, reportByKind, resolveRange, toGrid, type DailyRow } from "./reports";
 import { runReport } from "./report-data";
 import type { PropertySettings, ReportSchedule } from "./types";
+import { APP_URL, PRODUCT } from "./app-config";
 
 /**
- * Building and sending a scheduled report (SOW Module 13: "Scheduled email
+ * Building and sending a scheduled report (Module 13: "Scheduled email
  * reports (daily/weekly/monthly) to management").
  *
  * Shared by the cron endpoint and the "send now" button so a manager's test
@@ -45,12 +46,28 @@ export async function buildScheduledReport(
   db: SupabaseClient,
   schedule: ReportSchedule,
 ): Promise<BuiltReport> {
+  const built = await buildReportBody(db, schedule);
+  if (built.error) return built;
+  // A quiet sign-off, so a manager knows where the email came from and where
+  // to change it. Staff mail only: guest messages carry the hotel's name alone.
+  const manage = `${APP_URL}/reports/schedules`;
+  return {
+    ...built,
+    html:
+      built.html +
+      `<p style="color:#999;font-size:11px;margin-top:24px">Sent by ${escape(PRODUCT.name)} · ` +
+      `<a href="${escape(manage)}" style="color:#999">Manage scheduled reports</a></p>`,
+    text: `${built.text}\n\n— Sent by ${PRODUCT.name} · ${manage}`,
+  };
+}
+
+async function buildReportBody(db: SupabaseClient, schedule: ReportSchedule): Promise<BuiltReport> {
   const { data: settingsRow } = await db.from("property_settings").select("*").maybeSingle();
   const settings = (settingsRow ?? {}) as Partial<PropertySettings>;
   const timezone = settings.timezone ?? "Asia/Kolkata";
   const today = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
   const range = rangeForFrequency(schedule.frequency, today);
-  const hotel = settings.name ?? "The hotel";
+  const hotel = settings.name ?? "Your Hotel";
 
   // The KPI summary is not one of the report functions: it is the headline
   // figures a GM wants in the body of an email, not a table to scroll.
@@ -85,13 +102,10 @@ export async function buildScheduledReport(
               `<td style="border-bottom:1px solid #eee;text-align:right"><strong>${escape(value)}</strong></td></tr>`,
           )
           .join("") +
-        `</table>` +
-        `<p style="color:#666;font-size:12px">${k.auditedDays} of ${k.days} day(s) closed by night audit. ` +
-        `Figures for days not yet closed may still change.</p>`,
+        `</table>`,
       text:
         `${hotel}\n${range.from} to ${range.to}\n\n` +
-        lines.map(([label, value]) => `${label}: ${value}`).join("\n") +
-        `\n\n${k.auditedDays} of ${k.days} day(s) closed by night audit.`,
+        lines.map(([label, value]) => `${label}: ${value}`).join("\n"),
       error: null,
     };
   }

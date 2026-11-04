@@ -124,7 +124,7 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Link href="/hr/staff" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+      <Link href="/hr/staff" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
         <ArrowLeft className="w-3.5 h-3.5" /> Staff
       </Link>
       <div>
@@ -211,7 +211,7 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
           <ul className="divide-y divide-slate-100 border-t border-slate-100">
             {feedback.map((f) => (
               <li key={f.id} className="py-2.5 text-sm">
-                <span className="text-yellow-600">{"★".repeat(f.rating)}</span>
+                <span className="text-brand-600">{"★".repeat(f.rating)}</span>
                 <span className="text-slate-300">{"★".repeat(5 - f.rating)}</span>{" "}
                 <span className="text-xs text-slate-500">
                   {f.source === "guest" ? "Guest" : "Manager"} · {fmtDateTime(f.created_at)}

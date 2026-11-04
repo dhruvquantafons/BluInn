@@ -10,6 +10,7 @@ import type {
   PropertySettings,
 } from "../../../../lib/types";
 import PrintButton from "../../../components/PrintButton";
+import PrintFooter from "../../../components/PrintFooter";
 import { fmtMoney } from "../../../components/ui";
 
 /**
@@ -32,7 +33,7 @@ export async function loadEventDocument(id: string): Promise<EventDocument | nul
   const { data: row } = await supabase
     .from("event_bookings")
     .select(
-      "*, event_spaces(*), event_layouts(name, capacity), event_packages(*), companies(name, gstin, billing_address), guests(full_name, phone, email), bookings(reference, check_in, check_out)",
+      "*, event_spaces(*), event_layouts(name, capacity), event_packages(*), guests(full_name, phone, email), bookings(reference, check_in, check_out)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -79,7 +80,7 @@ export function DocumentShell({
       <div className="flex justify-between items-center mb-6 print:hidden">
         <Link
           href={`/events/${eventId}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to the event
         </Link>
@@ -112,6 +113,7 @@ export function DocumentShell({
           </div>
         </div>
         {children}
+        <PrintFooter />
       </div>
     </div>
   );
@@ -259,13 +261,10 @@ export function ChargeTable({
 export function AddressedTo({ doc }: { doc: EventDocument }) {
   const { event } = doc;
   const lines = [
-    event.companies?.name,
     event.guests?.full_name,
     event.contact_name && event.contact_name !== event.guests?.full_name ? event.contact_name : null,
-    event.companies?.billing_address,
     event.contact_phone,
     event.contact_email,
-    event.companies?.gstin ? `GSTIN ${event.companies.gstin}` : null,
   ].filter(Boolean) as string[];
 
   return (

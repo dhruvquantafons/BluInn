@@ -278,7 +278,10 @@ export interface PromoCheck {
   today: string;
   /** How many times this guest has already used it, when known. */
   guestRedemptions?: number;
-  /** A guest typing the code on the public site cannot use a private one. */
+  /**
+   * For a guest-facing channel or booking engine: a private code (one the desk
+   * applies by hand) is refused as if it did not exist. The desk leaves it off.
+   */
   publicOnly?: boolean;
 }
 

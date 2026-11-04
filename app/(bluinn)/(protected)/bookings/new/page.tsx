@@ -4,7 +4,7 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { loadPricingData, loadCompanies } from "../../../../lib/rate-data";
+import { loadPricingData } from "../../../../lib/rate-data";
 import { todayIn, addDays } from "../../../../lib/dates";
 import { loadGroupAvailability, getCurrentProperty } from "../../../../lib/properties";
 import { Card } from "../../../components/ui";
@@ -20,14 +20,14 @@ export default async function NewBookingPage({
   const params = await searchParams;
   const supabase = await createClient();
   const settings = await getSettings();
-  const [pricing, companies] = await Promise.all([loadPricingData(supabase), loadCompanies(supabase)]);
+  const pricing = await loadPricingData(supabase);
 
   const today = todayIn(settings.timezone);
   const walkIn = params.walkin === "1";
   const checkIn = !walkIn && params.check_in && params.check_in >= today ? params.check_in : today;
   const checkOut = addDays(checkIn, 1);
 
-  // Who in the group has room on these dates (SOW Module 14). Returns a single
+  // Who in the group has room on these dates (Module 14). Returns a single
   // property for a single-hotel installation, and the strip hides itself.
   const [availability, currentProperty] = await Promise.all([
     loadGroupAvailability(checkIn, checkOut),
@@ -38,7 +38,7 @@ export default async function NewBookingPage({
     <>
       <Link
         href={walkIn ? "/front-desk" : "/bookings"}
-        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back
       </Link>
@@ -67,7 +67,6 @@ export default async function NewBookingPage({
           restrictions={pricing.restrictions}
           extraCharges={pricing.extraCharges}
           adjustments={pricing.adjustments}
-          companies={companies}
           defaults={{
             checkIn,
             checkOut,

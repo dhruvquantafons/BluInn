@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Folio, FolioEntry, Invoice, PaymentTransaction } from "../../../../lib/types";
-import { PAYMENT_METHOD_LABELS } from "../../../../lib/types";
+import { PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import {
   createFolio,
   moveFolioEntry,
@@ -37,7 +37,6 @@ export default function BillingPanel({
   entries,
   invoices,
   payments,
-  companies,
   balance,
   depositRequired,
   depositPaid,
@@ -53,7 +52,6 @@ export default function BillingPanel({
   entries: FolioEntry[];
   invoices: Invoice[];
   payments: PaymentTransaction[];
-  companies: { id: string; name: string }[];
   balance: number;
   depositRequired: number;
   depositPaid: number;
@@ -76,7 +74,7 @@ export default function BillingPanel({
       <Card className="p-5">
         <SectionTitle>Bills on this stay</SectionTitle>
         <p className="text-[11px] text-slate-500 -mt-2 mb-4">
-          Split a stay when someone else pays part of it — room charges to the company, extras to the guest. Every
+          Split a stay when someone else pays part of it — room charges to one person, extras to another. Every
           charge starts on the master bill.
         </p>
 
@@ -100,7 +98,6 @@ export default function BillingPanel({
                 <span className="text-sm">
                   <Tag tone={f.kind === "master" ? "neutral" : "green"}>{f.kind === "master" ? "Master" : "Split"}</Tag>{" "}
                   {labelOf(f)}
-                  {f.companies?.name && <span className="text-xs text-slate-500"> · {f.companies.name}</span>}
                   <span className="text-xs text-slate-500">
                     {" "}
                     · {folioEntries.length} {folioEntries.length === 1 ? "line" : "lines"}
@@ -111,7 +108,7 @@ export default function BillingPanel({
                   {invoice ? (
                     <Link
                       href={`/bookings/${bookingId}/invoice/${invoice.id}`}
-                      className="font-mono text-yellow-700 hover:underline"
+                      className="font-mono text-brand-700 hover:underline"
                     >
                       {invoice.number}
                     </Link>
@@ -132,26 +129,16 @@ export default function BillingPanel({
         {canAdjust && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
             <ActionForm action={createFolio} submitLabel="Open folio" submitClassName={secondaryButtonClass} className="space-y-3">
-              <p className="text-xs font-medium text-yellow-700">New split folio</p>
+              <p className="text-xs font-medium text-brand-700">New split folio</p>
               <input type="hidden" name="booking_id" value={bookingId} />
               <Field label="Name">
-                <input name="label" required placeholder="Company, Extras, Mr Khan…" maxLength={60} className={inputClass} />
-              </Field>
-              <Field label="Bill to company" hint="Optional — used on the invoice.">
-                <select name="company_id" defaultValue="" className={inputClass}>
-                  <option value="">The guest</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <input name="label" required placeholder="Extras, Mr Khan…" maxLength={60} className={inputClass} />
               </Field>
             </ActionForm>
 
             {folios.length > 1 && (
               <ActionForm action={moveFolioEntry} submitLabel="Move" submitClassName={secondaryButtonClass} className="space-y-3">
-                <p className="text-xs font-medium text-yellow-700">Move a charge</p>
+                <p className="text-xs font-medium text-brand-700">Move a charge</p>
                 <Field label="Charge">
                   <select name="entry_id" required defaultValue="" className={inputClass}>
                     <option value="" disabled>
@@ -221,7 +208,7 @@ export default function BillingPanel({
                             href={p.short_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-yellow-700 hover:underline break-all"
+                            className="text-brand-700 hover:underline break-all"
                           >
                             {p.short_url}
                           </a>
@@ -291,7 +278,7 @@ export default function BillingPanel({
                   <option value="" disabled>
                     Choose…
                   </option>
-                  {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+                  {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
@@ -345,7 +332,7 @@ export default function BillingPanel({
               >
                 <span>
                   <Tag tone={i.status === "issued" ? "green" : "red"}>{i.status === "issued" ? "Issued" : "Cancelled"}</Tag>{" "}
-                  <Link href={`/bookings/${bookingId}/invoice/${i.id}`} className="font-mono text-yellow-700 hover:underline">
+                  <Link href={`/bookings/${bookingId}/invoice/${i.id}`} className="font-mono text-brand-700 hover:underline">
                     {i.number}
                   </Link>
                   <span className="text-slate-500"> · {fmtDateTime(i.issued_at)} · {i.bill_to_name}</span>

@@ -103,10 +103,10 @@ export default function TapeChart({
               <div
                 key={d}
                 className={`text-center py-2 border-slate-100 ${i < days - 1 ? "border-r" : ""} ${
-                  d === today ? "bg-yellow-100 shadow-[inset_0_-2px_0_var(--color-yellow-600)]" : ""
+                  d === today ? "bg-brand-100 shadow-[inset_0_-2px_0_var(--color-brand-600)]" : ""
                 }`}
               >
-                <p className={`text-[10px] uppercase tracking-wide leading-none ${d === today ? "text-yellow-800 font-semibold" : "text-slate-500"}`}>
+                <p className={`text-[10px] uppercase tracking-wide leading-none ${d === today ? "text-brand-800 font-semibold" : "text-slate-500"}`}>
                   {date.toLocaleDateString("en-IN", { weekday: "short" })}
                 </p>
                 <p className="text-[13px] font-medium text-slate-900 tabular-nums leading-none mt-1.5">{date.getDate()}</p>
@@ -134,7 +134,7 @@ export default function TapeChart({
                 <div className="grid flex-1" style={grid}>
                   {dates.map((d, i) => {
                     const weekend = [5, 6].includes(dayOfWeek(d));
-                    const cls = `min-h-9 border-slate-100 ${i < days - 1 ? "border-r" : ""} ${d === today ? "bg-yellow-100/50" : weekend ? "bg-slate-50" : ""}`;
+                    const cls = `min-h-9 border-slate-100 ${i < days - 1 ? "border-r" : ""} ${d === today ? "bg-brand-100/50" : weekend ? "bg-slate-50" : ""}`;
                     return canCreate && d >= today ? (
                       <Link
                         key={d}
@@ -192,7 +192,7 @@ export default function TapeChart({
               <div className="grid flex-1" style={grid}>
                 {dates.map((d, i) => {
                   const weekend = [5, 6].includes(dayOfWeek(d));
-                  const cls = `min-h-9 border-slate-100 ${i < days - 1 ? "border-r" : ""} ${d === today ? "bg-yellow-100/50" : weekend ? "bg-slate-50" : ""}`;
+                  const cls = `min-h-9 border-slate-100 ${i < days - 1 ? "border-r" : ""} ${d === today ? "bg-brand-100/50" : weekend ? "bg-slate-50" : ""}`;
                   return canCreate && d >= today ? (
                     <Link
                       key={d}

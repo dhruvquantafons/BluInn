@@ -525,23 +525,13 @@ describe("equipment available in a space", () => {
 });
 
 describe("payment terms", () => {
-  it("uses a company's own account terms", () => {
-    expect(defaultPaymentTerms({ name: "Dal Travels", payment_terms_days: 30 }, 25)).toBe(
-      "Billed to Dal Travels on account, due 30 days from invoice.",
-    );
-  });
-
-  it("says due on invoice when a company has no credit period", () => {
-    expect(defaultPaymentTerms({ name: "Dal Travels", payment_terms_days: 0 }, 25)).toMatch(/due on invoice/);
-  });
-
-  it("falls back to the hotel's deposit sentence for anyone else", () => {
-    expect(defaultPaymentTerms(null, 25)).toBe(
+  it("uses the hotel's deposit sentence", () => {
+    expect(defaultPaymentTerms(25)).toBe(
       "25% deposit to confirm the booking; balance due on or before the day of the event.",
     );
   });
 
   it("asks for no deposit when the hotel asks for none", () => {
-    expect(defaultPaymentTerms(null, 0)).toBe("Balance due on or before the day of the event.");
+    expect(defaultPaymentTerms(0)).toBe("Balance due on or before the day of the event.");
   });
 });

@@ -33,7 +33,7 @@ export default function AddStaffForm({
   currentProperty = null,
 }: {
   roles: Role[];
-  /** The hotels the administrator may assign to (SOW Module 14). */
+  /** The hotels the administrator may assign to (Module 14). */
   properties?: Pick<Property, "id" | "code" | "name">[];
   currentProperty?: string | null;
 }) {
@@ -55,8 +55,8 @@ export default function AddStaffForm({
 
   return (
     <details className="group">
-      <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-medium text-yellow-700 hover:text-yellow-800 transition-colors">
-        <span className="w-6 h-6 rounded-full bg-yellow-50 flex items-center justify-center">
+      <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-medium text-brand-700 hover:text-brand-800 transition-colors">
+        <span className="w-6 h-6 rounded-full bg-brand-50 flex items-center justify-center">
           <UserPlus className="w-3.5 h-3.5" />
         </span>
         <span>Add a staff member</span>
@@ -111,7 +111,7 @@ export default function AddStaffForm({
               type="button"
               onClick={() => setPassword(suggestPassword())}
               title="Generate a password"
-              className="px-3 rounded-lg border border-slate-200 text-slate-700 hover:border-yellow-500 hover:text-yellow-700 transition-colors cursor-pointer shrink-0"
+              className="px-3 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-700 transition-colors cursor-pointer shrink-0"
             >
               <RefreshCw className="w-4 h-4" />
             </button>

@@ -8,6 +8,7 @@ import { loadFolio, billLines } from "../../../../../lib/folio";
 import type { Booking } from "../../../../../lib/types";
 import { PAYMENT_METHOD_LABELS } from "../../../../../lib/types";
 import { fmtDate, fmtDateTime, fmtMoney } from "../../../../components/ui";
+import PrintFooter from "../../../../components/PrintFooter";
 import PrintButton from "../../../../components/PrintButton";
 
 /**
@@ -22,18 +23,18 @@ export default async function FolioPrintPage({ params }: { params: Promise<{ id:
 
   const { data } = await supabase
     .from("bookings")
-    .select("*, rooms(room_number), room_types(name), companies(name, gstin, billing_address)")
+    .select("*, rooms(room_number), room_types(name)")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
-  const booking = data as Booking & { companies: { name: string; gstin: string; billing_address: string } | null };
+  const booking = data as Booking;
   const { entries, totals } = await loadFolio(supabase, id);
   const live = entries.filter((e) => !e.voided_at);
 
   return (
     <div className="max-w-3xl mx-auto bg-white print:shadow-none">
       <div className="flex justify-between items-center mb-6 print:hidden">
-        <Link href={`/bookings/${id}`} className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+        <Link href={`/bookings/${id}`} className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </Link>
         <PrintButton />
@@ -64,14 +65,6 @@ export default async function FolioPrintPage({ params }: { params: Promise<{ id:
           <div>
             <p className="text-slate-500 uppercase tracking-wider text-[10px]">Guest</p>
             <p className="text-sm">{booking.contact_name}</p>
-            {booking.companies && (
-              <p className="mt-1">
-                {booking.companies.name}
-                {booking.companies.gstin && ` · GSTIN ${booking.companies.gstin}`}
-                <br />
-                {booking.companies.billing_address}
-              </p>
-            )}
           </div>
           <div>
             <p className="text-slate-500 uppercase tracking-wider text-[10px]">Stay</p>
@@ -139,6 +132,7 @@ export default async function FolioPrintPage({ params }: { params: Promise<{ id:
             Room rates are inclusive of {settings.tax_label}; the tax portion is shown separately above.
           </p>
         )}
+        <PrintFooter />
       </div>
     </div>
   );

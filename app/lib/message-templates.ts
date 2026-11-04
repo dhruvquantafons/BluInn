@@ -1,5 +1,5 @@
 /**
- * Guest message templates (SOW Module 15: "email templates"; Module 16:
+ * Guest message templates (Module 15: "email templates"; Module 16:
  * "admins must be able to edit templates without needing a developer, using
  * placeholders like {GuestName}, {CheckInDate}").
  *
@@ -24,7 +24,7 @@ export const TEMPLATE_LABELS: Record<MessageTemplateKey, { name: string; when: s
   },
   post_stay: {
     name: "Post-stay thank-you",
-    when: "A set number of days after departure, with the feedback link.",
+    when: "A set number of days after departure, to thank the guest.",
   },
   payment_receipt: { name: "Payment receipt", when: "A payment is recorded against the booking." },
   booking_modified: { name: "Booking updated", when: "Dates, room or rate change on a confirmed booking." },
@@ -109,7 +109,7 @@ export const DEFAULT_TEMPLATES: Record<MessageTemplateKey, Omit<MessageTemplate,
 /**
  * Fills {Placeholders}. Unknown names are left as written, so a typo is
  * visible rather than silently blank. A line whose placeholder has no value
- * (e.g. no feedback link) is dropped, so it never reads "…your stay: ".
+ * (e.g. no hotel phone) is dropped, so it never reads "…your stay: ".
  */
 export function renderTemplate(text: string, values: Record<string, string>): string {
   return text

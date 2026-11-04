@@ -2,7 +2,7 @@
 // Builds the Next.js app for the desktop demo and stages it:
 //
 //   .stage/app/                 Next standalone server (+ public, .next/static)
-//   .stage/migrations/          supabase/migrations/*.sql
+//   .stage/migrations/          neon/migrations/*.sql
 //   .stage/build-secrets.json   JWT secret, anon + service-role keys, demo.env
 //
 // The JWT secret is generated once into desktop/.secrets and reused, so a
@@ -108,7 +108,7 @@ for (const file of readdirSync(app)) {
 
 const migrations = join(stage, "migrations");
 rmSync(migrations, { recursive: true, force: true });
-cpSync(join(root, "supabase", "migrations"), migrations, { recursive: true });
+cpSync(join(root, "neon", "migrations"), migrations, { recursive: true });
 
 writeFileSync(
   join(stage, "build-secrets.json"),

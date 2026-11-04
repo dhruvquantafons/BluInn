@@ -236,8 +236,8 @@ export async function saveLoyaltyTier(_prev: ActionState, fd: FormData): Promise
 }
 
 /**
- * Re-checks every member's tier. Night audit does this nightly; this is the
- * button for after the thresholds have been changed.
+ * Re-checks every member's tier: the button for after the thresholds have
+ * been changed.
  */
 export async function reevaluateAllTiers(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("loyalty.manage");

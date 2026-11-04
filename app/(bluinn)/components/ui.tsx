@@ -14,7 +14,7 @@
  * so a later restyle only has to touch this file.
  */
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { PAGE_SIZE, pageHref, pageList, type PageParams } from "./paging";
 import type { BookingStatus } from "../../lib/types";
 import { BOOKING_STATUS_LABELS } from "../../lib/types";
@@ -122,9 +122,12 @@ export function PageHeader({
           {stats.map((s) => {
             const body = (
               <>
-                <p className="flex items-center gap-1.5 text-[13px] font-medium text-white/85 [&_svg]:w-3.5 [&_svg]:h-3.5">
+                {/* Two lines reserved below 640px, where the tiles are narrow
+                    and a label like "Departing today" wraps: the values in a
+                    row then stay level. */}
+                <p className="flex items-start gap-1.5 text-[13px] leading-[1.35] font-medium text-white/85 min-h-[2.7em] sm:min-h-0 [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:mt-[0.15em] [&_svg]:shrink-0">
                   {s.icon}
-                  {s.label}
+                  <span>{s.label}</span>
                 </p>
                 <p className="admin-display text-[1.75rem] leading-none text-white mt-2.5">{s.value}</p>
                 {s.hint && <p className="text-[12px] text-white/70 mt-2">{s.hint}</p>}
@@ -197,7 +200,7 @@ export function CardHeader({
   return (
     <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100">
       {icon && (
-        <span className="w-8 h-8 shrink-0 rounded-lg bg-(--g-50) text-(--g-600) flex items-center justify-center [&_svg]:w-4 [&_svg]:h-4">
+        <span className="w-8 h-8 shrink-0 rounded-lg bg-(--g-50) text-(--g-600) ring-1 ring-(--g-100) flex items-center justify-center [&_svg]:w-4 [&_svg]:h-4">
           {icon}
         </span>
       )}
@@ -267,16 +270,21 @@ export function StatCard({
   const body = (
     <div
       className={`group relative h-full flex flex-col overflow-hidden rounded-xl border pl-5 pr-4 py-4 shadow-sm transition duration-200 ease-out ${
-        highlight ? "bg-linear-to-br from-(--g-50) to-white border-(--g-200)" : "bg-white border-slate-200"
-      } ${href ? "hover:border-slate-300 hover:shadow-[0_10px_24px_-14px_rgb(18_23_34/0.28)]" : ""}`}
+        highlight ? "bg-linear-to-br from-(--g-50) via-white to-white border-(--g-200)" : "bg-white border-slate-200"
+      } ${href ? "hover:border-(--g-200) hover:shadow-[0_14px_28px_-16px_rgb(18_23_34/0.32)]" : ""}`}
     >
       <span aria-hidden="true" className={`absolute left-0 inset-y-0 ${highlight ? "w-1 bg-(--g-600)" : "w-[3px] bg-(--g-500)"}`} />
-      <div className="flex items-center gap-2.5">
+      {highlight && (
+        <span aria-hidden="true" className="absolute -right-10 -top-10 w-32 h-32 rounded-full bg-(--g-100) opacity-70 blur-2xl pointer-events-none" />
+      )}
+      <div className="relative flex items-center gap-2.5">
         {icon && (
           <span
             aria-hidden="true"
             className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center [&_svg]:w-4 [&_svg]:h-4 ${
-              highlight ? "bg-(--g-600) text-white" : "bg-(--g-50) text-(--g-600)"
+              highlight
+                ? "bg-linear-to-br from-(--g-500) to-(--g-700) text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"
+                : "bg-(--g-50) text-(--g-600) ring-1 ring-(--g-100)"
             }`}
           >
             {icon}
@@ -290,8 +298,8 @@ export function StatCard({
           />
         )}
       </div>
-      <p className="admin-display text-[1.75rem] leading-none text-slate-900 mt-3.5">{value}</p>
-      {hint && <p className="text-[12px] text-slate-500 mt-auto pt-3">{hint}</p>}
+      <p className="relative admin-display text-[1.875rem] leading-none text-slate-900 mt-4">{value}</p>
+      {hint && <p className="relative text-[12px] text-slate-500 mt-auto pt-3">{hint}</p>}
     </div>
   );
   return href ? (
@@ -354,18 +362,21 @@ export function Banner({ error, success }: { error?: string; success?: string })
 }
 
 /** Centred muted line inside a card, with an optional icon in a tinted ring. */
+/**
+ * "Nothing here" inside a card. Every empty state carries an icon in the
+ * section tint (an inbox unless the page passes its own), so an empty card
+ * reads as deliberate rather than broken.
+ */
 export function EmptyState({ message, icon }: { message: string; icon?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-3 text-center py-12 px-4 text-sm text-slate-500">
-      {icon && (
-        <span
-          aria-hidden="true"
-          className="w-11 h-11 rounded-full bg-(--g-50) text-(--g-600) flex items-center justify-center [&_svg]:w-5 [&_svg]:h-5"
-        >
-          {icon}
-        </span>
-      )}
-      {message}
+    <div className="flex flex-col items-center gap-2.5 text-center py-9 px-4 text-sm text-slate-500">
+      <span
+        aria-hidden="true"
+        className="w-10 h-10 rounded-full bg-(--g-50) text-(--g-600) ring-1 ring-(--g-100) flex items-center justify-center [&_svg]:w-[18px] [&_svg]:h-[18px]"
+      >
+        {icon ?? <Inbox strokeWidth={1.75} />}
+      </span>
+      <p className="max-w-sm leading-relaxed">{message}</p>
     </div>
   );
 }

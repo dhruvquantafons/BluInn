@@ -304,15 +304,6 @@ export default async function PropertiesPage({
               </Field>
             </div>
 
-            <Field label="Best-rate message" hint="For your hotel website or booking engine.">
-              <textarea
-                name="best_rate_message"
-                defaultValue={group.best_rate_message}
-                rows={2}
-                className={inputClass}
-              />
-            </Field>
-
             <Field label="Invoice terms">
               <textarea name="invoice_terms" defaultValue={group.invoice_terms} rows={2} className={inputClass} />
             </Field>

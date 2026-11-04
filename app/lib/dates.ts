@@ -16,18 +16,6 @@ export function toLocalIso(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Today as yyyy-mm-dd in the viewer's timezone. */
-export function todayIso(): string {
-  return toLocalIso(new Date());
-}
-
-/** yyyy-mm-dd, `days` from today. */
-export function isoPlusDays(days: number, from = new Date()): string {
-  const d = new Date(from);
-  d.setDate(d.getDate() + days);
-  return toLocalIso(d);
-}
-
 /** First day of the month containing `iso`, as yyyy-mm-01. */
 export function monthStartOf(iso: string): string {
   return `${iso.slice(0, 7)}-01`;

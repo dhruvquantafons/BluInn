@@ -4,7 +4,7 @@
 // Files live on disk under <data>/storage/<bucket>/<object id>. Every
 // operation first writes or reads the storage.objects row *as the caller*
 // (role and JWT claims set for the transaction), so the app's own storage
-// policies in supabase/migrations decide what is allowed — as they do on
+// policies in neon/migrations decide what is allowed — as they do on
 // Supabase. Bucket limits come from storage.buckets.
 
 const crypto = require("node:crypto");

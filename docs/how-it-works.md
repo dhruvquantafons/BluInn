@@ -30,9 +30,9 @@ README's [Features](../README.md#features) table.
 - **Overbooking is blocked by the database.** A manager can override it with a reason, which is logged.
 - **Booking sources** include walk-in, phone, email, website, OTA, travel agent, corporate and mobile app, so bookings that arrive through a hotel's own channels are recorded alongside the desk's.
 - **Check-in** needs an inspected room, government ID, a signed registration card and the deposit.
-- **Check-out** settles the bill and can email it.
-- **Night audit** posts the night's room charges, marks no-shows, retires expired loyalty points,
-re-checks every member's tier, and moves the business date forward.
+- **Check-out** posts the stay's room charges and tax, settles the bill and can email it. There is no
+night audit or business date: the app works on today's date in the property's timezone, and no-shows are
+marked by hand from the booking.
 
 ## Billing and invoicing
 - **Folios:** every stay starts with one master bill. The desk can open more — "Company", "Extras" — and move charges between them, so one stay can be billed to more than one payer.
@@ -76,7 +76,7 @@ the same guest the same pre-arrival reminder twice.
 
 ## Multi-property
 - **`properties` is the table that was `property_settings`.** Each hotel holds its own name, brand, tax
-slabs, business date, check-in times and fee rules. A view still called `property_settings` shows *the
+slabs, check-in times and fee rules. A view still called `property_settings` shows *the
 property this request is about*, which is why the many functions written as `from property_settings limit 1`
 kept working and kept meaning the right thing.
 - **The database decides which hotel, not the browser.** `current_property()` reads the signed-in staff
@@ -115,14 +115,13 @@ food and 18% on a beer. The effective rate is shown on every menu row.
 - **An order is the bill.** Splitting moves lines onto a second bill; merging moves them back and voids the empty
 one — the same idea as moving a charge between folios.
 - **Charge to room** posts to the guest's folio, one line per tax rate so the tax invoice's rate-wise summary stays
-correct. It is refused unless the guest is checked in, and it respects both the property's outlet limit per stay
-and, on a company-billed folio, that company's credit limit.
+correct. It is refused unless the guest is checked in, and it respects the property's outlet limit per stay.
 - **Paying at the outlet:** cash, card, UPI, or loyalty points at the guest's tier rate.
 - **Kitchen tickets** mark each line as fired once, print from the browser, and can also be posted to a kitchen
 display with `KOT_WEBHOOK_URL`. POS hardware is the hotel's own; BluInn integrates with it.
 - **Prices and tax are frozen onto every line** when it is ordered, so re-pricing the menu never rewrites a bill
 that has already been served.
-- Night audit totals the outlet takings, because a bill settled with cash never touches a folio and would
+- The outlet reports total the takings, because a bill settled with cash never touches a folio and would
 otherwise be missing from the day's revenue.
 
 ## Events and banquets
@@ -146,15 +145,15 @@ a telephone call. Confirming a second function over a confirmed one is refused.
 not approve it. Repricing a quotation withdraws its approval. Below the threshold no approval is needed at all.
 Approval sits with sales, so the **Sales & Marketing** role holds `events.approve` — banquet
 business is sold, not taken at the desk.
-- **Payment terms are recorded on the booking** and print on the quotation and the contract. A corporate client's
-own account terms are filled in by default rather than typed again.
+- **Payment terms are recorded on the booking** and print on the quotation and the contract. Left blank, the
+hotel's usual deposit sentence is used.
 - **Three documents** print from the same figures: the **quotation** for the client, the **contract** with the
 hotel's own terms and both signatures, and the **banquet event order** for the kitchen, the stewards and the
 technicians — which deliberately carries no prices.
-- **Billing is the main billing module, not a second one.** An event is settled in one of three ways: posted to a
-resident guest's folio (a residential conference, one bill with the rooms), charged to a company on the city ledger
-(where it ages and is chased with their other debt), or invoiced from the property's own GST invoice series — the
-same run of numbers a room invoice takes, because the tax law wants one series for the whole business.
+- **Billing is the main billing module, not a second one.** An event is settled in one of two ways: posted to a
+resident guest's folio (a residential conference, one bill with the rooms), or invoiced from the property's own GST
+invoice series — the same run of numbers a room invoice takes, because the tax law wants one series for the whole
+business.
 - **Once an event has been billed its price is fixed.** Changing the head count, the package, the hall charge or
 the discount is refused, for the same reason an issued invoice cannot be edited.
 - Event revenue is reported on its own under **Reports → Financial**, not folded into occupancy, ADR or RevPAR —
@@ -176,7 +175,7 @@ a function is not a room night, and mixing them would spoil all three.
 
 ## Guests
 - **Profiles:** stay history, total spend, preferences, birthday and anniversary.
-- **Tags:** VIP and Blacklisted (warned at booking and check-in). Repeat Guest and Corporate are added automatically.
+- **Tags:** VIP and Blacklisted (warned at booking and check-in). Repeat Guest is added automatically.
 - **Feedback:** recorded by the desk from the guest's profile, and reported under **Reports → Guests**.
 - **Housekeeping of records:** duplicate merging, plus data export and erasure for privacy requests.
 
@@ -187,12 +186,12 @@ the desk can always say which stay a point came from and when it dies, which a s
 cannot.
 - **Earning** happens automatically when an invoice is issued, at the earn rate of the tier the guest
 held at the time, on the **taxable value** only: tax collected for the government is not spend with the
-hotel. A company-billed invoice earns the company nothing for the guest, and reprinting an invoice never
-earns twice.
+hotel. Reprinting an invoice never earns twice.
 - **Redeeming** posts a payment to the folio, so points settle a bill exactly as cash does. A redemption
 can never exceed the balance, the property's minimum, or what is actually owed.
 - **Tiers** (Silver, Gold, Platinum by default, all editable) need both the nights *and* the spend of a
-rolling twelve months. Night audit re-checks every member and records each move with its reason.
+rolling twelve months. **Review every member** (Guests → Loyalty) re-checks everyone after the thresholds
+change, and each move is recorded with its reason.
 - Erasing a guest's data removes the membership and its points history; the folio lines a redemption
 produced are financial record and stay.
 
@@ -200,9 +199,8 @@ produced are financial record and stay.
 - **Core KPIs** for any period: occupancy, ADR, RevPAR, GOPPAR, total revenue, outstanding balance, cancellation
 rate and no-show rate. ADR divides by rooms *sold* and RevPAR by rooms *available* — that difference is why a
 hotel quotes both.
-- **Figures from a closed night audit never change.** Each day's row says whether it came from the stored audit
-snapshot or was computed live, so a stay amended in March cannot silently rewrite January's revenue. That is what
-makes the same report for the same dates give the same answer every time.
+- **Figures are computed live** from bookings and folios. With no night audit there is no closed-day snapshot, so
+amending an old stay changes the report for its dates.
 - **Financial reports** — daily revenue, tax summary by rate, payments and refunds, outlet-wise sales, outlet
 settlement, and money owed — are restricted to management and finance. The restriction is enforced by the database
 functions themselves, not just hidden in the interface, so it holds for the screen, the CSV export and the
@@ -222,7 +220,7 @@ the days reported; leave it at zero and GOPPAR is simply not reported rather tha
 
 ## Administration
 - **Roles:** twelve built-in, all editable, and you can add your own. Permissions are set per module and
-action — including the city ledger, loyalty enrolment, corrections and redemption, and the outlets (taking orders,
+action — including loyalty enrolment, corrections and redemption, and the outlets (taking orders,
 settling bills and managing menus are separate permissions), and reports (operational, financial and scheduling
 are separate).
 - **Audit log:** every change, with before/after values. Entries cannot be edited or deleted. Adding a hotel,

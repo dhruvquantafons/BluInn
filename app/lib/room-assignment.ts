@@ -1,5 +1,5 @@
 /**
- * Room assignment (SOW Module 2, "Room Assignment Logic").
+ * Room assignment (Module 2, "Room Assignment Logic").
  *
  * A room is eligible when it is the booked type, vacant, inspected, not
  * blocked and not promised to another stay on any of these nights. Eligible

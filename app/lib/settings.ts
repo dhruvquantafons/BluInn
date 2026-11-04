@@ -66,8 +66,6 @@ export const DEFAULT_SETTINGS: PropertySettings = {
   event_advance_percent: 25,
   event_terms: "",
   monthly_operating_cost: 0,
-  best_rate_message:
-    "Book direct for our best available rate. Find a lower public rate for the same room and dates elsewhere, and we will match it.",
   notify_pre_arrival_days: 3,
   notify_checkin_days: 1,
   notify_post_stay_days: 1,

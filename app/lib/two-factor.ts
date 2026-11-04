@@ -12,8 +12,8 @@ import { TWO_FACTOR_COOKIE, TWO_FACTOR_COOKIE_PATH } from "./session-cookies";
  *                                       MFA, or app/lib/neon/totp.ts on Neon).
  *
  * DEMO MODE IS NOT SECURITY. Anyone who knows the code passes. It exists so
- * the flow can be shown before staff have authenticator apps; switch to totp
- * before real guest data is in the system.
+ * the flow can be shown before staff have authenticator apps. It stays the
+ * default while BluInn is in demo; make totp the default before go-live.
  *
  * In demo mode, passing the step sets an httpOnly cookie signed with a server
  * secret, bound to the user and valid for 12 hours or until sign-out.
@@ -31,7 +31,7 @@ export function demoCode() {
 }
 
 function secret() {
-  return process.env.AUTH_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "pms-demo-2fa";
+  return process.env.AUTH_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "bluinn-demo-2fa";
 }
 
 function sign(userId: string, expires: number) {

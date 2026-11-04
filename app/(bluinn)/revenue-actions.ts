@@ -6,7 +6,7 @@ import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
 import { addDays, todayIn } from "../lib/dates";
-import { proposeRates, checkPromo, type RuleLimits } from "../lib/revenue";
+import { proposeRates, type RuleLimits } from "../lib/revenue";
 import type {
   AdjustmentKind,
   DiscountKind,
@@ -15,7 +15,6 @@ import type {
   PackageBasis,
   PricingAdjustment,
   PricingRule,
-  PromoCode,
   RateSeason,
   RoomType,
 } from "../lib/types";
@@ -507,63 +506,6 @@ export async function deletePromoCode(_prev: ActionState, fd: FormData): Promise
 
   revalidateRevenue();
   return { success: "Code removed." };
-}
-
-/**
- * Checks a code against a stay, for the desk.
- *
- * Returns the discount rather than applying it: the booking flow re-checks
- * and records the redemption when the booking is actually taken, so a code
- * cannot be spent by looking at it.
- */
-export async function validatePromoCode(input: {
-  code: string;
-  checkIn: string;
-  checkOut: string;
-  roomTypeId: string;
-  ratePlanId: string | null;
-  amount: number;
-  email?: string;
-}): Promise<{ ok: boolean; discount: number; message: string; codeId: string | null }> {
-  await requirePermission("bookings.create");
-  const supabase = await createClient();
-  const settings = await getSettings();
-
-  const code = input.code.trim().toUpperCase();
-  if (!code) return { ok: false, discount: 0, message: "", codeId: null };
-
-  const { data } = await supabase.from("promo_codes").select("*").eq("code", code).maybeSingle();
-  const promo = (data ?? null) as PromoCode | null;
-
-  const guestRedemptions =
-    promo && promo.max_per_guest !== null && input.email
-      ? ((
-          await supabase
-            .from("promo_redemptions")
-            .select("id", { count: "exact", head: true })
-            .eq("promo_code_id", promo.id)
-            .ilike("email", input.email.trim())
-        ).count ?? 0)
-      : 0;
-
-  const result = checkPromo(promo, {
-    checkIn: input.checkIn,
-    checkOut: input.checkOut,
-    roomTypeId: input.roomTypeId,
-    ratePlanId: input.ratePlanId,
-    amount: input.amount,
-    today: todayIn(settings.timezone),
-    guestRedemptions,
-  });
-
-  return {
-    ok: result.ok,
-    discount: result.discount,
-    message: result.ok
-      ? `${promo?.name} applied: ₹${result.discount.toLocaleString("en-IN")} off.`
-      : (result.reason ?? "That promo code cannot be used for this stay."),
-    codeId: result.ok ? (promo?.id ?? null) : null,
-  };
 }
 
 // ── Package components ──────────────────────────────────────────────────────

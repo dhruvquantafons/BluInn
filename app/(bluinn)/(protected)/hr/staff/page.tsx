@@ -73,7 +73,7 @@ export default async function HrStaffPage() {
               {staff.map((p) => (
                 <tr key={p.id}>
                   <td className="px-4 py-2.5">
-                    <Link href={`/hr/staff/${p.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                    <Link href={`/hr/staff/${p.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                       {p.full_name || p.email}
                     </Link>
                     <span className="block text-xs text-slate-500">

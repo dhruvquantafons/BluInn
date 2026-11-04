@@ -2,7 +2,7 @@ import type { ShiftColor } from "../../../lib/types";
 
 export const SHIFT_COLOR_CLASS: Record<ShiftColor, string> = {
   slate: "bg-slate-100 text-slate-800",
-  yellow: "bg-yellow-100 text-yellow-900",
+  yellow: "bg-brand-100 text-brand-900",
   orange: "bg-orange-100 text-orange-900",
   indigo: "bg-indigo-100 text-indigo-900",
   emerald: "bg-emerald-100 text-emerald-900",

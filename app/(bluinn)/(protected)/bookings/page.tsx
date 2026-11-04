@@ -118,7 +118,7 @@ export default async function BookingsPage({
           <SearchInput
             action="/bookings"
             defaultValue={q}
-            placeholder="Reference, name, email, phone or room number"
+            placeholder="Name, reference, phone or room"
             keep={{ status: status !== "all" ? status : null }}
             className="w-full sm:w-96"
           />
@@ -151,7 +151,7 @@ export default async function BookingsPage({
                           <span className="block font-medium text-slate-900">
                             {b.guests?.full_name || b.contact_name || "Unnamed guest"}
                           </span>
-                          <span className="block text-[11px] text-slate-500 font-mono">
+                          <span className="block text-[11px] text-slate-500 font-mono whitespace-nowrap">
                             {b.reference}
                           </span>
                         </span>

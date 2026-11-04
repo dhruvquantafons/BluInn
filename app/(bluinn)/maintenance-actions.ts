@@ -273,7 +273,7 @@ export async function assignTicket(fd: FormData) {
     .select("id, reference, title, priority, due_at, location, assigned_to, rooms(room_number)")
     .maybeSingle();
 
-  // SOW Module 16, trigger event "ticket assigned": the person who now owns
+  // Module 16, trigger event "ticket assigned": the person who now owns
   // the job hears about it. Unassigning tells nobody.
   const settings = await getSettings();
   if (ticket && staffId && settings.notify_staff_ticket_assigned) {

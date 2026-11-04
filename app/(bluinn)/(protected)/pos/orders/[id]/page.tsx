@@ -140,7 +140,7 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
   // ── Charge to room: who, and is it allowed ──
   const booking = order.booking_id ? inHouse.find((b) => b.id === order.booking_id) : undefined;
   const { data: folioRows } = order.booking_id
-    ? await supabase.from("folios").select("*, companies(id, name)").eq("booking_id", order.booking_id).order("created_at")
+    ? await supabase.from("folios").select("*").eq("booking_id", order.booking_id).order("created_at")
     : { data: null };
   const folios = (folioRows ?? []) as Folio[];
 
@@ -190,21 +190,21 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href={`/pos/${outlet.id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> {outlet.name}
         </Link>
         <div className="flex items-center gap-3 text-xs">
           <Link
             href={`/pos/orders/${id}/bill`}
-            className="inline-flex items-center gap-1.5 text-yellow-700 hover:underline"
+            className="inline-flex items-center gap-1.5 text-brand-700 hover:underline"
           >
             <Printer className="w-3.5 h-3.5" /> Print bill
           </Link>
           {outlet.sends_kot && (
             <Link
               href={`/pos/orders/${id}/kot`}
-              className="inline-flex items-center gap-1.5 text-yellow-700 hover:underline"
+              className="inline-flex items-center gap-1.5 text-brand-700 hover:underline"
             >
               <ChefHat className="w-3.5 h-3.5" /> Kitchen ticket
             </Link>
@@ -393,7 +393,7 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
                     if (own.length === 0) return null;
                     return (
                       <details key={category?.id ?? "none"} open={categories.length <= 1}>
-                        <summary className="text-xs font-medium text-yellow-700 cursor-pointer py-1">
+                        <summary className="text-xs font-medium text-brand-700 cursor-pointer py-1">
                           {category?.name ?? "Other"} ({own.length})
                         </summary>
                         <ul className="mt-2 space-y-2">

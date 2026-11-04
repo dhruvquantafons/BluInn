@@ -62,7 +62,7 @@ export default async function DuplicatesPage() {
             <ul className="divide-y divide-slate-100 mb-3">
               {group.map((g) => (
                 <li key={g.id} className="py-2 text-sm flex flex-wrap gap-x-4">
-                  <Link href={`/guests/${g.id}`} className="font-medium text-slate-900 hover:text-yellow-800 min-w-[180px]">
+                  <Link href={`/guests/${g.id}`} className="font-medium text-slate-900 hover:text-brand-800 min-w-[180px]">
                     {g.full_name}
                   </Link>
                   <span className="text-slate-600">{g.email ?? "—"}</span>

@@ -8,6 +8,7 @@ import { getSettings, hhmm } from "../../../../../lib/settings";
 import type { Booking } from "../../../../../lib/types";
 import { ID_TYPE_LABELS } from "../../../../../lib/types";
 import { fmtDate, fmtDateTime, Notice } from "../../../../components/ui";
+import PrintFooter from "../../../../components/PrintFooter";
 import PrintButton from "../../../../components/PrintButton";
 
 /**
@@ -60,7 +61,7 @@ export default async function RegistrationCardPage({ params }: { params: Promise
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex justify-between items-center mb-6 print:hidden">
-        <Link href={`/bookings/${id}`} className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+        <Link href={`/bookings/${id}`} className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </Link>
         <PrintButton />
@@ -107,6 +108,7 @@ export default async function RegistrationCardPage({ params }: { params: Promise
           </div>
           <p className="text-xs text-slate-600">{card.signed_at ? `Signed ${fmtDateTime(card.signed_at)}` : ""}</p>
         </div>
+        <PrintFooter />
       </div>
     </div>
   );

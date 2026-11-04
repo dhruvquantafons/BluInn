@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 /**
- * Point of Sale arithmetic (SOW Module 6).
+ * Point of Sale arithmetic (Module 6).
  *
  * The database owns the real numbers — a line's totals are frozen onto it by
  * `pos_add_line` and an order's by `pos_recalc_order`, because a bill must not
@@ -169,14 +169,13 @@ export interface ChargeToRoomCheck {
 }
 
 /**
- * Whether a bill may be charged to a room (SOW Module 6 "Charge-to-Room
+ * Whether a bill may be charged to a room (Module 6 "Charge-to-Room
  * Validation"). Mirrors the checks in pos_charge_to_room() so the till can
  * say why before it tries.
  *
  * Being checked in *is* the authorisation: a guest who has not arrived, or
  * has already left, has no room to charge to. On top of that the property may
- * cap how much outlet spend one stay carries unpaid, and a folio billed to a
- * company is bound by that company's credit limit.
+ * cap how much outlet spend one stay carries unpaid.
  */
 export function checkChargeToRoom(options: {
   owed: number;
@@ -185,10 +184,8 @@ export function checkChargeToRoom(options: {
   alreadyCharged: number;
   /** Property cap; zero means no limit. */
   limit: number;
-  /** Set when the folio is billed to a company. */
-  company?: { name: string; credit_limit: number | null; balance: number } | null;
 }): ChargeToRoomCheck {
-  const { owed, bookingStatus, alreadyCharged, limit, company } = options;
+  const { owed, bookingStatus, alreadyCharged, limit } = options;
 
   if (owed <= 0) return { allowed: false, reason: "This bill is already settled." };
   if (!bookingStatus) return { allowed: false, reason: "Choose the room the guest is staying in." };
@@ -204,12 +201,6 @@ export function checkChargeToRoom(options: {
       reason:
         `This stay already carries ${alreadyCharged.toFixed(2)} of a ${limit.toFixed(2)} outlet limit, ` +
         `and this bill adds ${owed.toFixed(2)}. Take payment at the outlet, or settle the folio first.`,
-    };
-  }
-  if (company && company.credit_limit !== null && company.balance + owed > Number(company.credit_limit)) {
-    return {
-      allowed: false,
-      reason: `${company.name} would go past its credit limit of ${Number(company.credit_limit).toFixed(2)}.`,
     };
   }
   return { allowed: true, reason: "" };

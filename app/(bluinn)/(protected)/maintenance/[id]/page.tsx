@@ -89,7 +89,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Link href="/maintenance" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+      <Link href="/maintenance" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
         <ArrowLeft className="w-3.5 h-3.5" /> Tickets
       </Link>
 
@@ -122,7 +122,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <Stat label="Source">
                 {MT_SOURCE_LABELS[t.source]}
                 {t.guest_requests?.booking_id && (
-                  <Link href={`/bookings/${t.guest_requests.booking_id}`} className="block text-xs text-yellow-800">
+                  <Link href={`/bookings/${t.guest_requests.booking_id}`} className="block text-xs text-brand-800">
                     View booking
                   </Link>
                 )}
@@ -137,7 +137,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               )}
               {t.assets && (
                 <Stat label="Asset">
-                  <Link href={`/maintenance/assets/${t.assets.id}`} className="text-yellow-800">
+                  <Link href={`/maintenance/assets/${t.assets.id}`} className="text-brand-800">
                     {t.assets.code} · {t.assets.name}
                   </Link>
                 </Stat>

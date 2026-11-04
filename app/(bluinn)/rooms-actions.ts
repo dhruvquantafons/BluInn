@@ -119,7 +119,7 @@ export async function updateHousekeepingStatus(fd: FormData) {
 }
 
 /**
- * Takes a room off sale for a date range (SOW: "block/unblock rooms for
+ * Takes a room off sale for a date range (Module 3: "block/unblock rooms for
  * maintenance with reason tracking"; out-of-order rooms are removed from
  * bookable inventory). Refused while a stay is assigned to the room for those
  * dates, so no guest is silently left without a room.

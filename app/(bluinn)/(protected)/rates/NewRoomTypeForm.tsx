@@ -23,8 +23,8 @@ export default function NewRoomTypeForm() {
 
   return (
     <details className="group">
-      <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-medium text-yellow-700 hover:text-yellow-800 transition-colors">
-        <span className="w-6 h-6 rounded-full bg-yellow-50 flex items-center justify-center">
+      <summary className="flex items-center gap-2 cursor-pointer list-none text-sm font-medium text-brand-700 hover:text-brand-800 transition-colors">
+        <span className="w-6 h-6 rounded-full bg-brand-50 flex items-center justify-center">
           <Plus className="w-3.5 h-3.5 transition-transform group-open:rotate-45" />
         </span>
         <span>Add a new room type</span>
@@ -111,7 +111,7 @@ export default function NewRoomTypeForm() {
             type="checkbox"
             name="is_active"
             defaultChecked
-            className="accent-yellow-500 w-4 h-4"
+            className="accent-brand-500 w-4 h-4"
           />
           <span>Active straight away</span>
         </label>

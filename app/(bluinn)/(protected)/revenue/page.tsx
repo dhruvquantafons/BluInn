@@ -18,6 +18,7 @@ import {
   Notice,
   StatCard,
   Tag,
+  fmtDate,
   fmtMoney,
   inputClass,
   tableHeadClass,
@@ -104,7 +105,11 @@ export default async function ForecastPage({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label={`Occupancy to ${until}`} value={`${occupancyPercent(sold, capacity)}%`} />
+        <StatCard
+          label={`Occupancy to ${fmtDate(until)}`}
+          value={capacity > 0 ? `${occupancyPercent(sold, capacity)}%` : "—"}
+          hint={capacity > 0 ? undefined : "No rooms in inventory"}
+        />
         <StatCard label="Rooms on the books" value={`${sold} of ${capacity}`} />
         <StatCard label="Room revenue on the books" value={fmtMoney(revenue)} />
         <StatCard
@@ -143,7 +148,7 @@ export default async function ForecastPage({
               ))}
             </select>
           </label>
-          <button type="submit" className="px-4 py-2 text-sm rounded-md border border-slate-300 hover:border-yellow-500">
+          <button type="submit" className="px-4 py-2 text-sm rounded-md border border-slate-300 hover:border-brand-500">
             Show
           </button>
         </form>
@@ -200,13 +205,19 @@ export default async function ForecastPage({
                     >
                       <td className="px-5 py-2 whitespace-nowrap">
                         <span className="text-slate-500 text-xs mr-2">{DAYS[dayOfWeek(date)]}</span>
-                        {date}
+                        {fmtDate(date)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {row.rooms_sold}/{row.capacity}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <Tag tone={occupancyTone(pct)}>{pct}%</Tag>
+                        {/* The pricing rules treat no capacity as full; on screen
+                            it is simply nothing to sell, not a sell-out. */}
+                        {Number(row.capacity) > 0 ? (
+                          <Tag tone={occupancyTone(pct)}>{pct}%</Tag>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-500">
                         {fmtMoney(ordinary)}

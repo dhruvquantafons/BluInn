@@ -45,7 +45,7 @@ export default async function PackagesPage() {
       <Notice>
         A package is a rate plan of the &ldquo;Package&rdquo; type — room plus whatever is bundled with it, sold at one
         price. Set that price on the plan itself under{" "}
-        <Link href="/rates/plans" className="text-yellow-700 underline">
+        <Link href="/rates/plans" className="text-brand-700 underline">
           Rates &rarr; Rate plans
         </Link>
         ; choose &ldquo;Fixed rate&rdquo; there to sell the whole thing at a flat nightly price. What you list here is
@@ -113,7 +113,7 @@ export default async function PackagesPage() {
 
               {manage && (
                 <details className="border-t border-slate-100 pt-4">
-                  <summary className="text-sm font-medium text-yellow-700 cursor-pointer">
+                  <summary className="text-sm font-medium text-brand-700 cursor-pointer">
                     Add something to this package
                   </summary>
                   <div className="mt-4">

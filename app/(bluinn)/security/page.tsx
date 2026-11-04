@@ -1,14 +1,17 @@
 import Link from "next/link";
+import { ArrowLeft, LogOut, ShieldCheck } from "lucide-react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "../../lib/auth";
+import { PRODUCT } from "../../lib/app-config";
 import { getSettings } from "../../lib/settings";
 import { passwordExpired } from "../../lib/password-policy";
 import { changeOwnPassword } from "../security-actions";
 import { signOut } from "../actions";
 import { Card, Field, Notice, inputClass } from "../components/ui";
 import ActionForm from "../components/ActionForm";
+import BrandMark, { Wordmark } from "../components/BrandMark";
 import TwoFactorPanel from "./TwoFactorPanel";
 import { isDemoTwoFactor, demoCode } from "../../lib/two-factor";
 import { adminFonts } from "../fonts";
@@ -35,24 +38,50 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
   const blocked = mustChange || needs2fa;
 
   return (
-    <main className={`admin-theme ${adminFonts} min-h-screen bg-slate-50 p-4 sm:p-8`}>
-      <div className="max-w-xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <main className={`admin-theme ${adminFonts} min-h-screen bg-slate-50`}>
+      {/* The app's own top bar, minus the navigation: this page sits outside
+          the (protected) layout, but should not look like a different product. */}
+      <header className="admin-topbar sticky top-0 z-30 h-14 flex items-center gap-3 px-3 sm:px-5 text-white">
+        <Link href="/" className="flex items-center gap-2.5 shrink-0">
+          <span className="w-9 h-9 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
+            <BrandMark className="w-7 h-7" />
+          </span>
+          <span>
+            <Wordmark className="block text-[15px] leading-none" />
+            <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 leading-none mt-1.5">
+              {PRODUCT.descriptor}
+            </span>
+          </span>
+        </Link>
+        <div className="ml-auto">
+          {blocked ? (
+            <form action={signOut}>
+              <button className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm text-white/90 ring-1 ring-white/20 hover:bg-white/10 cursor-pointer">
+                <LogOut className="w-4 h-4" /> Sign out
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm text-white/90 ring-1 ring-white/20 hover:bg-white/10"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back to {PRODUCT.name}
+            </Link>
+          )}
+        </div>
+      </header>
+
+      <div className="max-w-xl mx-auto space-y-6 px-4 py-8 sm:py-10">
+        <div className="flex items-center gap-4">
+          <span className="w-12 h-12 shrink-0 rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100 flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6" strokeWidth={1.75} />
+          </span>
           <div>
-            <p className="admin-display text-2xl text-slate-900">Password &amp; two-factor</p>
-            <p className="text-sm text-slate-600">
+            <h1>Password &amp; two-factor</h1>
+            <p className="text-sm text-slate-600 mt-0.5">
               {session.staff.full_name || session.staff.email} · {session.role.name}
             </p>
           </div>
-          {blocked ? (
-            <form action={signOut}>
-              <button className="text-xs text-slate-600 hover:text-yellow-700 cursor-pointer">Sign out</button>
-            </form>
-          ) : (
-            <Link href="/" className="text-xs text-yellow-700">
-              Back to the panel →
-            </Link>
-          )}
         </div>
 
         {required && blocked && (

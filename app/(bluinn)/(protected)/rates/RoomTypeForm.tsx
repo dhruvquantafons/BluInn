@@ -25,7 +25,7 @@ export default function RoomTypeForm({ roomType }: { roomType: RoomType }) {
             type="checkbox"
             name="is_active"
             defaultChecked={roomType.is_active}
-            className="accent-yellow-500 w-4 h-4"
+            className="accent-brand-500 w-4 h-4"
           />
           <span>Active</span>
         </label>

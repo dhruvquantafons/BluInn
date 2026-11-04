@@ -5,7 +5,6 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { loadCompanies } from "../../../../lib/rate-data";
 import { loadFolio } from "../../../../lib/folio";
 import { razorpayConfigured, isTestMode } from "../../../../lib/razorpay";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../../../../lib/policies";
@@ -86,7 +85,7 @@ export default async function BookingDetailPage({
   const { data } = await supabase
     .from("bookings")
     .select(
-      "*, guests(id, full_name, email, phone, tags, blacklist_reason, loyalty_opt_in, loyalty_member_no, loyalty_tier), room_types(id, name), rooms(id, room_number), rate_plans(*), companies(id, name), booking_groups(id, reference, name)",
+      "*, guests(id, full_name, email, phone, tags, blacklist_reason, loyalty_opt_in, loyalty_member_no, loyalty_tier), room_types(id, name), rooms(id, room_number), rate_plans(*), booking_groups(id, reference, name)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -108,7 +107,6 @@ export default async function BookingDetailPage({
     { data: identity },
     { data: card },
     { data: splits },
-    companies,
     folio,
     { data: folios },
     { data: invoices },
@@ -149,9 +147,8 @@ export default async function BookingDetailPage({
       : Promise.resolve({ data: [] }),
     supabase.from("registration_cards").select("id, signed_at").eq("booking_id", id).maybeSingle(),
     supabase.from("bookings").select("id, reference, check_in, check_out").eq("split_from_id", id),
-    loadCompanies(supabase),
     loadFolio(supabase, id),
-    supabase.from("folios").select("*, companies(id, name)").eq("booking_id", id).order("created_at"),
+    supabase.from("folios").select("*").eq("booking_id", id).order("created_at"),
     supabase.from("invoices").select("*").eq("booking_id", id).order("issued_at", { ascending: false }),
     supabase
       .from("payment_transactions")
@@ -202,7 +199,7 @@ export default async function BookingDetailPage({
       <LiveRefresh tables={["bookings", "folio_entries"]} />
       <Link
         href="/bookings"
-        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Bookings
       </Link>
@@ -224,12 +221,12 @@ export default async function BookingDetailPage({
           <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
             <span className="font-mono">{booking.reference}</span>
             {booking.booking_groups && (
-              <Link href={`/groups/${booking.booking_groups.id}`} className="inline-flex items-center gap-1 text-yellow-700">
+              <Link href={`/groups/${booking.booking_groups.id}`} className="inline-flex items-center gap-1 text-brand-700">
                 <Users className="w-3 h-3" /> {booking.booking_groups.name} ({booking.booking_groups.reference})
               </Link>
             )}
             {booking.split_from_id && (
-              <Link href={`/bookings/${booking.split_from_id}`} className="text-yellow-700">
+              <Link href={`/bookings/${booking.split_from_id}`} className="text-brand-700">
                 split from earlier booking
               </Link>
             )}
@@ -254,7 +251,7 @@ export default async function BookingDetailPage({
       {booking.status === "tentative" && booking.hold_until && (
         <div className="mb-5">
           <Notice tone="warn">
-            Tentative hold until {fmtDateTime(booking.hold_until)}. Night audit releases it after that unless it is confirmed.
+            Tentative hold until {fmtDateTime(booking.hold_until)}. Confirm or cancel it by then.
           </Notice>
         </div>
       )}
@@ -337,7 +334,7 @@ export default async function BookingDetailPage({
             )}
 
             {["tentative", "confirmed"].includes(booking.status) &&
-              booking.check_in <= settings.business_date &&
+              booking.check_in <= today &&
               can(session, "bookings.cancel") && (
                 <details className="relative">
                   <summary className={`${secondaryButtonClass} list-none`}>No-show</summary>
@@ -389,7 +386,7 @@ export default async function BookingDetailPage({
             href={`/bookings/${id}${t.key === "overview" ? "" : `?tab=${t.key}`}`}
             aria-current={tab === t.key ? "page" : undefined}
             className={`px-3 py-2 text-sm -mb-px border-b-2 ${
-              tab === t.key ? "border-yellow-500 text-slate-900 font-medium" : "border-transparent text-slate-500 hover:text-slate-800"
+              tab === t.key ? "border-brand-500 text-slate-900 font-medium" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t.label}
@@ -418,7 +415,6 @@ export default async function BookingDetailPage({
               <Stat label="Rate plan">{plan ? `${plan.name} · ${MEAL_PLAN_LABELS[plan.meal_plan]}` : "—"}</Stat>
               <Stat label="Source">{BOOKING_SOURCE_LABELS[booking.source]}</Stat>
               <Stat label="Payment">{booking.payment_method ? PAYMENT_METHOD_LABELS[booking.payment_method] : "—"}</Stat>
-              <Stat label="Company">{booking.companies?.name ?? "—"}</Stat>
               <Stat label="Total">{fmtMoney(booking.total_amount)}</Stat>
               <Stat label="Deposit due">{fmtMoney(booking.deposit_required)}</Stat>
               {booking.eta && <Stat label="ETA">{booking.eta.slice(0, 5)}</Stat>}
@@ -448,7 +444,7 @@ export default async function BookingDetailPage({
 
             {(booking.rate_breakdown ?? []).length > 0 && (
               <details className="mt-3">
-                <summary className="text-[11px] text-yellow-700 cursor-pointer">Nightly rates</summary>
+                <summary className="text-[11px] text-brand-700 cursor-pointer">Nightly rates</summary>
                 <ul className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs text-slate-700">
                   {booking.rate_breakdown.map((n) => (
                     <li key={n.date}>
@@ -470,7 +466,7 @@ export default async function BookingDetailPage({
               <p className="mt-4 text-xs text-slate-700">
                 Continues as{" "}
                 {(splits ?? []).map((s) => (
-                  <Link key={s.id} href={`/bookings/${s.id}`} className="text-yellow-700 font-mono mr-2">
+                  <Link key={s.id} href={`/bookings/${s.id}`} className="text-brand-700 font-mono mr-2">
                     {s.reference}
                   </Link>
                 ))}
@@ -556,7 +552,7 @@ export default async function BookingDetailPage({
 
               {can(session, "bookings.edit") && ["tentative", "confirmed", "checked_in"].includes(booking.status) && (
                 <details className="mt-5 pt-4 border-t border-slate-100">
-                  <summary className="text-xs text-yellow-700 cursor-pointer">Split this booking</summary>
+                  <summary className="text-xs text-brand-700 cursor-pointer">Split this booking</summary>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <ActionForm action={splitBooking} submitLabel="Split by date" submitClassName={secondaryButtonClass} className="space-y-3">
                       <input type="hidden" name="id" value={id} />
@@ -606,7 +602,7 @@ export default async function BookingDetailPage({
                         <form action={updateGuestRequest} className="ml-auto">
                           <input type="hidden" name="id" value={r.id} />
                           <input type="hidden" name="status" value="done" />
-                          <button className="text-[11px] text-yellow-700 cursor-pointer">Mark done</button>
+                          <button className="text-[11px] text-brand-700 cursor-pointer">Mark done</button>
                         </form>
                       )}
                     </li>
@@ -624,12 +620,12 @@ export default async function BookingDetailPage({
                     ))}
                   </select>
                 </Field>
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-3">
                   <Field label="Details">
-                    <input name="description" required className={inputClass} />
+                    <input name="description" required placeholder="Wake-up call, extra towels…" className={inputClass} />
                   </Field>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="sm:col-span-2 grid grid-cols-2 gap-3">
                   <Field label="Date">
                     <input type="date" name="due_date" defaultValue={today} className={inputClass} />
                   </Field>
@@ -661,7 +657,6 @@ export default async function BookingDetailPage({
                 entries={folio.entries}
                 invoices={(invoices ?? []) as Invoice[]}
                 payments={(payments ?? []) as PaymentTransaction[]}
-                companies={companies}
                 balance={folio.totals.balance}
                 depositRequired={Number(booking.deposit_required)}
                 depositPaid={folio.totals.deposits}
@@ -679,7 +674,6 @@ export default async function BookingDetailPage({
                 memberNo={booking.guests?.loyalty_member_no ?? null}
                 folios={(folios ?? []) as Folio[]}
                 entries={folio.entries}
-                companies={companies}
                 currencies={(currencyRows ?? []) as Currency[]}
                 baseCurrency={settings.currency}
                 multiCurrency={settings.multi_currency_enabled}
@@ -689,7 +683,6 @@ export default async function BookingDetailPage({
                 minRedeem={settings.loyalty_min_redeem_points}
                 programName={settings.loyalty_program_name}
                 loyaltyEnabled={settings.loyalty_enabled}
-                canCityLedger={can(session, "folio.city_ledger")}
                 canPay={can(session, "folio.payment")}
                 canRedeem={can(session, "loyalty.redeem")}
               />
@@ -709,7 +702,6 @@ export default async function BookingDetailPage({
                 booking={booking}
                 roomTypes={(roomTypes ?? []) as RoomType[]}
                 plans={(plans ?? []) as RatePlan[]}
-                companies={companies}
                 canOverbook={can(session, "bookings.overbook")}
               />
             </Card>
@@ -764,7 +756,6 @@ export default async function BookingDetailPage({
                     ...((rooms ?? []) as Room[]).map((r) => [r.id, `room ${r.room_number}`] as [string, string]),
                     ...((roomTypes ?? []) as RoomType[]).map((t) => [t.id, t.name] as [string, string]),
                     ...((plans ?? []) as RatePlan[]).map((p) => [p.id, p.name] as [string, string]),
-                    ...companies.map((c) => [c.id, c.name] as [string, string]),
                   ])
                 }
               />
@@ -779,34 +770,34 @@ export default async function BookingDetailPage({
             <SectionTitle>Guest</SectionTitle>
             <div className="space-y-3 text-sm">
               <p className="flex items-start gap-2 text-slate-700">
-                <User className="w-4 h-4 text-yellow-700 shrink-0 mt-0.5" />
+                <User className="w-4 h-4 text-brand-700 shrink-0 mt-0.5" />
                 <span>
                   {booking.contact_name || booking.guests?.full_name || "—"}
                   {booking.guest_id && can(session, "guests.view") && (
-                    <Link href={`/guests/${booking.guest_id}`} className="block text-xs text-yellow-700 hover:text-yellow-800 mt-0.5">
+                    <Link href={`/guests/${booking.guest_id}`} className="block text-xs text-brand-700 hover:text-brand-800 mt-0.5">
                       Guest profile &amp; history
                     </Link>
                   )}
                 </span>
               </p>
               {(booking.contact_phone || booking.guests?.phone) && (
-                <a href={`tel:${booking.contact_phone || booking.guests?.phone}`} className="flex items-start gap-2 text-yellow-700 hover:text-yellow-800">
+                <a href={`tel:${booking.contact_phone || booking.guests?.phone}`} className="flex items-start gap-2 text-brand-700 hover:text-brand-800">
                   <Phone className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{booking.contact_phone || booking.guests?.phone}</span>
                 </a>
               )}
               {(booking.contact_email || booking.guests?.email) && (
-                <a href={`mailto:${booking.contact_email || booking.guests?.email}`} className="flex items-start gap-2 text-yellow-700 hover:text-yellow-800 break-all">
+                <a href={`mailto:${booking.contact_email || booking.guests?.email}`} className="flex items-start gap-2 text-brand-700 hover:text-brand-800 break-all">
                   <Mail className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{booking.contact_email || booking.guests?.email}</span>
                 </a>
               )}
               <p className="flex items-start gap-2 text-slate-700">
-                <IdCard className="w-4 h-4 text-yellow-700 shrink-0 mt-0.5" />
+                <IdCard className="w-4 h-4 text-brand-700 shrink-0 mt-0.5" />
                 <span>
                   {idOnFile ? `${ID_TYPE_LABELS[idOnFile.id_type] ?? idOnFile.id_type} ending ${idOnFile.id_last4}` : "No ID on file"}
                   {booking.guest_id && can(session, "guests.view_id") && (
-                    <Link href={`/bookings/${id}/identity`} className="block text-xs text-yellow-700 hover:text-yellow-800 mt-0.5">
+                    <Link href={`/bookings/${id}/identity`} className="block text-xs text-brand-700 hover:text-brand-800 mt-0.5">
                       View ID &amp; scans
                     </Link>
                   )}

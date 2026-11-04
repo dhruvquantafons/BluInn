@@ -4,7 +4,7 @@ import { can } from "../../../../../lib/permissions";
 
 /**
  * Everything the hotel holds about one guest, as JSON — for a guest asking
- * for their data (SOW Module 8: "handled per applicable privacy laws").
+ * for their data (Module 8: "handled per applicable privacy laws").
  * Scans are listed, not included; the ID number is included only for roles
  * that may see it.
  */

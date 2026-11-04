@@ -7,7 +7,7 @@ import { fmtDate, fmtDateTime, fmtMoney } from "../../../../components/ui";
 import { AddressedTo, ChargeTable, DocumentShell, loadEventDocument } from "../shared";
 
 /**
- * The quotation the client is sent (SOW Module 10 "quotation generation").
+ * The quotation the client is sent (Module 10 "quotation generation").
  *
  * It is a proposal, not a bill: it says what is included, what it costs, what
  * deposit holds the date, and until when the price stands. A quotation above

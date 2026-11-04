@@ -1,4 +1,5 @@
 import { createClient } from "../../../../lib/supabase/server";
+import { PRODUCT } from "../../../../lib/app-config";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { taxRateFor } from "../../../../lib/pos";
@@ -28,7 +29,7 @@ import {
 import ActionForm from "../../../components/ActionForm";
 
 /**
- * Outlets and their menus (SOW Module 6 "Menu/item and price list management
+ * Outlets and their menus (Module 6 "Menu/item and price list management
  * per outlet").
  *
  * Tax is set on the outlet and may be overridden per category or per item,
@@ -76,7 +77,7 @@ export default async function PosMenuPage({
       </div>
 
       <Notice tone="info">
-        POS hardware — terminals, receipt and kitchen printers, card machines — is the hotel&apos;s to buy; this system
+        POS hardware — terminals, receipt and kitchen printers, card machines — is the hotel&apos;s to buy; {PRODUCT.name}
         integrates with it. Bills and kitchen tickets print from the browser, and a kitchen display can be connected
         with <code>KOT_WEBHOOK_URL</code>.
       </Notice>
@@ -103,7 +104,7 @@ export default async function PosMenuPage({
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {outlets.map((o) => (
-                  <tr key={o.id} className={selected?.id === o.id ? "bg-yellow-50/60" : ""}>
+                  <tr key={o.id} className={selected?.id === o.id ? "bg-brand-50/60" : ""}>
                     <td className="py-2 px-3">
                       <span className="font-mono text-slate-500">{o.code}</span>{" "}
                       <span className="text-slate-900">{o.name}</span>
@@ -117,7 +118,7 @@ export default async function PosMenuPage({
                     <td className="py-2 pr-3">{o.sends_kot ? <Tag tone="green">KOT</Tag> : "—"}</td>
                     <td className="py-2 pr-3">{o.is_active ? <Tag tone="green">Yes</Tag> : <Tag tone="neutral">No</Tag>}</td>
                     <td className="py-2 pr-3 text-right">
-                      <a href={`/pos/menu?outlet=${o.id}`} className="text-yellow-700 hover:underline">
+                      <a href={`/pos/menu?outlet=${o.id}`} className="text-brand-700 hover:underline">
                         {selected?.id === o.id ? "Editing" : "Edit menu"}
                       </a>
                     </td>
@@ -129,7 +130,7 @@ export default async function PosMenuPage({
         )}
 
         <details className="mt-4 pt-4 border-t border-slate-100">
-          <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Add or edit an outlet</summary>
+          <summary className="text-xs font-medium text-brand-700 cursor-pointer">Add or edit an outlet</summary>
           <ActionForm action={saveOutlet} submitLabel="Save outlet" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
             <Field label="Editing" hint="Leave blank to add a new outlet.">
               <select name="id" defaultValue="" className={inputClass}>
@@ -217,7 +218,7 @@ export default async function PosMenuPage({
               </ul>
             )}
             <details>
-              <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Add or edit a category</summary>
+              <summary className="text-xs font-medium text-brand-700 cursor-pointer">Add or edit a category</summary>
               <ActionForm action={saveCategory} submitLabel="Save category" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
                 <input type="hidden" name="outlet_id" value={selected.id} />
                 <Field label="Editing" hint="Leave blank to add a new one.">
@@ -300,7 +301,7 @@ export default async function PosMenuPage({
 
             <div className="px-4 py-4 border-t border-slate-100 space-y-3">
               <details>
-                <summary className="text-xs font-medium text-yellow-700 cursor-pointer">
+                <summary className="text-xs font-medium text-brand-700 cursor-pointer">
                   Add several items at once
                 </summary>
                 <ActionForm action={addItemsInBulk} submitLabel="Add items" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
@@ -331,7 +332,7 @@ export default async function PosMenuPage({
               </details>
 
               <details>
-                <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Add or edit one item</summary>
+                <summary className="text-xs font-medium text-brand-700 cursor-pointer">Add or edit one item</summary>
                 <ActionForm action={saveItem} submitLabel="Save item" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
                   <input type="hidden" name="outlet_id" value={selected.id} />
                   <Field label="Editing" hint="Leave blank to add a new one.">
@@ -416,7 +417,7 @@ export default async function PosMenuPage({
               <p className="text-xs text-slate-500">Add menu items first, then attach modifiers to them.</p>
             ) : (
               <details>
-                <summary className="text-xs font-medium text-yellow-700 cursor-pointer">Add or edit a modifier</summary>
+                <summary className="text-xs font-medium text-brand-700 cursor-pointer">Add or edit a modifier</summary>
                 <ActionForm action={saveModifier} submitLabel="Save modifier" submitClassName={secondaryButtonClass} className="space-y-3 mt-3">
                   <input type="hidden" name="outlet_id" value={selected.id} />
                   <Field label="Editing" hint="Leave blank to add a new one. Re-tick its items when editing.">

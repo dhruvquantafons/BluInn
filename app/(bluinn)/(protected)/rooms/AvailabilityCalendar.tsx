@@ -112,7 +112,7 @@ export default function AvailabilityCalendar({
               onClick={() => setMonth(shiftMonth(month, -1))}
               disabled={!canGoBack}
               aria-label="Previous month"
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-yellow-500 hover:text-yellow-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -129,7 +129,7 @@ export default function AvailabilityCalendar({
               onClick={() => setMonth(shiftMonth(month, 1))}
               disabled={!canGoForward}
               aria-label="Next month"
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-yellow-500 hover:text-yellow-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-700 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-700"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -178,11 +178,11 @@ export default function AvailabilityCalendar({
                     title={`${cell.iso} — ${Math.max(0, free)} of ${dayCapacity} sellable free${dayCapacity < capacity ? ` (${capacity - dayCapacity} blocked)` : ""}`}
                     className={`rounded-lg border p-1.5 sm:p-2 min-h-[64px] sm:min-h-[80px] flex flex-col transition-colors ${tone} ${
                       isPast ? "opacity-45" : ""
-                    } ${isToday ? "ring-2 ring-yellow-500 ring-offset-1" : ""}`}
+                    } ${isToday ? "ring-2 ring-brand-500 ring-offset-1" : ""}`}
                   >
                     <span
                       className={`text-[11px] font-medium ${
-                        isToday ? "text-yellow-700" : "text-slate-700"
+                        isToday ? "text-brand-700" : "text-slate-700"
                       }`}
                     >
                       {cell.day}

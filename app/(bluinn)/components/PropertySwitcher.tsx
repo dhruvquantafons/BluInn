@@ -6,7 +6,7 @@ import { switchProperty } from "../property-actions";
 import type { ActionState } from "../form-utils";
 
 /**
- * Moves between the hotels in the group (SOW Module 14).
+ * Moves between the hotels in the group (Module 14).
  *
  * Submits on change rather than behind a button: this is navigation, not an
  * edit, and a "Go" button next to a list of two hotels is a step for nothing.

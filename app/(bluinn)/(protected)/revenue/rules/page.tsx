@@ -190,7 +190,7 @@ export default async function PricingRulesPage() {
       {manage && (
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Add a pricing rule</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Add a pricing rule</summary>
             <div className="mt-5">
               <ActionForm action={savePricingRule} submitLabel="Add rule">
                 <Fields typeList={typeList} />
@@ -219,7 +219,7 @@ export default async function PricingRulesPage() {
                 {r.room_type_id ? typeList.find((t) => t.id === r.room_type_id)?.name : "all room types"} · priority{" "}
                 {r.priority}
               </span>
-              {manage && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+              {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
             </summary>
             {manage && (
               <div className="mt-5 pt-5 border-t border-slate-100 space-y-3">

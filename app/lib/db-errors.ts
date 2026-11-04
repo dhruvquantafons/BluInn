@@ -16,9 +16,6 @@ export function friendlyDbError(message: string | undefined | null): string {
   if (message.startsWith("ROOM_BLOCKED:")) {
     return `Room unavailable — ${message.slice("ROOM_BLOCKED:".length).trim()}.`;
   }
-  if (message.startsWith("BUSINESS_DATE_MOVED:")) {
-    return "Night audit has already moved the business date. Refresh and check the current date.";
-  }
   if (message.startsWith("INVOICE_IMMUTABLE")) {
     return "An issued invoice cannot be changed or deleted. Cancel it and issue a new one.";
   }

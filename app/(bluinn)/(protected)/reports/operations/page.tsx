@@ -8,7 +8,7 @@ import { StatCard } from "../../../components/ui";
 import { RangePicker, ReportTable } from "../shared";
 
 /**
- * Operational reports (SOW Module 13): how housekeeping, engineering and the
+ * Operational reports (Module 13): how housekeeping, engineering and the
  * roster actually performed. No money here, so `reports.view` is enough.
  */
 export default async function OperationsReportsPage({

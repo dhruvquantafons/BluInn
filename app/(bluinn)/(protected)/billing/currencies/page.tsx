@@ -4,7 +4,7 @@ import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
 import { fromBase } from "../../../../lib/currency";
 import type { Currency } from "../../../../lib/types";
-import { saveCurrency, updateExchangeRates } from "../../../city-ledger-actions";
+import { saveCurrency, updateExchangeRates } from "../../../currency-actions";
 import {
   Card,
   Check,
@@ -22,11 +22,11 @@ import {
 import ActionForm from "../../../components/ActionForm";
 
 /**
- * Exchange rates (SOW Module 7: "Currency conversion support for
+ * Exchange rates (Module 7: "Currency conversion support for
  * international guests").
  *
  * Every amount the system stores stays in the property's own currency, so
- * that reports, invoices and the city ledger can never disagree with each
+ * that reports and invoices can never disagree with each
  * other. What lives here is the rate used to *quote* a price to a guest and
  * to convert what they hand over at the desk. The rate that applied at the
  * moment of payment is copied onto the folio line, so a receipt reprints

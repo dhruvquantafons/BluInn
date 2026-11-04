@@ -27,10 +27,10 @@ export default async function MyTicketsPage() {
   const unassigned = tickets.filter((t) => t.assigned_to === null);
 
   const card = (t: MaintenanceTicket) => (
-    <Card key={t.id} className={`p-4 ${t.status === "in_progress" ? "border-yellow-400 ring-1 ring-yellow-400" : ""}`}>
+    <Card key={t.id} className={`p-4 ${t.status === "in_progress" ? "border-brand-400 ring-1 ring-brand-400" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href={`/maintenance/${t.id}`} className="text-lg font-semibold text-slate-900 hover:text-yellow-800">
+          <Link href={`/maintenance/${t.id}`} className="text-lg font-semibold text-slate-900 hover:text-brand-800">
             {t.title}
           </Link>
           <p className="text-sm text-slate-600">

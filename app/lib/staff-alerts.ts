@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail, sendSms } from "./integrations";
-import { APP_URL } from "./app-config";
+import { APP_URL, PRODUCT } from "./app-config";
 import { MT_PRIORITY_LABELS, type MtPriority } from "./types";
 
 /**
@@ -22,8 +22,32 @@ export interface TicketForAlert {
   rooms?: { room_number: string } | null;
 }
 
+/** The sign-off on staff alert emails. Staff mail only; guest mail carries the hotel alone. */
+const SIGNED_HTML = `<p style="color:#999;font-size:11px;margin-top:24px">Sent by ${PRODUCT.name} · <a href="${APP_URL}" style="color:#999">${APP_URL.replace(/^https?:\/\//, "")}</a></p>`;
+const SIGNED_TEXT = `\n\n— Sent by ${PRODUCT.name} · ${APP_URL}`;
+
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * A ticket's target time as the hotel reads it: in that ticket's property's
+ * timezone, not the server's, so a group across timezones gets each right.
+ */
+async function ticketDue(db: SupabaseClient, ticket: TicketForAlert): Promise<string> {
+  const { data } = await db
+    .from("maintenance_tickets")
+    .select("properties(timezone)")
+    .eq("id", ticket.id)
+    .maybeSingle();
+  const tz = (data?.properties as { timezone?: string } | null)?.timezone || "Asia/Kolkata";
+  const fmt = (timeZone: string) =>
+    new Date(ticket.due_at).toLocaleString("en-IN", { timeZone, dateStyle: "medium", timeStyle: "short" });
+  try {
+    return fmt(tz);
+  } catch {
+    return fmt("Asia/Kolkata");
+  }
+}
 
 async function supervisors(db: SupabaseClient) {
   const { data: roles } = await db.from("role_permissions").select("role_key").eq("permission", "maintenance.manage");
@@ -46,7 +70,7 @@ export async function alertSupervisors(
       : `${ticket.reference} is past its resolution target`;
   const subject = `${head}: ${ticket.title}${where ? ` (${where})` : ""}`;
   const link = `${APP_URL}/maintenance/${ticket.id}`;
-  const due = new Date(ticket.due_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+  const due = await ticketDue(db, ticket);
   const text = [
     subject,
     `Priority: ${MT_PRIORITY_LABELS[ticket.priority]}. Target: ${due}.`,
@@ -62,7 +86,7 @@ export async function alertSupervisors(
   const rows: Record<string, unknown>[] = [];
   for (const person of await supervisors(db)) {
     if (person.email) {
-      const r = await sendEmail({ to: person.email, subject, html, text });
+      const r = await sendEmail({ to: person.email, subject, html: html + SIGNED_HTML, text: text + SIGNED_TEXT });
       rows.push({ ticket_id: ticket.id, kind: "staff", staff_id: person.id, channel: "email", template: `mt_${reason}`, recipient: person.email, subject, body: text, status: r.status, provider_id: r.providerId, error: r.error, created_by: staffId });
     }
     if (person.phone) {
@@ -77,7 +101,7 @@ export async function alertSupervisors(
 export async function escalateOverdueTickets(
   db: SupabaseClient,
   staffId: string | null = null,
-  /** Which hotel. Omit to mean the caller's own (SOW Module 14). */
+  /** Which hotel. Omit to mean the caller's own (Module 14). */
   propertyId: string | null = null,
 ) {
   const { data, error } = await db.rpc("mt_escalate_overdue", { p_property: propertyId });
@@ -94,7 +118,7 @@ export async function escalateOverdueTickets(
   return tickets.length;
 }
 
-// ── Staff notifications (SOW Module 16) ─────────────────────────────────────
+// ── Staff notifications (Module 16) ─────────────────────────────────────
 
 /**
  * The staff who should hear about something, by what their role may do.
@@ -156,8 +180,8 @@ async function alertStaff(
       const r = await sendEmail({
         to: person.email,
         subject: message.subject,
-        html: message.html,
-        text: message.text,
+        html: message.html + SIGNED_HTML,
+        text: message.text + SIGNED_TEXT,
       });
       rows.push({
         ...base,
@@ -284,11 +308,7 @@ export async function alertTicketAssigned(
   const where = ticket.rooms?.room_number ? `Room ${ticket.rooms.room_number}` : ticket.location || "";
   const subject = `Assigned to you: ${ticket.reference} — ${ticket.title}`;
   const link = `${APP_URL}/maintenance/${ticket.id}`;
-  const due = new Date(ticket.due_at).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const due = await ticketDue(db, ticket);
   const lines = [
     subject,
     `${where ? `${where}. ` : ""}Priority ${MT_PRIORITY_LABELS[ticket.priority]}, due ${due}.`,

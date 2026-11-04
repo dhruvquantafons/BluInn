@@ -77,7 +77,7 @@ export default async function CompetitorsPage({
       {manage && (
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Add a property to track</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Add a property to track</summary>
             <div className="mt-5">
               <ActionForm action={saveCompetitor} submitLabel="Add property">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -117,7 +117,7 @@ export default async function CompetitorsPage({
                     <span className="text-xs text-slate-400">
                       {readings.filter((r) => r.competitor_id === p.id).length} reading(s) ahead
                     </span>
-                    {manage && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+                    {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
                   </summary>
                   {manage && (
                     <div className="mt-4 space-y-3">

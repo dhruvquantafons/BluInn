@@ -40,12 +40,12 @@ const SOURCES: BookingSource[] = [
   "walk_in", "phone", "email", "website", "ota", "travel_agent", "corporate", "mobile_app",
 ];
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
 const ID_TYPES = ["passport", "aadhaar", "driving_licence", "voter_id", "pan", "other"] as const;
 
 const BOOKING_SELECT =
-  "*, guests(id, full_name, email, phone), room_types(id, name), rooms(id, room_number), rate_plans(*), companies(id, name)";
+  "*, guests(id, full_name, email, phone), room_types(id, name), rooms(id, room_number), rate_plans(*)";
 
 type BookingWithPlan = Booking & { rate_plans: RatePlan | null };
 
@@ -131,7 +131,7 @@ async function sendMessage(
 /** Finds a guest by email or phone, or creates one. */
 async function findOrCreateGuest(
   supabase: SupabaseClient,
-  details: { name: string; email: string; phone: string; nationality: string; companyId: string | null; isVip: boolean },
+  details: { name: string; email: string; phone: string; nationality: string; isVip: boolean },
 ) {
   let guestId: string | null = null;
   if (details.email || details.phone) {
@@ -156,7 +156,6 @@ async function findOrCreateGuest(
       email: details.email || null,
       phone: details.phone || null,
       nationality: details.nationality || "Indian",
-      company_id: details.companyId,
       tags: details.isVip ? ["VIP"] : [],
     })
     .select("id")
@@ -183,7 +182,7 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
   const idType = oneOfOrNull(fd, "id_type", ID_TYPES);
   const idNumber = str(fd, "id_number", 50);
 
-  // SOW Module 1 "minimum data per booking".
+  // Module 1 "minimum data per booking".
   if (!name) return { error: "Guest name is required." };
   if (!phone) return { error: "A contact number is required." };
   if (!email) return { error: "An email address is required." };
@@ -264,14 +263,12 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
   const average = breakdown.length ? Math.round(total / rooms / breakdown.length) : 0;
   const deposit = Math.round((total * Number(plan.deposit_percent)) / 100);
 
-  const companyId = uuidOrNull(fd, "company_id");
   const isVip = bool(fd, "is_vip");
   const guest = await findOrCreateGuest(supabase, {
     name,
     email,
     phone,
     nationality: str(fd, "nationality", 80),
-    companyId,
     isVip,
   });
   if (!guest.id) return { error: friendlyDbError(guest.error) };
@@ -303,7 +300,6 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
     .from("bookings")
     .insert({
       guest_id: guest.id,
-      company_id: companyId,
       room_type_id: roomTypeId,
       rate_plan_id: ratePlanId,
       check_in: checkIn,
@@ -366,7 +362,7 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
     await sendMessage(supabase, "confirmation", data.id, session.staff.id);
   }
 
-  // SOW Module 16, trigger event "booking created".
+  // Module 16, trigger event "booking created".
   if (settings.notify_staff_new_booking) {
     await alertNewBooking(
       supabase,
@@ -514,7 +510,7 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
   if (!["tentative", "confirmed"].includes(booking.status)) {
     return { error: "Only an expected arrival can be marked as a no-show." };
   }
-  if (booking.check_in > settings.business_date) {
+  if (booking.check_in > todayIn(settings.timezone)) {
     return { error: "The guest is not due yet." };
   }
 
@@ -658,7 +654,6 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
       rooms_count: rooms,
       room_type_id: roomTypeId,
       rate_plan_id: ratePlanId,
-      company_id: uuidOrNull(fd, "company_id"),
       source: oneOf(fd, "source", SOURCES, booking.source),
       payment_method: oneOfOrNull(fd, "payment_method", PAYMENT_METHODS) ?? booking.payment_method,
       rate_breakdown: breakdown,
@@ -679,7 +674,7 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
 
   if (error) return { error: friendlyDbError(error.message), overbooked: isOverbooked(error.message) };
 
-  // SOW Module 16, trigger event "booking modified". Only worth telling the
+  // Module 16, trigger event "booking modified". Only worth telling the
   // guest when the stay itself moved — a corrected phone number is not news,
   // and a message about it would only worry them.
   const moved =
@@ -957,7 +952,7 @@ export async function recordPayment(_prev: ActionState, fd: FormData): Promise<A
   });
   if (error) return { error: friendlyDbError(error.message) };
 
-  // SOW Module 16, trigger event "payment received". A refund is not a
+  // Module 16, trigger event "payment received". A refund is not a
   // receipt, so only a payment sends one, and only when asked: the desk
   // takes plenty of payments the guest is standing right there for.
   let sent = "";

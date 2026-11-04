@@ -173,25 +173,29 @@ export function OccupancyRevenueChart({ data }: { data: Point[] }) {
           tickFormatter={inrCompact}
         />
       </div>
-      <table className="sr-only">
-        <caption>Occupancy and revenue by day</caption>
-        <thead>
-          <tr>
-            <th scope="col">Day</th>
-            <th scope="col">Occupancy</th>
-            <th scope="col">Revenue</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((d) => (
-            <tr key={d.day}>
-              <th scope="row">{dayLabel(d.day)}</th>
-              <td>{d.occupancy === null ? "—" : `${d.occupancy}%`}</td>
-              <td>{inr(d.revenue)}</td>
+      {/* sr-only on a wrapper, not the table: a table ignores the 1px height
+          and, positioned absolutely, stretches the page below the content. */}
+      <div className="sr-only">
+        <table>
+          <caption>Occupancy and revenue by day</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col">Occupancy</th>
+              <th scope="col">Revenue</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map((d) => (
+              <tr key={d.day}>
+                <th scope="row">{dayLabel(d.day)}</th>
+                <td>{d.occupancy === null ? "—" : `${d.occupancy}%`}</td>
+                <td>{inr(d.revenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

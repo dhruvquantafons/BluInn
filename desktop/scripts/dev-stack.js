@@ -101,7 +101,7 @@ async function main() {
 
   // The app's migrations, fresh from the repo each start.
   fs.rmSync(paths.appMigrations, { recursive: true, force: true });
-  fs.cpSync(path.join(root, "supabase", "migrations"), paths.appMigrations, { recursive: true });
+  fs.cpSync(path.join(root, "neon", "migrations"), paths.appMigrations, { recursive: true });
 
   const config = installConfig();
   const secrets = devSecrets();

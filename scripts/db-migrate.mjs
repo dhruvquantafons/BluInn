@@ -4,7 +4,7 @@
 //   DATABASE_URL=postgres://... npm run db:migrate
 //
 // First db/platform.sql (the roles, auth and storage schemas Supabase would
-// otherwise provide), then every supabase/migrations/*.sql not yet applied, in
+// otherwise provide), then every neon/migrations/*.sql not yet applied, in
 // name order, each in its own transaction. Applied names are recorded in
 // bluinn_meta.migrations, so running it again only applies what is new.
 //
@@ -33,7 +33,7 @@ try {
   await client.query(fs.readFileSync(path.join(root, "db/platform.sql"), "utf8"));
   console.log("✓ platform (roles, auth, storage)");
 
-  const dir = path.join(root, "supabase/migrations");
+  const dir = path.join(root, "neon/migrations");
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
   const { rows } = await client.query("select name from bluinn_meta.migrations");
   const done = new Set(rows.map((r) => r.name));

@@ -77,7 +77,7 @@ export interface Staff {
   address?: string;
   emergency_contact?: string;
   sessions_revoked_at?: string | null;
-  /** The property this person belongs to (SOW Module 14). */
+  /** The property this person belongs to (Module 14). */
   property_id?: string | null;
   /** Head office: sees and works at every property in the group. */
   all_properties?: boolean;
@@ -86,7 +86,7 @@ export interface Staff {
 }
 
 /**
- * One hotel in the group (SOW Module 14).
+ * One hotel in the group (Module 14).
  *
  * Carries every field of PropertySettings — before 0024 this was a single row
  * called property_settings, and each property now holds its own copy — plus
@@ -132,7 +132,6 @@ export interface GroupAvailability {
 /** Head office's copy of the settings it can push to every property. */
 export interface GroupSettings {
   group_name: string;
-  best_rate_message: string;
   invoice_terms: string;
   event_terms: string;
   default_language: string;
@@ -372,16 +371,14 @@ export interface GuestFeedback {
   created_at: string;
 }
 
-/** Tags staff set by hand. Repeat Guest and Corporate are derived. */
-export const MANUAL_GUEST_TAGS = ["VIP", "Blacklisted"] as const;
-export const GUEST_TAGS = ["VIP", "Blacklisted", "Repeat Guest", "Corporate"] as const;
+/** VIP and Blacklisted are set by staff; Repeat Guest is derived. */
+export const GUEST_TAGS = ["VIP", "Blacklisted", "Repeat Guest"] as const;
 export type GuestTag = (typeof GUEST_TAGS)[number];
 
 /** Every tag that applies, including the derived ones. */
-export function guestTags(g: Pick<Guest, "tags" | "company_id">, stats?: Pick<GuestStats, "stays"> | null): GuestTag[] {
+export function guestTags(g: Pick<Guest, "tags">, stats?: Pick<GuestStats, "stays"> | null): GuestTag[] {
   const tags = new Set<GuestTag>((g.tags ?? []).filter((t): t is GuestTag => (GUEST_TAGS as readonly string[]).includes(t)));
   if ((stats?.stays ?? 0) >= 2) tags.add("Repeat Guest");
-  if (g.company_id) tags.add("Corporate");
   return GUEST_TAGS.filter((t) => tags.has(t));
 }
 
@@ -404,7 +401,7 @@ export type MessageTemplateKey =
   | "confirmation"
   | "cancellation"
   | "final_bill"
-  // SOW Module 16: the pre-arrival reminder, the check-in instructions and
+  // Module 16: the pre-arrival reminder, the check-in instructions and
   // the post-stay thank-you. Sent on a timer by the nightly job.
   | "pre_arrival"
   | "checkin_instructions"
@@ -743,8 +740,6 @@ export interface PropertySettings {
   event_advance_percent: number;
   event_terms: string;
   monthly_operating_cost: number;
-  /** Best-rate guarantee wording for the hotel's website or booking engine (Module 17). */
-  best_rate_message: string;
   /** Notification timings and staff alerts (Module 16). 0 days = off. */
   notify_pre_arrival_days: number;
   notify_checkin_days: number;
@@ -878,13 +873,6 @@ export const BOOKING_SOURCE_LABELS: Record<BookingSource, string> = {
   mobile_app: "Mobile App",
 };
 
-export const ROOM_STATUS_LABELS: Record<RoomStatus, string> = {
-  available: "Available",
-  occupied: "Occupied",
-  out_of_order: "Out of Order",
-  out_of_service: "Out of Service",
-};
-
 export const HOUSEKEEPING_STATUS_LABELS: Record<HousekeepingStatus, string> = {
   dirty: "Dirty",
   cleaning: "Cleaning",
@@ -926,6 +914,14 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   loyalty_points: "Loyalty points",
   other: "Other",
 };
+
+/**
+ * The methods offered in payment-method pickers. Company billing is gone with
+ * corporate accounts; the label above stays so older records still read.
+ */
+export const PAYMENT_METHOD_CHOICES = (Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod, string][]).filter(
+  ([method]) => method !== "corporate_billing",
+);
 
 export const ID_TYPE_LABELS: Record<string, string> = {
   passport: "Passport",
@@ -980,7 +976,7 @@ export const BOOKING_STATUS_STYLES: Record<BookingStatus, string> = {
 /** Statuses that hold inventory. Must match enforce_booking_inventory(). */
 export const OCCUPYING_STATUSES: BookingStatus[] = ["tentative", "confirmed", "checked_in"];
 
-/** The room board's combined view, in the SOW's terms. */
+/** The room board's combined view, in front-office terms. */
 export function roomBoardLabel(room: Pick<Room, "status" | "housekeeping_status">) {
   if (room.status === "occupied") return "Occupied";
   if (room.status === "out_of_order") return "Out of Order";
@@ -1318,7 +1314,7 @@ export interface LoyaltyTierChange {
 
 // ── Module 6: Point of Sale ─────────────────────────────────────────────────
 
-/** The seven outlet types the SOW names. */
+/** The seven outlet types BluInn supports (Module 6). */
 export type OutletKind =
   | "restaurant"
   | "bar"
@@ -1745,13 +1741,6 @@ export const PACKAGE_BASIS_LABELS: Record<PackageBasis, string> = {
   per_night: "Each night",
   per_person_per_stay: "Per person, once",
   per_person_per_night: "Per person, each night",
-};
-
-export const PRICING_ADJUSTMENT_STATUS_LABELS: Record<PricingAdjustmentStatus, string> = {
-  pending: "Waiting for approval",
-  applied: "Live",
-  rejected: "Rejected",
-  expired: "Expired",
 };
 
 export interface PackageComponent {

@@ -4,9 +4,9 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { loadPricingData, loadCompanies } from "../../../../lib/rate-data";
+import { loadPricingData } from "../../../../lib/rate-data";
 import { todayIn, addDays } from "../../../../lib/dates";
-import { PAYMENT_METHOD_LABELS } from "../../../../lib/types";
+import { PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import { createGroup } from "../../../group-actions";
 import { Card, Field, inputClass, fmtMoney } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
@@ -15,14 +15,14 @@ export default async function NewGroupPage() {
   const session = await requirePermission("bookings.groups");
   const supabase = await createClient();
   const settings = await getSettings();
-  const [pricing, companies] = await Promise.all([loadPricingData(supabase), loadCompanies(supabase)]);
+  const pricing = await loadPricingData(supabase);
   const today = todayIn(settings.timezone);
   const plans = pricing.plans.filter((p) => p.is_active);
   const defaultPlan = plans.find((p) => p.rate_type === "group") ?? plans.find((p) => p.rate_type === "bar") ?? plans[0];
 
   return (
     <>
-      <Link href="/groups" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700 mb-4">
+      <Link href="/groups" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Groups
       </Link>
       <h1 className="text-xl font-semibold tracking-tight text-slate-900 mb-1">New group booking</h1>
@@ -45,21 +45,9 @@ export default async function NewGroupPage() {
             )
           }
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Group name">
-              <input name="name" required placeholder="Sharma–Kaul wedding" className={inputClass} />
-            </Field>
-            <Field label="Company">
-              <select name="company_id" defaultValue="" className={inputClass}>
-                <option value="">None</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+          <Field label="Group name">
+            <input name="name" required placeholder="Sharma–Kaul wedding" className={inputClass} />
+          </Field>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Organiser">
               <input name="organiser_name" className={inputClass} />
@@ -93,7 +81,7 @@ export default async function NewGroupPage() {
           </div>
 
           <div>
-            <p className="text-xs font-medium text-yellow-700 mb-2">Rooms to block</p>
+            <p className="text-xs font-medium text-brand-700 mb-2">Rooms to block</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {pricing.roomTypes
                 .filter((t) => t.is_active)
@@ -123,7 +111,7 @@ export default async function NewGroupPage() {
             </Field>
             <Field label="Payment">
               <select name="payment_method" defaultValue="bank_transfer" className={inputClass}>
-                {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+                {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>

@@ -11,7 +11,7 @@ import PrintButton from "../../../components/PrintButton";
 import { RangePicker, ReportTable } from "../shared";
 
 /**
- * The custom report builder (SOW Module 13: "Custom report builder with
+ * The custom report builder (Module 13: "Custom report builder with
  * export to Excel/PDF").
  *
  * Deliberately a chooser over the reports the system knows how to produce,
@@ -58,7 +58,7 @@ export default async function ReportBuilderPage({
               href={query(r.kind)}
               className={`block border rounded-lg px-3 py-2 transition-colors ${
                 allowed?.kind === r.kind
-                  ? "border-yellow-500 bg-yellow-50"
+                  ? "border-brand-500 bg-brand-50"
                   : "border-slate-200 hover:border-slate-300"
               }`}
             >

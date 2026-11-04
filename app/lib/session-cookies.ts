@@ -11,7 +11,7 @@
 export const SUPABASE_COOKIE_PREFIX = "sb-";
 
 /** Set once the second sign-in step has been passed. See lib/two-factor.ts. */
-export const TWO_FACTOR_COOKIE = "pms_2fa";
+export const TWO_FACTOR_COOKIE = "bluinn_2fa";
 
 /** The 2FA cookie must be cleared with the same path it was set with, or the
  *  browser keeps it. */

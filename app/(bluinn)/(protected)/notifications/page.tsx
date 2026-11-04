@@ -1,6 +1,8 @@
+import { BellRing } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../lib/supabase/server";
+import { PRODUCT } from "../../../lib/app-config";
 import { requireAnyPermission } from "../../../lib/auth";
 import { TEMPLATE_LABELS } from "../../../lib/message-templates";
 import type { Notification, Staff } from "../../../lib/types";
@@ -19,7 +21,7 @@ import {
 import NotificationList, { templateName } from "../../components/NotificationList";
 
 /**
- * The notification log (SOW Module 16: "notification history log per guest
+ * The notification log (Module 16: "notification history log per guest
  * and per staff member").
  *
  * A guest's own history also appears on their profile, and a booking's on its
@@ -83,7 +85,8 @@ export default async function NotificationsPage({
     <>
       <PageHeader
         title="Notification log"
-        description="Every guest message and staff alert this system has attempted, successful or not."
+        icon={<BellRing />}
+        description={`Every guest message and staff alert ${PRODUCT.name} has attempted, successful or not.`}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -155,11 +158,11 @@ export default async function NotificationsPage({
           </label>
           <button
             type="submit"
-            className="px-4 py-2 rounded-md border border-slate-300 hover:border-yellow-500 transition-colors"
+            className="px-4 py-2 rounded-md border border-slate-300 hover:border-brand-500 transition-colors"
           >
             Filter
           </button>
-          <Link href="/notifications" className="text-slate-500 hover:text-yellow-700 px-2 py-2">
+          <Link href="/notifications" className="text-slate-500 hover:text-brand-700 px-2 py-2">
             Clear
           </Link>
         </form>
@@ -183,7 +186,7 @@ export default async function NotificationsPage({
       <p className="text-xs text-slate-500 mt-4">
         A guest&apos;s own history is on their profile, and a booking&apos;s on its activity tab. Wording is edited
         under{" "}
-        <Link href="/settings/templates" className="text-yellow-700 underline">
+        <Link href="/settings/templates" className="text-brand-700 underline">
           Settings → Templates
         </Link>
         .

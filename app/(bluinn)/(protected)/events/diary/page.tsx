@@ -18,7 +18,7 @@ import { EVENT_STATUS_LABELS } from "../../../../lib/types";
 import { Card, EmptyState, SectionTitle, StatCard, Tag, fmtMoney } from "../../../components/ui";
 
 /**
- * The availability calendar (SOW Module 10).
+ * The availability calendar (Module 10).
  *
  * Only a confirmed function holds the hall, so the diary has to show two
  * different things at once: what is actually happening, and what is still
@@ -60,7 +60,7 @@ export default async function EventsDiaryPage({
 
   const query = supabase
     .from("event_bookings")
-    .select("*, event_layouts(name, capacity), companies(name), guests(full_name)")
+    .select("*, event_layouts(name, capacity), guests(full_name)")
     .gte("event_date", month)
     .lte("event_date", monthEnd)
     .order("event_date")
@@ -123,7 +123,7 @@ export default async function EventsDiaryPage({
             >
               <ChevronRight className="w-4 h-4" />
             </Link>
-            <Link href={href(todayIn(settings.timezone))} className="ml-1 text-[11px] text-yellow-700 hover:underline">
+            <Link href={href(todayIn(settings.timezone))} className="ml-1 text-[11px] text-brand-700 hover:underline">
               This month
             </Link>
           </div>
@@ -136,7 +136,7 @@ export default async function EventsDiaryPage({
                   href={`/events/diary?month=${month.slice(0, 7)}&space=${s.id}`}
                   className={`px-2.5 py-1 rounded-md text-xs border ${
                     s.id === spaceId
-                      ? "border-yellow-500 bg-yellow-50 text-yellow-800"
+                      ? "border-brand-500 bg-brand-50 text-brand-800"
                       : "border-slate-200 text-slate-600 hover:border-slate-300"
                   }`}
                 >
@@ -169,13 +169,13 @@ export default async function EventsDiaryPage({
                   key={day}
                   className={`min-h-[5rem] rounded-lg border p-1.5 ${
                     isToday
-                      ? "border-yellow-400 bg-yellow-50/40"
+                      ? "border-brand-400 bg-brand-50/40"
                       : isHeld
                         ? "border-emerald-200 bg-emerald-50/30"
                         : "border-slate-200"
                   }`}
                 >
-                  <p className={`text-[11px] mb-1 ${isToday ? "font-semibold text-yellow-800" : "text-slate-500"}`}>
+                  <p className={`text-[11px] mb-1 ${isToday ? "font-semibold text-brand-800" : "text-slate-500"}`}>
                     {Number(day.slice(8, 10))}
                   </p>
                   <div className="space-y-1">
@@ -220,7 +220,7 @@ export default async function EventsDiaryPage({
             {chasing.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-2 text-xs">
                 <Tag tone={e.status === "quoted" ? "amber" : "neutral"}>{EVENT_STATUS_LABELS[e.status]}</Tag>
-                <Link href={`/events/${e.id}`} className="font-mono text-yellow-700 hover:underline">
+                <Link href={`/events/${e.id}`} className="font-mono text-brand-700 hover:underline">
                   {e.number}
                 </Link>
                 <span className="text-slate-700">{e.title}</span>

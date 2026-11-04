@@ -545,7 +545,7 @@ describe("checkPromo", () => {
     expect(checkPromo(once, { ...stay, guestRedemptions: 1 }).ok).toBe(false);
   });
 
-  it("hides a private code from the public site but not from the desk", () => {
+  it("hides a private code from a guest-facing channel but not from the desk", () => {
     const private_ = promo({ is_public: false });
     expect(checkPromo(private_, { ...stay, publicOnly: true }).ok).toBe(false);
     expect(checkPromo(private_, stay).ok).toBe(true);

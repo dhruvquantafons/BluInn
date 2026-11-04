@@ -76,7 +76,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
                 {assets.map((a) => (
                   <tr key={a.id} className={a.is_active ? "" : "opacity-60"}>
                     <td className="px-4 py-2.5">
-                      <Link href={`/maintenance/assets/${a.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                      <Link href={`/maintenance/assets/${a.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                         {a.name}
                       </Link>
                       <span className="block text-xs text-slate-500">

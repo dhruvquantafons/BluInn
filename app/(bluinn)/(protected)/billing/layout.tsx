@@ -10,13 +10,11 @@ export default async function BillingLayout({ children }: { children: React.Reac
     "folio.view",
     "folio.invoice",
     "folio.refund_approve",
-    "folio.city_ledger",
   ]);
 
   const tabs = [
     { href: "/billing/invoices", label: "Invoices" },
     { href: "/billing/refunds", label: "Refunds" },
-    { href: "/billing/city-ledger", label: "City ledger" },
     { href: "/billing/currencies", label: "Currencies" },
   ].filter(Boolean) as { href: string; label: string }[];
 
@@ -25,7 +23,7 @@ export default async function BillingLayout({ children }: { children: React.Reac
       <PageHeader
         icon={<ReceiptIndianRupee />}
         title="Billing"
-        description="Tax invoices, online payments, refund approvals, corporate accounts and exchange rates."
+        description="Tax invoices, online payments, refund approvals and exchange rates."
         action={
           can(session, "folio.invoice") ? undefined : (
             <span className="text-xs text-slate-500">You can view invoices but not issue them.</span>

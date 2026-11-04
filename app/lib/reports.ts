@@ -1,5 +1,5 @@
 /**
- * Reporting and analytics (SOW Module 13).
+ * Reporting and analytics (Module 13).
  *
  * The database does the aggregating — see 0018_reports.sql, where each report
  * is a permission-checked function so "financial reports restricted to
@@ -73,7 +73,7 @@ export function proratedOperatingCost(monthlyCost: number, days: number): number
 }
 
 /**
- * The SOW's Core KPIs, from the daily rows.
+ * The Core KPIs, from the daily rows.
  *
  * ADR divides by rooms *sold* and RevPAR by rooms *available* — that is the
  * whole difference between them, and the reason a hotel quotes both: a high
@@ -224,7 +224,7 @@ export function describeRange(from: string, to: string): string {
 // ── The custom report builder ───────────────────────────────────────────────
 
 /**
- * What the builder can produce (SOW Module 13: "Custom report builder with
+ * What the builder can produce (Module 13: "Custom report builder with
  * export to Excel/PDF").
  *
  * Deliberately a fixed set of reports over a chosen date range rather than an
@@ -254,7 +254,7 @@ export interface ReportDefinition {
   description: string;
   /** The database function behind it. */
   fn: string;
-  /** Financial reports are Management/Finance only (SOW Module 13). */
+  /** Financial reports are Management/Finance only (Module 13). */
   financial: boolean;
   /** False for reports that ignore the date range, such as outstanding money. */
   ranged: boolean;
@@ -265,13 +265,12 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "daily_revenue",
     label: "Daily revenue",
-    description: "Rooms sold, occupancy and revenue for each day, from the closed night audit where there is one.",
+    description: "Rooms sold, occupancy and revenue for each day.",
     fn: "report_daily",
     financial: true,
     ranged: true,
     columns: [
       { key: "day", label: "Date" },
-      { key: "source", label: "Source" },
       { key: "rooms_available", label: "Available" },
       { key: "rooms_sold", label: "Sold" },
       { key: "room_revenue", label: "Room revenue", money: true },
@@ -364,7 +363,7 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "outstanding",
     label: "Outstanding payments",
-    description: "Stays that still owe money, in house and departed. Corporate debt is on the city ledger.",
+    description: "Stays that still owe money, in house and departed.",
     fn: "report_outstanding",
     financial: true,
     ranged: false,

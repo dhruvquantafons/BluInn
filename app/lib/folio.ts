@@ -13,8 +13,7 @@ type ChargeableBooking = Pick<
 
 /**
  * Posts the room charge (and its tax) for each given night that has not been
- * charged yet. Night audit uses it for one night across every in-house
- * booking; check-out uses it to catch any night an audit missed.
+ * charged yet. Check-out uses it to charge every night of the stay.
  *
  * A unique index guarantees one room charge per booking per night, so a
  * retry can never double-charge.

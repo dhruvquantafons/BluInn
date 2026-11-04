@@ -1,7 +1,7 @@
 import type { LoyaltyTier, LoyaltyTransaction } from "./types";
 
 /**
- * Loyalty points and membership tiers (SOW Module 8).
+ * Loyalty points and membership tiers (Module 8).
  *
  * Points are held as *lots*: every earning creates one, carrying its own
  * expiry date and how much of it is still unspent. A redemption eats the
@@ -106,7 +106,7 @@ export function entryTier(tiers: LoyaltyTier[]): LoyaltyTier | null {
 }
 
 /**
- * The highest tier a guest's rolling twelve months qualifies for (SOW Module
+ * The highest tier a guest's rolling twelve months qualifies for (Module
  * 8 "Tier Upgrade Rules"). Both thresholds must be met; a guest who meets
  * neither falls back to the entry tier, which is what a downgrade means.
  */

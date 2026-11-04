@@ -9,8 +9,8 @@ import "server-only";
  *   SMS        TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
  *   Door locks DOOR_LOCK_WEBHOOK_URL, DOOR_LOCK_API_KEY (optional)
  *
- * Door locks follow SOW §5: "integration hooks only; hardware is out of
- * scope". The lock vendor's middleware receives a signed JSON request and
+ * Door locks are integration hooks only: BluInn does not ship lock hardware.
+ * The lock vendor's middleware receives a signed JSON request and
  * encodes the cards.
  */
 
@@ -167,7 +167,7 @@ export interface KotTicket {
 /**
  * Sends a kitchen ticket to a kitchen display or network printer.
  *
- * The SOW puts POS hardware out of scope (§2.2, "software integration only"),
+ * BluInn does not ship POS hardware (software integration only),
  * so this is a hook in the same shape as the door locks above: with no
  * endpoint configured it stands down cleanly and the ticket is printed from
  * the browser instead. Nothing in the order flow depends on it succeeding.

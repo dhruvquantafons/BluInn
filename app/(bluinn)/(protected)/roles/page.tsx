@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
+import { PRODUCT } from "../../../lib/app-config";
 import { requirePermission } from "../../../lib/auth";
 import { PERMISSION_GROUPS } from "../../../lib/permissions";
 import type { Role } from "../../../lib/types";
@@ -24,7 +25,7 @@ function RoleFields({ role, granted }: { role?: Role; granted: Set<string> }) {
         name="requires_2fa"
         defaultChecked={role?.requires_2fa}
         label="Require two-factor authentication"
-        hint="People with this role must set up an authenticator app before they can use the panel."
+        hint={`People with this role must set up an authenticator app before they can use ${PRODUCT.name}.`}
       />
       {role?.is_superuser ? (
         <Notice>This role holds every permission, including ones added in future releases.</Notice>
@@ -32,7 +33,7 @@ function RoleFields({ role, granted }: { role?: Role; granted: Set<string> }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {PERMISSION_GROUPS.map((g) => (
             <fieldset key={g.module} className="space-y-1.5">
-              <legend className="text-xs font-medium text-yellow-700 mb-1">{g.module}</legend>
+              <legend className="text-xs font-medium text-brand-700 mb-1">{g.module}</legend>
               {g.permissions.map((p) => (
                 <Check key={p.key} name="permissions" value={p.key} defaultChecked={granted.has(p.key)} label={p.label} />
               ))}
@@ -66,7 +67,7 @@ export default async function RolesPage() {
       <div className="space-y-6">
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Create a custom role</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Create a custom role</summary>
             <div className="mt-5">
               <ActionForm action={saveRole} submitLabel="Create role">
                 <RoleFields granted={new Set()} />
@@ -85,7 +86,7 @@ export default async function RolesPage() {
                 <span className="text-xs text-slate-600">
                   {headcount(role.key)} person(s) · {role.is_superuser ? "all permissions" : `${byRole(role.key).size} permission(s)`}
                 </span>
-                <span className="ml-auto text-[11px] text-yellow-700">Edit</span>
+                <span className="ml-auto text-[11px] text-brand-700">Edit</span>
               </summary>
               <div className="mt-5 pt-5 border-t border-slate-100 space-y-3">
                 <ActionForm action={saveRole} submitLabel="Save role">

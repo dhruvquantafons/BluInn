@@ -1,5 +1,5 @@
 /**
- * Password rules (SOW Module 15: minimum length and complexity, periodic
+ * Password rules (Module 15: minimum length and complexity, periodic
  * reset, lockout after repeated failures).
  */
 

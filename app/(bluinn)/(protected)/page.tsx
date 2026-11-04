@@ -172,9 +172,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }, {});
 
   const alerts: { text: string; href: string }[] = [];
-  if (settings.business_date < today && can(session, "frontdesk.night_audit")) {
-    alerts.push({ text: `Night audit has not closed ${fmtDate(settings.business_date)}.`, href: "/night-audit" });
-  }
   if ((unassigned.count ?? 0) > 0) {
     alerts.push({ text: `${unassigned.count} arriving or in-house booking(s) have no room assigned.`, href: "/front-desk" });
   }
@@ -229,7 +226,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
 
   const canFrontDesk = can(session, "frontdesk.view");
-  const shown = alerts.slice(0, 3);
 
   return (
     <>
@@ -237,11 +233,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PageHeader
         eyebrow={new Date(today + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
         title={`Good day, ${session.staff.full_name.split(" ")[0] || "there"}`}
-        description={`${fmtDate(today)} · business date ${fmtDate(settings.business_date)}`}
-        chips={[
-          ...shown.map((a) => ({ label: a.text, href: a.href, tone: "warn" as const, icon: <AlertTriangle /> })),
-          ...(alerts.length > shown.length ? [{ label: `${alerts.length - shown.length} more`, href: "#attention" }] : []),
-        ]}
+        description={fmtDate(today)}
+        // One summary chip: the items themselves are listed in "Needs
+        // attention" right below, so repeating each one here said it twice.
+        chips={
+          alerts.length
+            ? [
+                {
+                  label: `${alerts.length} ${alerts.length === 1 ? "thing needs" : "things need"} attention`,
+                  href: "#attention",
+                  tone: "warn" as const,
+                  icon: <AlertTriangle />,
+                },
+              ]
+            : []
+        }
         action={
           canCreate || canFrontDesk || seesBookings ? (
             <>
@@ -301,18 +307,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <div className="divide-y divide-slate-100">
             {alerts.map((a) => (
               <Link key={a.text} href={a.href} className="group flex items-center gap-3 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150">
-                <span className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                <span className="w-7 h-7 rounded-lg bg-amber-100 ring-1 ring-amber-200/70 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
                 </span>
-                {a.text}
+                <span className="group-hover:text-slate-900 transition-colors duration-150">{a.text}</span>
                 <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-300 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-slate-500" />
               </Link>
             ))}
           </div>
         </Card>
       ) : (
-        <Card className="mb-6 flex items-center gap-3 px-5 py-4">
-          <span className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+        <Card className="mb-6 flex items-center gap-3 px-5 py-4 bg-linear-to-r from-emerald-50 to-white border-emerald-200/70!">
+          <span className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 flex items-center justify-center shrink-0">
             <CircleCheck className="w-[18px] h-[18px]" />
           </span>
           <p className="text-sm text-slate-600">
@@ -461,7 +467,12 @@ function MovementList({
                     {b.adults + b.children} guest(s) · {b.rooms_count} room(s)
                   </span>
                 </span>
-                <span className={`text-xs tabular-nums ${b.rooms?.room_number ? "text-slate-600" : "text-amber-700"}`}>
+                <span
+                  className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-xs font-medium tabular-nums ${
+                    b.rooms?.room_number ? "bg-slate-100 text-slate-700" : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                  }`}
+                >
+                  <BedDouble aria-hidden="true" className="w-3 h-3 opacity-60" />
                   {b.rooms?.room_number ?? "No room"}
                 </span>
                 <StatusPill status={b.status} />

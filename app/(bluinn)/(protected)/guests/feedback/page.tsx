@@ -63,10 +63,10 @@ export default async function FeedbackListPage({ searchParams }: { searchParams:
             {rows.map((f) => (
               <li key={f.id} className="px-4 py-3 text-sm">
                 <p>
-                  <span className="text-yellow-600">{"★".repeat(f.overall ?? 0)}</span>
+                  <span className="text-brand-600">{"★".repeat(f.overall ?? 0)}</span>
                   <span className="text-slate-300">{"★".repeat(5 - (f.overall ?? 0))}</span>{" "}
                   {f.guests ? (
-                    <Link href={`/guests/${f.guests.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                    <Link href={`/guests/${f.guests.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                       {f.guests.full_name}
                     </Link>
                   ) : (

@@ -17,7 +17,7 @@ export default function StaffMemberForm({
   member: Staff;
   isSelf: boolean;
   roles: Role[];
-  /** The hotels this person can be assigned to (SOW Module 14). */
+  /** The hotels this person can be assigned to (Module 14). */
   properties?: Pick<Property, "id" | "code" | "name">[];
 }) {
   const role = roles.find((r) => r.key === member.role);
@@ -35,7 +35,7 @@ export default function StaffMemberForm({
           <h3 className="text-base font-semibold text-slate-900">
             {member.full_name || "Unnamed staff member"}
             {isSelf && (
-              <span className="ml-2 text-[11px] text-yellow-700 font-sans font-normal">
+              <span className="ml-2 text-[11px] text-brand-700 font-sans font-normal">
                 (you)
               </span>
             )}
@@ -44,7 +44,7 @@ export default function StaffMemberForm({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs px-2.5 py-1 rounded-full border border-yellow-200 bg-yellow-50 text-yellow-800">
+          <span className="text-xs px-2.5 py-1 rounded-full border border-brand-200 bg-brand-50 text-brand-800">
             {role?.name ?? member.role}
           </span>
           <span

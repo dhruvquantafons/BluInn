@@ -67,7 +67,7 @@ export default async function HrSetupPage() {
                 {!s.is_active && <span className="text-xs text-slate-500">not in use</span>}
               </div>
               <details className="mt-2">
-                <summary className="text-xs text-yellow-800 cursor-pointer">Edit</summary>
+                <summary className="text-xs text-brand-800 cursor-pointer">Edit</summary>
                 <div className="mt-2">
                   <ActionForm action={saveShiftType} submitLabel="Save" className="space-y-2">
                     <input type="hidden" name="id" value={s.id} />
@@ -95,7 +95,7 @@ export default async function HrSetupPage() {
           <ul className="divide-y divide-slate-100">
             {departments.map((d) => (
               <li key={d.id} className="py-2 flex items-center gap-2">
-                <ActionForm action={saveDepartment} submitLabel="Save" submitClassName="text-xs text-yellow-800 cursor-pointer" className="flex-1 flex items-center gap-2 [&>div]:shrink-0">
+                <ActionForm action={saveDepartment} submitLabel="Save" submitClassName="text-xs text-brand-800 cursor-pointer" className="flex-1 flex items-center gap-2 [&>div]:shrink-0">
                   <input type="hidden" name="id" value={d.id} />
                   <input name="name" defaultValue={d.name} required className={inputClass} />
                 </ActionForm>

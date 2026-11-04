@@ -1,15 +1,14 @@
 import Link from "next/link";
 import type { Currency, Folio, FolioEntry, LoyaltyTier } from "../../../../lib/types";
-import { PAYMENT_METHOD_LABELS } from "../../../../lib/types";
+import { PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import { quoteSettlement } from "../../../../lib/currency";
 import { maxRedeemablePoints, redemptionValue, tierByKey } from "../../../../lib/loyalty";
-import { transferToCityLedger, takeForeignPayment } from "../../../city-ledger-actions";
+import { takeForeignPayment } from "../../../currency-actions";
 import { redeemPoints } from "../../../loyalty-actions";
 import {
   Card,
   Check,
   Field,
-  Notice,
   SectionTitle,
   Tag,
   fmtMoney,
@@ -19,11 +18,9 @@ import {
 import ActionForm from "../../../components/ActionForm";
 
 /**
- * The three ways a bill gets settled other than cash at the desk, completing
+ * The two ways a bill gets settled other than cash at the desk, completing
  * Module 7 and the spending half of Module 8:
  *
- *   • Bill it to a company — the balance leaves the stay and joins that
- *     company's city ledger account, to be chased on payment terms.
  *   • Take it in another currency — credited in the property's own money at
  *     the rate used, which is recorded on the line.
  *   • Take it in loyalty points — worth what the guest's tier says, and never
@@ -36,7 +33,6 @@ export default function SettlementPanel({
   memberNo,
   folios,
   entries,
-  companies,
   currencies,
   baseCurrency,
   multiCurrency,
@@ -46,7 +42,6 @@ export default function SettlementPanel({
   minRedeem,
   programName,
   loyaltyEnabled,
-  canCityLedger,
   canPay,
   canRedeem,
 }: {
@@ -56,7 +51,6 @@ export default function SettlementPanel({
   memberNo: string | null;
   folios: Folio[];
   entries: FolioEntry[];
-  companies: { id: string; name: string }[];
   currencies: Currency[];
   baseCurrency: string;
   multiCurrency: boolean;
@@ -66,7 +60,6 @@ export default function SettlementPanel({
   minRedeem: number;
   programName: string;
   loyaltyEnabled: boolean;
-  canCityLedger: boolean;
   canPay: boolean;
   canRedeem: boolean;
 }) {
@@ -85,15 +78,6 @@ export default function SettlementPanel({
         .toFixed(2),
     );
 
-  // A folio already pushed onto a company's account shows a corporate-billing
-  // credit; transferring it again would double-count the debt.
-  const transferred = new Set(
-    live.filter((e) => e.kind === "payment" && e.method === "corporate_billing").map((e) => e.folio_id),
-  );
-  const owing = folios
-    .map((f) => ({ folio: f, balance: balanceOfFolio(f.id) }))
-    .filter((f) => f.balance > 0 && !transferred.has(f.folio.id));
-
   const totalOwed = Number(folios.reduce((s, f) => s + Math.max(0, balanceOfFolio(f.id)), 0).toFixed(2));
   const tier = tierByKey(tiers, tierKey);
   const offered = currencies.filter((c) => c.is_active && c.code !== baseCurrency);
@@ -102,77 +86,10 @@ export default function SettlementPanel({
   const showLoyalty = loyaltyEnabled && canRedeem && guestId && tier;
   const showCurrency = multiCurrency && canPay && offered.length > 0;
 
-  if (!canCityLedger && !showCurrency && !showLoyalty) return null;
+  if (!showCurrency && !showLoyalty) return null;
 
   return (
     <div className="space-y-5">
-      {/* ── Bill it to a company ── */}
-      {canCityLedger && (
-        <Card className="p-5">
-          <SectionTitle>Bill a company (city ledger)</SectionTitle>
-          <p className="text-[11px] text-slate-500 -mt-2 mb-4">
-            Moves what is still owed off this stay and onto the company&apos;s account, due on their payment terms. The
-            stay then reads as settled, and the money is chased under{" "}
-            <Link href="/billing/city-ledger" className="text-yellow-700 hover:underline">
-              Billing → City ledger
-            </Link>
-            .
-          </p>
-
-          {transferred.size > 0 && (
-            <Notice tone="ok">
-              {transferred.size === 1 ? "A bill on this stay has" : `${transferred.size} bills on this stay have`} already
-              been billed to a company account.
-            </Notice>
-          )}
-
-          {owing.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              Nothing left to bill — every folio on this stay is settled or already on a company account.
-            </p>
-          ) : (
-            <ActionForm
-              action={transferToCityLedger}
-              submitLabel="Bill to the company"
-              submitClassName={secondaryButtonClass}
-              className="space-y-3"
-            >
-              <input type="hidden" name="booking_id" value={bookingId} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Which bill">
-                  <select name="folio_id" required defaultValue={owing[0]?.folio.id} className={inputClass}>
-                    {owing.map((o) => (
-                      <option key={o.folio.id} value={o.folio.id}>
-                        {labelOf(o.folio)} — {fmtMoney(o.balance)} owed
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Company">
-                  <select name="company_id" required defaultValue={owing[0]?.folio.company_id ?? ""} className={inputClass}>
-                    <option value="" disabled>
-                      Choose…
-                    </option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-              <Field label="Note" hint="Optional — appears on the company's statement.">
-                <input name="note" maxLength={200} placeholder="PO 4471, conference delegates…" className={inputClass} />
-              </Field>
-              <p className="text-[11px] text-slate-500">
-                Refused if it would take the company past its credit limit. Issue the tax invoice first if the company
-                needs one — the invoice number is carried onto the statement.
-              </p>
-            </ActionForm>
-          )}
-        </Card>
-      )}
-
       {/* ── Another currency ── */}
       {showCurrency && (
         <Card className="p-5">
@@ -221,8 +138,8 @@ export default function SettlementPanel({
               </Field>
               <Field label="Taken by">
                 <select name="method" defaultValue="cash" className={inputClass}>
-                  {Object.entries(PAYMENT_METHOD_LABELS)
-                    .filter(([v]) => !["loyalty_points", "corporate_billing"].includes(v))
+                  {PAYMENT_METHOD_CHOICES
+                    .filter(([v]) => v !== "loyalty_points")
                     .map(([v, l]) => (
                       <option key={v} value={v}>
                         {l}
@@ -248,7 +165,7 @@ export default function SettlementPanel({
             <Check name="is_deposit" label="This is the deposit" />
             <p className="text-[11px] text-slate-500">
               Rates are maintained under{" "}
-              <Link href="/billing/currencies" className="text-yellow-700 hover:underline">
+              <Link href="/billing/currencies" className="text-brand-700 hover:underline">
                 Billing → Currencies
               </Link>
               . Fill the rate in only when a different one was agreed with the guest.

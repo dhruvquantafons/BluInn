@@ -7,7 +7,7 @@ import type { GroupAvailability } from "../../../../lib/types";
 import type { ActionState } from "../../../form-utils";
 
 /**
- * Taking a booking at whichever hotel in the group has room (SOW Module 14:
+ * Taking a booking at whichever hotel in the group has room (Module 14:
  * "Central reservation option — book any property from one screen").
  *
  * Deliberately not a second booking engine. It answers one question — who has
@@ -67,10 +67,10 @@ export default function CentralReservation({
                 }
                 className={`text-left rounded-md border px-3 py-2 transition-colors disabled:cursor-default ${
                   here
-                    ? "border-yellow-300 bg-yellow-50"
+                    ? "border-brand-300 bg-brand-50"
                     : p.free === 0
                       ? "border-slate-200 bg-white opacity-60"
-                      : "border-slate-200 bg-white hover:border-yellow-400 cursor-pointer"
+                      : "border-slate-200 bg-white hover:border-brand-400 cursor-pointer"
                 }`}
               >
                 <span className="block text-sm text-slate-900">{p.name}</span>

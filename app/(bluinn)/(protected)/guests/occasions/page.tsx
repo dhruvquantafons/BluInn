@@ -26,7 +26,7 @@ function nextOccurrence(date: string, today: string): string {
   return thisYear >= today ? thisYear : fix(year + 1);
 }
 
-/** Birthdays and anniversaries coming up (SOW Module 8: special-occasion reminders). */
+/** Birthdays and anniversaries coming up (Module 8: special-occasion reminders). */
 export default async function OccasionsPage() {
   await requirePermission("guests.view");
   const supabase = await createClient();
@@ -79,9 +79,9 @@ export default async function OccasionsPage() {
             const days = daysBetween(today, e.on);
             return (
               <li key={`${e.guest.id}-${e.kind}`} className="px-4 py-3 flex flex-wrap items-center gap-3">
-                {e.kind === "Birthday" ? <Cake className="w-4 h-4 text-yellow-700" /> : <Heart className="w-4 h-4 text-rose-600" />}
+                {e.kind === "Birthday" ? <Cake className="w-4 h-4 text-brand-700" /> : <Heart className="w-4 h-4 text-rose-600" />}
                 <div className="flex-1 min-w-[220px]">
-                  <Link href={`/guests/${e.guest.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                  <Link href={`/guests/${e.guest.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                     {e.guest.full_name}
                   </Link>
                   <p className="text-xs text-slate-500">

@@ -24,7 +24,6 @@ import {
 } from "../../../../lib/events";
 import type {
   Booking,
-  Company,
   EventBooking,
   EventEquipment,
   EventLayout,
@@ -40,7 +39,7 @@ import {
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   MEAL_PERIOD_LABELS,
-  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_LABELS, PAYMENT_METHOD_CHOICES,
   RENTAL_BASIS_LABELS,
 } from "../../../../lib/types";
 import {
@@ -64,7 +63,6 @@ import ActionForm from "../../../components/ActionForm";
 import {
   addEventLine,
   approveEventQuote,
-  billEventToCompany,
   billEventToRoom,
   cancelEvent,
   completeEvent,
@@ -97,7 +95,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const { data: row } = await supabase
     .from("event_bookings")
     .select(
-      "*, event_spaces(*), event_layouts(name, capacity), event_packages(name, price_per_head, tax_rate, inclusions, meal_period), companies(name, gstin, billing_address), guests(full_name, phone, email), bookings(reference, check_in, check_out, status)",
+      "*, event_spaces(*), event_layouts(name, capacity), event_packages(name, price_per_head, tax_rate, inclusions, meal_period), guests(full_name, phone, email), bookings(reference, check_in, check_out, status)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -114,7 +112,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     { data: layoutRows },
     { data: packageRows },
     { data: equipmentRows },
-    { data: companyRows },
     { data: invoiceRows },
     { data: sameDayRows },
     { data: residentRows },
@@ -124,7 +121,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     supabase.from("event_layouts").select("*").eq("space_id", event.space_id).eq("is_active", true).order("sort_order"),
     supabase.from("event_packages").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("event_equipment").select("*").eq("is_active", true).order("sort_order"),
-    supabase.from("companies").select("id, name, credit_limit, payment_terms_days").eq("is_active", true).order("name"),
     supabase.from("invoices").select("*").eq("event_id", id).order("issued_at", { ascending: false }),
     supabase
       .from("event_bookings")
@@ -145,7 +141,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const layouts = (layoutRows ?? []) as EventLayout[];
   const packages = (packageRows ?? []) as EventPackage[];
   const equipment = equipmentForSpace((equipmentRows ?? []) as EventEquipment[], event.space_id);
-  const companies = (companyRows ?? []) as Pick<Company, "id" | "name" | "credit_limit" | "payment_terms_days">[];
   const invoices = (invoiceRows ?? []) as Invoice[];
   const sameDay = (sameDayRows ?? []) as (Pick<
     EventBooking,
@@ -317,7 +312,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         <StatCard
           label="Still owed"
           value={fmtMoney(balance)}
-          hint={balance <= 0 ? "Settled" : billed ? "On a room or company account" : "Not yet billed"}
+          hint={balance <= 0 ? "Settled" : billed ? "On a guest's room folio" : "Not yet billed"}
         />
         <StatCard
           label={settings.tax_label}
@@ -687,7 +682,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 </Field>
                 <Field label="How?">
                   <select name="method" defaultValue="bank_transfer" className={inputClass}>
-                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                    {PAYMENT_METHOD_CHOICES.map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -722,7 +717,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 </Field>
                 <Field label="How?">
                   <select name="method" defaultValue="bank_transfer" className={inputClass}>
-                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                    {PAYMENT_METHOD_CHOICES.map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -736,30 +731,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {canBill && balance > 0 && (event.status === "confirmed" || event.status === "completed") && (
             <div className="mt-5 pt-5 border-t border-slate-100 space-y-5">
               <p className="text-xs text-slate-600">
-                Three ways to bill the {fmtMoney(balance)} still owed. Each one puts it into the main billing module,
-                so it is chased and reported like any other money.
+                Bill the {fmtMoney(balance)} still owed to a guest&apos;s room, or issue a tax invoice for it. Either way
+                it goes into the main billing module, so it is chased and reported like any other money.
               </p>
-
-              <ActionForm
-                action={billEventToCompany}
-                submitLabel="Bill it to a company"
-                pendingLabel="Billing…"
-                submitClassName={secondaryButtonClass}
-                confirmMessage="Put this event on the company's account?"
-              >
-                <input type="hidden" name="id" value={id} />
-                <Field label="Company" hint="Falls due on their own payment terms and ages with their other debt">
-                  <select name="company_id" defaultValue={event.company_id ?? ""} className={inputClass}>
-                    <option value="">Choose a company</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — {c.payment_terms_days} day terms
-                        {c.credit_limit !== null ? `, limit ${c.credit_limit}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </ActionForm>
 
               <ActionForm
                 action={billEventToRoom}
@@ -810,7 +784,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <ul className="space-y-1 text-xs">
                 {invoices.map((i) => (
                   <li key={i.id} className="flex items-center gap-2">
-                    <Link href={`/events/${id}/invoice/${i.id}`} className="font-mono text-yellow-700 hover:underline">
+                    <Link href={`/events/${id}/invoice/${i.id}`} className="font-mono text-brand-700 hover:underline">
                       {i.number}
                     </Link>
                     <Tag tone={i.status === "issued" ? "green" : "red"}>
@@ -830,7 +804,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         <Card className="p-5">
           <SectionTitle
             action={
-              <Link href={`/events/${id}/beo`} className="text-[11px] text-yellow-700 hover:underline">
+              <Link href={`/events/${id}/beo`} className="text-[11px] text-brand-700 hover:underline">
                 Print the event order
               </Link>
             }
@@ -958,16 +932,6 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   className={inputClass}
                 />
               </Field>
-              <Field label="Company">
-                <select name="company_id" defaultValue={event.company_id ?? ""} className={inputClass}>
-                  <option value="">Not a company booking</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
               <Field label="Contact name">
                 <input name="contact_name" defaultValue={event.contact_name} maxLength={120} className={inputClass} />
               </Field>
@@ -979,7 +943,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               </Field>
               <Field
                 label="Payment terms"
-                hint="Printed on the quotation and the contract. Defaulted from the company's account terms."
+                hint="Printed on the quotation and the contract. Defaulted from the hotel's usual deposit terms."
               >
                 <input name="payment_terms" defaultValue={event.payment_terms} maxLength={500} className={inputClass} />
               </Field>

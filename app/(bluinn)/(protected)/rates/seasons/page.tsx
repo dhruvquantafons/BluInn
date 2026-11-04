@@ -89,7 +89,7 @@ export default async function SeasonsPage() {
       {manage && (
         <Card className="p-5">
           <details>
-            <summary className="text-sm font-medium text-yellow-700 cursor-pointer">Add a season</summary>
+            <summary className="text-sm font-medium text-brand-700 cursor-pointer">Add a season</summary>
             <div className="mt-5">
               <ActionForm action={saveSeason} submitLabel="Add season">
                 <Fields typeList={typeList} />
@@ -113,7 +113,7 @@ export default async function SeasonsPage() {
                 {s.room_type_id ? typeList.find((t) => t.id === s.room_type_id)?.name : "all room types"} ·{" "}
                 {s.days_of_week.length === 7 ? "every night" : s.days_of_week.map((d) => DAYS[d]).join(", ")}
               </span>
-              {manage && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+              {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
             </summary>
             {manage && (
               <div className="mt-5 pt-5 border-t border-slate-100 space-y-3">

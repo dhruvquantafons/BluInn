@@ -29,7 +29,7 @@ import {
 } from "./form-utils";
 
 const PAYMENT_METHODS: PaymentMethod[] = [
-  "cash", "card", "upi", "bank_transfer", "online_gateway", "corporate_billing", "ota_prepaid", "wallet", "other",
+  "cash", "card", "upi", "bank_transfer", "online_gateway", "ota_prepaid", "wallet", "other",
 ];
 const ID_TYPES = ["passport", "aadhaar", "driving_licence", "voter_id", "pan", "other"] as const;
 const DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -107,7 +107,7 @@ async function issueKeys(
 // ── Check-in ───────────────────────────────────────────────────────────────
 
 /**
- * SOW Module 2 check-in requirements: government ID captured, guest
+ * Module 2 check-in requirements: government ID captured, guest
  * signature, deposit or payment confirmed, room assigned. The room must be
  * vacant and inspected.
  */
@@ -185,10 +185,7 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
   }
 
   const { totals } = await loadFolio(supabase, booking.id);
-  const guaranteed =
-    booking.payment_method === "corporate_billing" ||
-    booking.payment_method === "ota_prepaid" ||
-    bool(fd, "guarantee_confirmed");
+  const guaranteed = booking.payment_method === "ota_prepaid" || bool(fd, "guarantee_confirmed");
   const paidAfter = totals.payments + (payNow ?? 0);
   if (!guaranteed && paidAfter < Number(booking.deposit_required)) {
     return {
@@ -398,12 +395,11 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
 
   const { entries, totals } = await loadFolio(supabase, booking.id);
 
-  // A balance may only be left on a company's account (city ledger), or by
-  // someone who can adjust folios, with a reason on record.
+  // A balance may only be left by someone who can adjust folios, with a
+  // reason on record.
   if (totals.balance > 0.5) {
-    const toCompany = booking.payment_method === "corporate_billing" && booking.company_id;
     const allowed = can(session, "folio.adjust") && str(fd, "balance_reason", 300);
-    if (!toCompany && !allowed) {
+    if (!allowed) {
       return {
         error: `₹${totals.balance.toLocaleString("en-IN")} is still owed. Take payment before checking out.`,
       };
@@ -412,9 +408,7 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
       p_module: "folio",
       p_action: "checkout_with_balance",
       p_record_id: booking.id,
-      p_summary: toCompany
-        ? `₹${totals.balance} transferred to the company account`
-        : `Checked out owing ₹${totals.balance}: ${str(fd, "balance_reason", 300)}`,
+      p_summary: `Checked out owing ₹${totals.balance}: ${str(fd, "balance_reason", 300)}`,
     });
   }
 
@@ -455,7 +449,7 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
   redirect(`/bookings/${booking.id}?checkedOut=1${sent ? `&sent=${encodeURIComponent(sent)}` : ""}`);
 }
 
-/** The guest's private feedback link for a stay, created on first use. */
+/** Sends more key cards to the lock system for an in-house guest (lost or extra keys). */
 export async function reissueKeys(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("frontdesk.checkin");
   const supabase = await createClient();

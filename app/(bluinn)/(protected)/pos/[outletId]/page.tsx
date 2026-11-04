@@ -80,7 +80,7 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
     <div className="space-y-6">
       <LiveRefresh tables={["pos_orders", "pos_order_lines", "pos_payments"]} />
 
-      <Link href="/pos" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+      <Link href="/pos" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
         <ArrowLeft className="w-3.5 h-3.5" /> All outlets
       </Link>
 
@@ -178,7 +178,7 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
                 {orders.map((o) => (
                   <tr key={o.id} className={`hover:bg-slate-50/60 ${o.status === "void" ? "text-slate-400" : ""}`}>
                     <td className="py-2 px-4">
-                      <Link href={`/pos/orders/${o.id}`} className="font-mono text-yellow-700 hover:underline">
+                      <Link href={`/pos/orders/${o.id}`} className="font-mono text-brand-700 hover:underline">
                         {o.number}
                       </Link>
                     </td>

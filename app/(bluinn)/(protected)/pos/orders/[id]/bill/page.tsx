@@ -8,6 +8,7 @@ import { amountPaid, orderBalance, taxBands } from "../../../../../../lib/pos";
 import type { Outlet, PosOrder, PosOrderLine, PosPayment } from "../../../../../../lib/types";
 import { POS_PAYMENT_KIND_LABELS } from "../../../../../../lib/types";
 import { fmtDateTime, fmtMoney } from "../../../../../components/ui";
+import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
 
 /**
@@ -48,7 +49,7 @@ export default async function PosBillPage({ params }: { params: Promise<{ id: st
       <div className="flex justify-between items-center mb-6 print:hidden">
         <Link
           href={`/pos/orders/${id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </Link>
@@ -169,6 +170,7 @@ export default async function PosBillPage({ params }: { params: Promise<{ id: st
             ? "Charged to your room. A tax invoice will be issued with your final bill at check-out."
             : "Thank you. Please retain this bill."}
         </p>
+        <PrintFooter />
       </div>
     </div>
   );

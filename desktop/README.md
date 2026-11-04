@@ -29,7 +29,7 @@ two switches that only the desktop build turns on (`DEMO_BUILD=1`):
 `next.config.ts` (standalone output, local room photos) and
 `LiveRefresh.tsx` (refresh every 15 s, since there is no Realtime server).
 
-On first launch the database is created and all `supabase/migrations` are
+On first launch the database is created and all `neon/migrations` are
 applied, after which the client creates the administrator account. An updated
 installer applies only the new migrations and keeps the data.
 

@@ -23,7 +23,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
       <PageHeader
         icon={<ChartColumn />}
         title="Reports"
-        description="Occupancy, revenue and performance. Figures from a closed night audit never change; live ones still can."
+        description="Occupancy, revenue and performance, computed live from bookings and folios."
       />
       <SectionTabs tabs={tabs} label="Report sections" />
       {children}

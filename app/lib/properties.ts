@@ -5,7 +5,7 @@ import { hasSupabaseConfig } from "./supabase/config";
 import type { GroupAvailability, GroupPerformance, GroupSettings, Property } from "./types";
 
 /**
- * The group of hotels this installation runs (SOW Module 14).
+ * The group of hotels this installation runs (Module 14).
  *
  * One idea underpins all of it: the database, not the browser, decides which
  * property a request is about. current_property() reads the signed-in staff
@@ -46,18 +46,6 @@ export const getCurrentProperty = cache(async (): Promise<Property | null> => {
   return properties.find((p) => p.id === data) ?? null;
 });
 
-/**
- * True when there is more than one property to choose between.
- *
- * Used to keep the property switcher and the group screens out of the way of a
- * single hotel, which is what every installation starts as. Nothing is
- * disabled by this — it is presentation only, and the database enforces the
- * separation either way.
- */
-export const isMultiProperty = cache(async (): Promise<boolean> => {
-  return (await getProperties()).length > 1;
-});
-
 /** Head office's copy of the settings it can push down. */
 export const getGroupSettings = cache(async (): Promise<GroupSettings | null> => {
   if (!hasSupabaseConfig()) return null;
@@ -69,7 +57,7 @@ export const getGroupSettings = cache(async (): Promise<GroupSettings | null> =>
 /**
  * Each property's performance side by side.
  *
- * SOW Module 14: "Central dashboard showing all properties' performance side
+ * Module 14: "Central dashboard showing all properties' performance side
  * by side" and "compare occupancy/revenue across properties in one report".
  */
 export async function loadGroupPerformance(from: string, to: string): Promise<GroupPerformance[]> {
@@ -81,7 +69,7 @@ export async function loadGroupPerformance(from: string, to: string): Promise<Gr
 
 /**
  * Rooms free at every property for a set of dates, so the desk can place a
- * guest at whichever hotel has space (SOW Module 14: "Central reservation
+ * guest at whichever hotel has space (Module 14: "Central reservation
  * option — book any property from one screen").
  */
 export async function loadGroupAvailability(

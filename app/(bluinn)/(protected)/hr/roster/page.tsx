@@ -63,7 +63,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
           <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50 border-b border-slate-200">
             <th className="px-3 py-2.5 font-medium sticky left-0 bg-slate-50 min-w-[160px]">Staff</th>
             {days.map((d) => (
-              <th key={d} className={`px-2 py-2.5 font-medium min-w-[110px] ${d === today ? "text-yellow-800" : ""}`}>
+              <th key={d} className={`px-2 py-2.5 font-medium min-w-[110px] ${d === today ? "text-brand-800" : ""}`}>
                 {new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
               </th>
             ))}
@@ -142,13 +142,13 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
         <Link href={href(addDays(week, 7))} className={secondaryButtonClass} aria-label="Next week">
           <ChevronRight className="w-4 h-4" />
         </Link>
-        <Link href={href(mondayOf(today))} className="text-xs text-yellow-800 ml-1">
+        <Link href={href(mondayOf(today))} className="text-xs text-brand-800 ml-1">
           This week
         </Link>
         <div className="ml-auto flex flex-wrap gap-1">
           <Link
             href={href(week, "")}
-            className={`text-xs px-2.5 py-1 rounded-md border ${!params.dept ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600"}`}
+            className={`text-xs px-2.5 py-1 rounded-md border ${!params.dept ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600"}`}
           >
             All
           </Link>
@@ -156,7 +156,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
             <Link
               key={d.id}
               href={href(week, d.id)}
-              className={`text-xs px-2.5 py-1 rounded-md border ${params.dept === d.id ? "bg-yellow-50 border-yellow-300 text-yellow-900" : "border-slate-200 text-slate-600"}`}
+              className={`text-xs px-2.5 py-1 rounded-md border ${params.dept === d.id ? "bg-brand-50 border-brand-300 text-brand-900" : "border-slate-200 text-slate-600"}`}
             >
               {d.name}
             </Link>

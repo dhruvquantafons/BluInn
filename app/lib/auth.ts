@@ -97,11 +97,6 @@ export const getSession = cache(async (): Promise<Session | null> => {
   };
 });
 
-/** Kept for callers that only need the staff row. */
-export async function getStaff(): Promise<Staff | null> {
-  return (await getSession())?.staff ?? null;
-}
-
 /**
  * Guard for every admin page and server action. proxy.ts already redirects
  * unauthenticated traffic, but authorization is re-checked here so a missed

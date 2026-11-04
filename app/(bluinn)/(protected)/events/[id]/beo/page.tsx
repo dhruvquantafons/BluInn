@@ -7,7 +7,7 @@ import { fmtDate } from "../../../../components/ui";
 import { DocumentShell, loadEventDocument } from "../shared";
 
 /**
- * The Banquet Event Order (SOW Module 10 "BEO generation").
+ * The Banquet Event Order (Module 10 "BEO generation").
  *
  * This one is not for the client. It goes on the kitchen wall and into the
  * stewards' folder, so it leads with the head count and the times and carries

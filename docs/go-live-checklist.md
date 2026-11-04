@@ -19,8 +19,6 @@ are in the [README](../README.md).
       rates are indicative only
 - [ ] Agree the loyalty earn and redemption rates, tier thresholds and points expiry with the owner, then
       turn the programme on under **Guests → Loyalty** (it ships switched off)
-- [ ] Set each corporate client's credit limit and payment terms under **Companies**, or the city ledger
-      will let an account run up without limit
 - [ ] Confirm which outlets the hotel actually runs and close the rest under **Point of sale → Outlets &
       menus**; all seven ship set up, with only the restaurant, mini-bar, room service and laundry open
 - [ ] Confirm every outlet's tax rate and service charge with the accountant, and load the real menus and prices

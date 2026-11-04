@@ -334,7 +334,7 @@ export default async function RoomsPage({
           <SectionTitle
             action={
               can(session, "maintenance.report") && (
-                <Link href="/maintenance?report=1" className="text-xs text-yellow-800 hover:text-yellow-900">
+                <Link href="/maintenance?report=1" className="text-xs text-brand-800 hover:text-brand-900">
                   Report a problem
                 </Link>
               )
@@ -375,7 +375,7 @@ export default async function RoomsPage({
                           {b.maintenance_tickets && (
                             <>
                               {" · "}
-                              <Link href={`/maintenance/${b.maintenance_tickets.id}`} className="text-yellow-800 hover:text-yellow-900">
+                              <Link href={`/maintenance/${b.maintenance_tickets.id}`} className="text-brand-800 hover:text-brand-900">
                                 {b.maintenance_tickets.reference}
                               </Link>
                             </>
@@ -398,7 +398,7 @@ export default async function RoomsPage({
 
           {can(session, "rooms.block") && roomList.length > 0 && (
             <details>
-              <summary className="text-sm text-yellow-700 cursor-pointer">Block a room</summary>
+              <summary className="text-sm text-brand-700 cursor-pointer">Block a room</summary>
               <ActionForm action={createBlock} submitLabel="Block room" className="space-y-3 mt-3">
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <Field label="Room">
@@ -476,7 +476,7 @@ export default async function RoomsPage({
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
-                      {can(session, "rooms.manage") && <span className="ml-auto text-[11px] text-yellow-700">Edit</span>}
+                      {can(session, "rooms.manage") && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
                     </summary>
                     {can(session, "rooms.manage") && (
                       <div className="mt-4">

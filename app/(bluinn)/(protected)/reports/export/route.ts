@@ -8,7 +8,7 @@ import { exportFilename, reportByKind, resolveRange, toGrid, type RangePreset } 
 import { runReport } from "../../../../lib/report-data";
 
 /**
- * CSV export for any report (SOW Module 13 "Report Formats": Excel/CSV).
+ * CSV export for any report (Module 13 "Report Formats": Excel/CSV).
  *
  * Built from the same definition the screen renders, so an export can never
  * show different columns from the page it was taken off. Permission is

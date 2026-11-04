@@ -50,7 +50,7 @@ export default async function MyTasksPage() {
         const elapsed = t.started_at ? minutesSince(t.started_at) : 0;
         const late = t.status === "in_progress" && elapsed > t.target_minutes;
         return (
-          <Card key={t.id} className={`p-4 ${t.status === "in_progress" ? "border-yellow-400 ring-1 ring-yellow-400" : ""}`}>
+          <Card key={t.id} className={`p-4 ${t.status === "in_progress" ? "border-brand-400 ring-1 ring-brand-400" : ""}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-2xl font-semibold text-slate-900">Room {t.rooms?.room_number}</p>

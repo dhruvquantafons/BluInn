@@ -1,5 +1,5 @@
 import type { FolioEntry, FolioKind } from "../../../../lib/types";
-import { PAYMENT_METHOD_LABELS } from "../../../../lib/types";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import type { FolioTotals } from "../../../../lib/policies";
 import { recordPayment, postCharge, voidFolioEntry } from "../../../booking-actions";
 import {
@@ -29,7 +29,7 @@ const KIND_LABEL: Record<FolioKind, string> = {
 };
 
 /**
- * The guest's running bill: room charges and tax from night audit, fees,
+ * The guest's running bill: room charges and tax (posted at check-out), fees,
  * extras, penalties, and payments. Entries are never edited — mistakes are
  * voided with a reason, which keeps the ledger auditable.
  */
@@ -85,7 +85,7 @@ export default function FolioPanel({
 
       {entries.length === 0 ? (
         <p className="text-sm text-slate-500 mb-4">
-          Nothing posted yet. Night audit posts room charges each night of the stay.
+          Nothing posted yet. Room charges and tax for the stay are posted at check-out.
         </p>
       ) : (
         <div className="overflow-x-auto mb-5">
@@ -153,7 +153,7 @@ export default function FolioPanel({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
         {canPay && (
           <ActionForm action={recordPayment} submitLabel="Record" submitClassName={secondaryButtonClass} className="space-y-3">
-            <p className="text-xs font-medium text-yellow-700">Payment or refund</p>
+            <p className="text-xs font-medium text-brand-700">Payment or refund</p>
             <input type="hidden" name="booking_id" value={bookingId} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Amount (₹)">
@@ -172,7 +172,7 @@ export default function FolioPanel({
                   <option value="" disabled>
                     Choose…
                   </option>
-                  {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => (
+                  {PAYMENT_METHOD_CHOICES.map(([v, l]) => (
                     <option key={v} value={v}>
                       {l}
                     </option>
@@ -194,7 +194,7 @@ export default function FolioPanel({
 
         {canPost && (
           <ActionForm action={postCharge} submitLabel="Post charge" submitClassName={secondaryButtonClass} className="space-y-3">
-            <p className="text-xs font-medium text-yellow-700">Charge</p>
+            <p className="text-xs font-medium text-brand-700">Charge</p>
             <input type="hidden" name="booking_id" value={bookingId} />
             <Field label="Description">
               <input name="description" required placeholder="Laundry, airport transfer, minibar…" className={inputClass} />

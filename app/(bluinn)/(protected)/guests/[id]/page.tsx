@@ -8,7 +8,6 @@ import { getSettings } from "../../../../lib/settings";
 import { todayIn } from "../../../../lib/dates";
 import type {
   Booking,
-  Company,
   Guest,
   GuestFeedback,
   GuestStats,
@@ -87,7 +86,6 @@ export default async function GuestProfilePage({
     { data: fb },
     { data: identity },
     { data: types },
-    { data: companies },
     { data: tierRows },
     { data: loyaltyRows },
     { data: tierHistory },
@@ -103,7 +101,6 @@ export default async function GuestProfilePage({
     supabase.from("guest_feedback").select("*").eq("guest_id", id).order("created_at", { ascending: false }),
     supabase.rpc("guest_identity_masked", { p_guest: id }),
     supabase.from("room_types").select("id, name").order("sort_order"),
-    supabase.from("companies").select("id, name").eq("is_active", true).order("name"),
     supabase.from("loyalty_tiers").select("*").order("sort_order"),
     supabase
       .from("loyalty_transactions")
@@ -117,7 +114,7 @@ export default async function GuestProfilePage({
       .order("changed_at", { ascending: false })
       .limit(20),
     supabase.rpc("loyalty_rolling_activity", { p_guest: id, p_date: today }),
-    // SOW Module 16: "notification history log per guest". Read by guest
+    // Module 16: "notification history log per guest". Read by guest
     // rather than by booking, so it follows them across stays.
     supabase
       .from("notifications")
@@ -186,16 +183,6 @@ export default async function GuestProfilePage({
         <Field label="Nationality">
           <input name="nationality" defaultValue={guest.nationality} className={inputClass} />
         </Field>
-        <Field label="Company">
-          <select name="company_id" defaultValue={guest.company_id ?? ""} className={inputClass}>
-            <option value="">—</option>
-            {((companies ?? []) as Pick<Company, "id" | "name">[]).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
         <Field label="Language" hint="Messages are sent in it when a template exists.">
           <select name="language" defaultValue={guest.language} className={inputClass}>
             {Object.entries(LANGUAGES).map(([code, name]) => (
@@ -259,7 +246,7 @@ export default async function GuestProfilePage({
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <Link href="/guests" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700">
+      <Link href="/guests" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
         <ArrowLeft className="w-3.5 h-3.5" /> Guests
       </Link>
 
@@ -291,7 +278,7 @@ export default async function GuestProfilePage({
           {guest.date_of_birth && (
             <Stat label="Birthday">
               <span className="inline-flex items-center gap-1">
-                <Cake className="w-3.5 h-3.5 text-yellow-700" /> {fmtDate(guest.date_of_birth)}
+                <Cake className="w-3.5 h-3.5 text-brand-700" /> {fmtDate(guest.date_of_birth)}
               </span>
             </Stat>
           )}
@@ -344,7 +331,7 @@ export default async function GuestProfilePage({
                 {stays.map((b) => (
                   <tr key={b.id} className="align-top">
                     <td className="px-4 py-2.5">
-                      <Link href={`/bookings/${b.id}`} className="font-medium text-slate-900 hover:text-yellow-800">
+                      <Link href={`/bookings/${b.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                         {b.reference}
                       </Link>
                     </td>
@@ -399,7 +386,7 @@ export default async function GuestProfilePage({
                 {f.submitted_at ? (
                   <>
                     <p>
-                      <span className="text-yellow-600">{"★".repeat(f.overall ?? 0)}</span>
+                      <span className="text-brand-600">{"★".repeat(f.overall ?? 0)}</span>
                       <span className="text-slate-300">{"★".repeat(5 - (f.overall ?? 0))}</span>{" "}
                       <span className="text-xs text-slate-500">
                         {f.source === "guest" ? "From the guest" : "Recorded by the desk"} · {fmtDateTime(f.submitted_at)}
@@ -416,7 +403,7 @@ export default async function GuestProfilePage({
                   </>
                 ) : (
                   <p className="text-xs text-slate-500">
-                    Feedback link {f.requested_at ? `emailed ${fmtDateTime(f.requested_at)}` : "created"} for{" "}
+                    Feedback requested{f.requested_at ? ` ${fmtDateTime(f.requested_at)}` : ""} for{" "}
                     {stays.find((s) => s.id === f.booking_id)?.reference ?? "a stay"} — not answered yet.
                   </p>
                 )}

@@ -27,7 +27,7 @@ import {
 import ActionForm from "../../../components/ActionForm";
 
 /**
- * Refunds waiting for a decision (SOW Module 7: "Refunds above a set amount
+ * Refunds waiting for a decision (Module 7: "Refunds above a set amount
  * require manager or finance-head approval before processing").
  *
  * Approving one pays it out and posts it to the folio in the same step, so
@@ -86,7 +86,7 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5">
                       {r.bookings?.reference && (
-                        <Link href={`/bookings/${r.booking_id}`} className="font-mono text-yellow-700 hover:underline">
+                        <Link href={`/bookings/${r.booking_id}`} className="font-mono text-brand-700 hover:underline">
                           {r.bookings.reference}
                         </Link>
                       )}
@@ -163,7 +163,7 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
                   <tr key={r.id}>
                     <td className="py-2 pr-3 whitespace-nowrap">{fmtDateTime(r.requested_at)}</td>
                     <td className="py-2 pr-3">
-                      <Link href={`/bookings/${r.booking_id}`} className="font-mono text-yellow-700 hover:underline">
+                      <Link href={`/bookings/${r.booking_id}`} className="font-mono text-brand-700 hover:underline">
                         {r.bookings?.reference ?? "—"}
                       </Link>
                     </td>

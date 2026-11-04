@@ -1,7 +1,7 @@
 import type { Room, RoomType } from "../../../lib/types";
 import { Field, Check, inputClass } from "../../components/ui";
 
-/** The room attributes the SOW lists (Module 3 "Room Attributes"). */
+/** The room attributes (Module 3 "Room Attributes"). */
 export default function RoomFields({
   room,
   roomTypes,

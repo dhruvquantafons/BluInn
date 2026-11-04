@@ -3,14 +3,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "../../../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../../../lib/auth";
-import { getSettings } from "../../../../../../lib/settings";
-import { zonedTime } from "../../../../../../lib/dates";
 import type { Outlet, PosOrder, PosOrderLine } from "../../../../../../lib/types";
 import { fmtDateTime } from "../../../../../components/ui";
+import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
 
 /**
- * The Kitchen Order Ticket (SOW Module 6).
+ * The Kitchen Order Ticket (Module 6).
  *
  * Printed for the kitchen, so it carries no prices — only what to cook, how
  * many, and anything the guest asked for. Deliberately large type: this is
@@ -19,13 +18,12 @@ import PrintButton from "../../../../../components/PrintButton";
  * Every line is shown, with the ones already fired marked, so a chef can see
  * the whole table rather than only the latest addition. Posting to a kitchen
  * display is a separate hook (KOT_WEBHOOK_URL); POS hardware is out of scope
- * per SOW §2.2, so printing is always available as the fallback.
+ * by design (BluInn integrates with kitchen hardware, it does not ship it), so printing is always available as the fallback.
  */
 export default async function KotPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAnyPermission(["pos.view", "pos.order"]);
   const { id } = await params;
   const supabase = await createClient();
-  const settings = await getSettings();
 
   const { data: orderRow } = await supabase
     .from("pos_orders")
@@ -48,7 +46,7 @@ export default async function KotPage({ params }: { params: Promise<{ id: string
       <div className="flex justify-between items-center mb-6 print:hidden">
         <Link
           href={`/pos/orders/${id}`}
-          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-yellow-700"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </Link>
@@ -79,7 +77,7 @@ export default async function KotPage({ params }: { params: Promise<{ id: string
             <span className="text-slate-500">Covers</span> <span className="font-bold">{order.covers}</span>
           </p>
           <p className="text-xs text-slate-600">
-            {fmtDateTime(zonedTime(settings.business_date, "00:00", settings.timezone).toISOString()).split(",")[0]}
+            {fmtDateTime(order.opened_at).split(",")[0]}
           </p>
         </div>
 
@@ -110,6 +108,7 @@ export default async function KotPage({ params }: { params: Promise<{ id: string
         )}
 
         <p className="mt-4 text-center text-[10px] text-slate-500">Printed {fmtDateTime(new Date().toISOString())}</p>
+        <PrintFooter />
       </div>
     </div>
   );

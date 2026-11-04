@@ -93,7 +93,7 @@ export default async function HousekeepingBoard() {
           <ActionForm action={generateTasks} submitLabel="Schedule due deep cleans" pendingLabel="Scheduling…" className="space-y-2">
             <p className="text-sm text-slate-600 max-w-md">
               Check-out cleans are created automatically when a guest leaves. Deep cleans fall due every{" "}
-              {settings.hk_deep_clean_days} days; night audit schedules them, or do it now.
+              {settings.hk_deep_clean_days} days; schedule the ones that are due here.
             </p>
           </ActionForm>
           <details className="ml-auto">
@@ -220,7 +220,7 @@ export default async function HousekeepingBoard() {
                               </option>
                             ))}
                           </select>
-                          <button className="text-xs text-yellow-800 cursor-pointer">Save</button>
+                          <button className="text-xs text-brand-800 cursor-pointer">Save</button>
                         </form>
                       ) : (
                         <span className={t.assigned_to ? "" : "text-amber-700"}>{nameOf(t.assigned_to)}</span>

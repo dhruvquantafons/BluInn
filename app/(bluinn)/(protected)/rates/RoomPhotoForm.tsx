@@ -77,7 +77,7 @@ export default function RoomPhotoForm({ roomType }: { roomType: RoomType }) {
           )}
 
           {preview && (
-            <span className="absolute bottom-0 inset-x-0 bg-yellow-400 text-slate-900 text-[9px] uppercase tracking-widest text-center py-0.5">
+            <span className="absolute bottom-0 inset-x-0 bg-brand-400 text-slate-900 text-[9px] uppercase tracking-widest text-center py-0.5">
               Not saved yet
             </span>
           )}
@@ -90,7 +90,7 @@ export default function RoomPhotoForm({ roomType }: { roomType: RoomType }) {
             name="photo"
             accept="image/jpeg,image/png,image/webp,image/avif"
             onChange={handleChange}
-            className="block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-yellow-50 file:text-yellow-800 hover:file:bg-yellow-100 file:cursor-pointer cursor-pointer"
+            className="block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-800 hover:file:bg-brand-100 file:cursor-pointer cursor-pointer"
           />
 
           <p className="text-[11px] text-slate-500 leading-relaxed">

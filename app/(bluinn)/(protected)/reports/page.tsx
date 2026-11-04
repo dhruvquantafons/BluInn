@@ -1,4 +1,5 @@
 import { createClient } from "../../../lib/supabase/server";
+import { PRODUCT } from "../../../lib/app-config";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
@@ -16,10 +17,10 @@ import {
 import { runReport } from "../../../lib/report-data";
 import { Card, Notice, SectionTitle, StatCard, fmtMoney } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
-import { RangePicker, ReportTable, SourceNote } from "./shared";
+import { RangePicker, ReportTable } from "./shared";
 
 /**
- * The management overview: the SOW's Core KPIs for a chosen period, with a
+ * The management overview: the Core KPIs for a chosen period, with a
  * day-by-day breakdown underneath.
  *
  * Occupancy, ADR and RevPAR are the three a hotelier reads together — a high
@@ -61,7 +62,7 @@ export default async function ReportsOverviewPage({
 
   return (
     <div className="space-y-6">
-      <LiveRefresh tables={["folio_entries", "bookings", "night_audits"]} />
+      <LiveRefresh tables={["folio_entries", "bookings"]} />
 
       <RangePicker basePath="/reports" preset={preset} from={fromParam ?? ""} to={toParam ?? ""} resolved={range} />
 
@@ -105,12 +106,10 @@ export default async function ReportsOverviewPage({
         />
       </div>
 
-      <SourceNote audited={kpis.auditedDays} days={kpis.days} />
-
       {kpis.goppar === null && financial && (
         <Notice tone="info">
-          GOPPAR needs the hotel&apos;s monthly running cost, which this system does not hold — it has no expense
-          ledger, and the SOW leaves accounting to the hotel&apos;s own software. Enter the figure under{" "}
+          GOPPAR needs the hotel&apos;s monthly running cost, which {PRODUCT.name} does not hold — it has no expense
+          ledger, and accounting stays in the hotel&apos;s own software. Enter the figure under{" "}
           <strong>Settings → Reporting</strong> and GOPPAR is reported from then on.
         </Notice>
       )}
