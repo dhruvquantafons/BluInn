@@ -316,3 +316,75 @@ export async function saveChecklistItem(_prev: ActionState, fd: FormData): Promi
   revalidateHk();
   return { success: "Checklist saved." };
 }
+
+// ── Occupancy reports, minibar and laundry (0032) ───────────────────────────
+
+/** The database puts the sentence for the desk in the hint (0017). */
+const rpcError = (e: { message: string; hint?: string | null }) => e.hint || friendlyDbError(e.message);
+
+/**
+ * What the attendant saw: is someone living in the room? Compared with the
+ * front desk's status, it finds skips and sleepers (room_discrepancies).
+ */
+export async function reportRoom(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAnyPermission(["housekeeping.tasks", "housekeeping.inspect", "rooms.status"]);
+  const supabase = await createClient();
+  const roomId = uuidOrNull(fd, "room_id");
+  const reported = oneOf(fd, "reported", ["occupied", "vacant"] as const, "occupied");
+  if (!roomId) return { error: "Room not found." };
+
+  const { error } = await supabase.rpc("hk_report_room", {
+    p_room: roomId,
+    p_reported: reported,
+    p_luggage: bool(fd, "luggage"),
+    p_notes: str(fd, "notes", 300),
+  });
+  if (error) return { error: rpcError(error) };
+
+  revalidateHk();
+  revalidatePath("/front-desk");
+  return { success: `Recorded: room ${reported}.` };
+}
+
+/**
+ * Minibar items used, or a laundry bag collected, posted to the guest in the
+ * room as one outlet bill charged to their folio.
+ */
+export async function postRoomConsumption(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("housekeeping.post_charges");
+  const supabase = await createClient();
+  const roomId = uuidOrNull(fd, "room_id");
+  const outlet = oneOf(fd, "outlet", ["mini_bar", "laundry"] as const, "mini_bar");
+  if (!roomId) return { error: "Room not found." };
+
+  // One quantity field per menu item: qty_<item id>.
+  const items: { item_id: string; qty: number }[] = [];
+  for (const [key, value] of fd.entries()) {
+    const m = /^qty_([0-9a-f-]{36})$/i.exec(key);
+    const qty = Number(value);
+    if (m && Number.isFinite(qty) && qty > 0) items.push({ item_id: m[1], qty: Math.min(qty, 99) });
+  }
+  if (items.length === 0) return { error: "Enter how many of at least one item." };
+
+  const { error } = await supabase.rpc("hk_post_consumption", {
+    p_room: roomId,
+    p_outlet_kind: outlet,
+    p_items: items,
+    p_notes: str(fd, "notes", 300),
+  });
+  if (error) return { error: rpcError(error) };
+
+  revalidateHk();
+  revalidatePath("/pos");
+  return { success: outlet === "laundry" ? "Laundry collected and charged to the room." : "Minibar charged to the room." };
+}
+
+export async function setLaundryStatus(fd: FormData) {
+  await requireAnyPermission(["housekeeping.post_charges", "housekeeping.assign", "pos.manage"]);
+  const supabase = await createClient();
+  const orderId = uuidOrNull(fd, "order_id");
+  const status = oneOf(fd, "laundry_status", ["collected", "processing", "delivered"] as const, "processing");
+  if (!orderId) return;
+  await supabase.rpc("pos_set_laundry_status", { p_order: orderId, p_status: status });
+  revalidateHk();
+}

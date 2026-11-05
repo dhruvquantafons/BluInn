@@ -17,6 +17,7 @@ import type {
   Folio,
   GuestRequest,
   Invoice,
+  CreditNote,
   LoyaltyTier,
   PaymentTransaction,
   RatePlan,
@@ -29,6 +30,7 @@ import {
   ID_TYPE_LABELS,
   MEAL_PLAN_LABELS,
   REQUEST_KIND_LABELS,
+  ROOM_MOVE_REASONS,
 } from "../../../../lib/types";
 import {
   confirmBooking,
@@ -62,6 +64,8 @@ import {
 import ActionForm from "../../../components/ActionForm";
 import LiveRefresh from "../../../components/LiveRefresh";
 import FolioPanel from "./FolioPanel";
+import RoomGuestsPanel from "./RoomGuestsPanel";
+import ArrangementsForm from "./ArrangementsForm";
 import BillingPanel from "./BillingPanel";
 import SettlementPanel from "./SettlementPanel";
 import EditBookingForm from "./EditBookingForm";
@@ -110,6 +114,7 @@ export default async function BookingDetailPage({
     folio,
     { data: folios },
     { data: invoices },
+    { data: creditNotes },
     { data: payments },
     { data: currencyRows },
     { data: loyaltyTierRows },
@@ -150,6 +155,7 @@ export default async function BookingDetailPage({
     loadFolio(supabase, id),
     supabase.from("folios").select("*").eq("booking_id", id).order("created_at"),
     supabase.from("invoices").select("*").eq("booking_id", id).order("issued_at", { ascending: false }),
+    supabase.from("credit_notes").select("*").eq("booking_id", id).order("issued_at"),
     supabase
       .from("payment_transactions")
       .select("*")
@@ -190,6 +196,24 @@ export default async function BookingDetailPage({
     stays ?? [],
     blocks ?? [],
   );
+
+  // A returning business guest is billed the way they were last time.
+  const billTo = { name: booking.contact_name, gstin: "", address: "" };
+  if (booking.guest_id && tab === "folio") {
+    const { data: guestStays } = await supabase.from("bookings").select("id").eq("guest_id", booking.guest_id);
+    const ids = (guestStays ?? []).map((b) => b.id as string);
+    if (ids.length > 0) {
+      const { data: last } = await supabase
+        .from("invoices")
+        .select("bill_to_name, bill_to_gstin, bill_to_address")
+        .in("booking_id", ids)
+        .neq("bill_to_gstin", "")
+        .order("issued_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (last) Object.assign(billTo, { name: last.bill_to_name, gstin: last.bill_to_gstin, address: last.bill_to_address });
+    }
+  }
 
   const idOnFile = (identity as { id_type: string; id_last4: string }[] | null)?.[0];
   const guestName = booking.guests?.full_name || booking.contact_name || "Unnamed guest";
@@ -251,7 +275,7 @@ export default async function BookingDetailPage({
       {booking.status === "tentative" && booking.hold_until && (
         <div className="mb-5">
           <Notice tone="warn">
-            Tentative hold until {fmtDateTime(booking.hold_until)}. Confirm or cancel it by then.
+            Tentative hold until {fmtDateTime(booking.hold_until)}. Night audit releases it after that unless it is confirmed.
           </Notice>
         </div>
       )}
@@ -334,7 +358,7 @@ export default async function BookingDetailPage({
             )}
 
             {["tentative", "confirmed"].includes(booking.status) &&
-              booking.check_in <= today &&
+              booking.check_in <= settings.business_date &&
               can(session, "bookings.cancel") && (
                 <details className="relative">
                   <summary className={`${secondaryButtonClass} list-none`}>No-show</summary>
@@ -474,6 +498,13 @@ export default async function BookingDetailPage({
             )}
           </Card>
 
+          {/* ── Who is staying ── */}
+          <RoomGuestsPanel
+            supabase={supabase}
+            bookingId={booking.id}
+            canEdit={!closed && can(session, "frontdesk.checkin")}
+          />
+
           {/* ── Room ── */}
           {!closed && (can(session, "bookings.edit") || can(session, "frontdesk.checkin")) && (
             <Card className="p-5">
@@ -482,7 +513,7 @@ export default async function BookingDetailPage({
               {inHouse ? (
                 <ActionForm action={moveRoom} submitLabel="Move guest" className="space-y-3">
                   <input type="hidden" name="id" value={id} />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Field label="To room" hint="Vacant, inspected rooms of this type, best match first.">
                       <select name="room_id" required className={inputClass} defaultValue="">
                         <option value="" disabled>
@@ -496,8 +527,20 @@ export default async function BookingDetailPage({
                         ))}
                       </select>
                     </Field>
-                    <Field label="Reason">
-                      <input name="reason" required placeholder="AC fault, guest request, upgrade…" className={inputClass} />
+                    <Field label="Why">
+                      <select name="reason_code" required defaultValue="" className={inputClass}>
+                        <option value="" disabled>
+                          Choose…
+                        </option>
+                        {Object.entries(ROOM_MOVE_REASONS).map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Details">
+                      <input name="reason" required placeholder="AC fault in 204, guest asked for a higher floor…" className={inputClass} />
                     </Field>
                   </div>
                 </ActionForm>
@@ -666,6 +709,11 @@ export default async function BookingDetailPage({
                 canInvoice={can(session, "folio.invoice")}
                 canPay={can(session, "folio.payment")}
                 canAdjust={can(session, "folio.adjust")}
+                creditNotes={(creditNotes ?? []) as CreditNote[]}
+                canCreditNote={can(session, "folio.credit_note")}
+                taxRegime={settings.tax_regime}
+                timeZone={settings.timezone}
+                billTo={billTo}
               />
               <SettlementPanel
                 bookingId={id}
@@ -706,6 +754,9 @@ export default async function BookingDetailPage({
               />
             </Card>
           ))}
+          {tab === "edit" && !closed && can(session, "bookings.edit") && (
+            <ArrangementsForm booking={booking} timeZone={settings.timezone} canComp={can(session, "bookings.complimentary")} />
+          )}
 
           {/* ── Activity ── */}
           {tab === "activity" && (<>

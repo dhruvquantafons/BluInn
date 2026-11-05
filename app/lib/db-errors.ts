@@ -22,11 +22,75 @@ export function friendlyDbError(message: string | undefined | null): string {
   if (message.startsWith("INVOICE_CANCELLED")) {
     return "That invoice is already cancelled.";
   }
+  // GST invoicing (0036): each carries its own sentence after the colon.
+  for (const code of [
+    "INVOICE_HAS_CREDIT_NOTE:",
+    "INVOICE_CANCEL_WINDOW:",
+    "CREDIT_NOTE_",
+    "ALLOWANCE_",
+  ]) {
+    if (message.startsWith(code)) {
+      const detail = message.slice(message.indexOf(":") + 1).trim();
+      if (detail) return `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`;
+    }
+  }
   if (message.startsWith("REFUND_SELF_APPROVAL")) {
     return "A refund must be approved by someone other than the person who requested it.";
   }
   if (message.startsWith("FOLIO_BOOKING_MISMATCH")) {
     return "That folio belongs to a different booking.";
+  }
+  if (message.startsWith("EVENT_EQUIPMENT_CLASH:")) {
+    return `Not enough equipment — ${message.slice("EVENT_EQUIPMENT_CLASH:".length).trim()} across the confirmed functions that overlap this one.`;
+  }
+  if (message.startsWith("INVENTORY_")) {
+    const detail = message.split(":").slice(1).join(":").trim();
+    if (message.startsWith("INVENTORY_IMMUTABLE")) return "Stock movements are never changed. Record a count adjustment instead.";
+    return detail ? detail.charAt(0).toUpperCase() + detail.slice(1) + "." : "That stock movement is not valid.";
+  }
+  if (message.startsWith("ROOM_IN_USE:")) {
+    return `A guest is assigned to this room — ${message.slice("ROOM_IN_USE:".length).trim()}. Move them first.`;
+  }
+  if (message.startsWith("HK_NO_ROOM")) {
+    return "That room is not at this property.";
+  }
+  if (message.startsWith("HK_BAD_OUTLET")) {
+    return "Only minibar and laundry are posted from housekeeping.";
+  }
+  if (message.startsWith("COMP_NOT_PERMITTED")) {
+    return "Only a manager can make a stay complimentary or house use.";
+  }
+  if (message.startsWith("COMP_REASON")) {
+    return "Give a reason for the complimentary or house-use stay.";
+  }
+  if (message.startsWith("CASHIER_NO_SHIFT")) {
+    return message.includes("before taking")
+      ? "Open your cash shift before taking or refunding cash (Front desk → Cash shift)."
+      : "You have no open cash shift. Open one first.";
+  }
+  if (message.startsWith("CASHIER_SHIFT_OPEN")) {
+    return "You already have an open cash shift. Close it before opening another.";
+  }
+  if (message.startsWith("CASHIER_SHIFT_CLOSED")) {
+    return "That shift is already closed.";
+  }
+  if (message.startsWith("CASHIER_REASON")) {
+    return "Give a reason for this cash movement.";
+  }
+  if (message.startsWith("CASHIER_NOT_IN_HOUSE")) {
+    return "A paid-out can only be charged to a guest who is checked in.";
+  }
+  if (message.startsWith("CASHIER_BAD_AMOUNT:")) {
+    return `Check the amount — ${message.slice("CASHIER_BAD_AMOUNT:".length).trim()}.`;
+  }
+  if (message.startsWith("FOLIO_DAY_CLOSED:")) {
+    return `Night audit has closed ${message.slice("FOLIO_DAY_CLOSED:".length).split(" is closed")[0].trim()}, so this line can no longer be voided. Post an allowance today instead (Folio → Allowance).`;
+  }
+  if (message.startsWith("FOLIO_VOID_REASON")) {
+    return "Give a reason for the void.";
+  }
+  if (message.startsWith("FOLIO_IMMUTABLE")) {
+    return "A posted folio line cannot be changed or deleted. Void it the same day, or post an allowance.";
   }
 
   // City ledger (Module 7)
@@ -92,7 +156,7 @@ export function friendlyDbError(message: string | undefined | null): string {
 
   // Events and banquets (Module 10)
   if (message.startsWith("EVENT_SPACE_CLASH:")) {
-    return `The hall is already taken — ${message.slice("EVENT_SPACE_CLASH:".length).trim()}. Choose another time, another day, or hold this one as an enquiry.`;
+    return `That space is already taken — ${message.slice("EVENT_SPACE_CLASH:".length).trim()}. Choose another time, another day, or hold this one as an enquiry.`;
   }
   if (message.startsWith("EVENT_OVERPAYMENT:")) {
     return `More than is owed — ${message.slice("EVENT_OVERPAYMENT:".length).trim()}. Take the balance, or record the rest as a separate payment once the event is repriced.`;
@@ -104,7 +168,7 @@ export function friendlyDbError(message: string | undefined | null): string {
     return "Send a quotation first, so there is a price both sides have agreed.";
   }
   if (message.startsWith("EVENT_NOTHING_QUOTED")) {
-    return "Price the hall, the catering or the equipment before sending a quotation.";
+    return "Price the space, the catering or the equipment before sending a quotation.";
   }
   if (message.startsWith("EVENT_ALREADY_CONFIRMED")) {
     return "This event is past the quotation stage. Reprice it on a new event, or cancel this one.";
@@ -158,7 +222,7 @@ export function friendlyDbError(message: string | undefined | null): string {
     return "Enter an amount greater than zero.";
   }
   if (message.includes("event_hold_covers_event")) {
-    return "The hall has to be held from before the event starts until after it ends.";
+    return "The space has to be held from before the event starts until after it ends.";
   }
   if (message.includes("event_times_ordered")) {
     return "The event has to finish after it starts.";

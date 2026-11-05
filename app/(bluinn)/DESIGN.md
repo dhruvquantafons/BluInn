@@ -148,6 +148,15 @@ highlights; copy only, never figures) and the form in a white card on the
 right. Below 1024px the panel collapses to a short gradient header the card
 overlaps. Pass `badge` for an icon tile above the title.
 
+- **Glass stripes** (`components/GlassStripes.tsx`) fill the brand panel:
+  diagonal fluted-glass stripes refracting a slow blue glow that leans
+  towards the pointer, drawn by one raw WebGL fragment shader (no three.js).
+  It fades in once drawn; without WebGL the panel's CSS gradient, grid and
+  rings show instead. It stops in hidden tabs and draws one still frame for
+  reduced motion. Props: `stripeCount` (6–40), `angle` (degrees from
+  vertical) and `colors` (`background`, `shadow`, `midtone`, `highlight`).
+  The left side is shaded deeper on purpose, because the copy sits there.
+
 - **Inputs** carry a leading icon that turns brand blue on focus; the
   password has a show/hide toggle.
 - **The one big action** uses `buttonClass` plus `admin-btn-glow` (a
@@ -191,8 +200,18 @@ from `PRODUCT` in `app/lib/app-config.ts`. Never type "BluInn" into a page.
 
 ### Wordmark and type details
 
+- **The mark** (`BrandMark`) is a bold "B" monogram cut by one diagonal
+  slit, which echoes the glass stripes, with a small cyan spark at the top
+  right. It is solid white-to-ice, and the counters and slit are masked out,
+  so it only works on blue surfaces. On the sign-in panel it sits on a dark
+  glass tile (`admin-auth-brand-tile`), and the lockup carries a navy text
+  shadow (`admin-auth-brand`) so it reads over the bright stripes.
+- **The sign-in form side** stays white, with a faint, faded dot grid. The
+  card is frosted glass (`admin-auth-form-card`): translucent white, a white
+  edge and a strong backdrop blur.
 - **The wordmark is two-tone** (`Wordmark` in `components/BrandMark.tsx`):
-  "Blu" in the surface colour, "Inn" in pale blue. In Inter a capital I and a
+  "Blu" in the surface colour, "Inn" in pale blue (`.admin-wordmark-tail`; cyan
+  on the sign-in panel). In Inter a capital I and a
   lower-case l are the same stroke, so a one-colour "BluInn" reads "Blulnn".
   The Google-hosted Inter has no serifed-I alternate (`cv08`), so the colour
   break does that job. Use the component; don't set the name by hand.

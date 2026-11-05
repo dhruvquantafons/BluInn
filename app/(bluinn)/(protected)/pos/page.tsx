@@ -20,6 +20,7 @@ import {
   tableHeadClass,
 } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
+import CashierShiftCard, { loadMyShift } from "../../components/CashierShiftCard";
 
 /**
  * The till's landing page: which outlets are busy, what is open on each, and
@@ -50,10 +51,14 @@ export default async function PosPage() {
   const takings = summary.reduce((s, r) => s + r.takings, 0);
   const openValue = summary.reduce((s, r) => s + r.openValue, 0);
   const order = can(session, "pos.order");
+  const isCashier = can(session, "folio.cashier");
+  const myShift = isCashier ? await loadMyShift(supabase, session.staff.id) : null;
 
   return (
     <div className="space-y-6">
       <LiveRefresh tables={["pos_orders", "pos_order_lines", "pos_payments"]} />
+
+      {isCashier && <CashierShiftCard mine={myShift} required={settings.require_cashier_shift} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Open bills" value={open.length} hint={fmtMoney(openValue)} />

@@ -25,6 +25,9 @@ import {
   Hotel,
   BriefcaseBusiness,
   SlidersHorizontal,
+  MoonStar,
+  Wallet,
+  Boxes,
 } from "lucide-react";
 import type { Permission } from "../../lib/permissions";
 
@@ -62,11 +65,13 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: ConciergeBell,
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true, any: ["dashboard.view"] },
-      { href: "/front-desk", label: "Front desk", icon: ConciergeBell, any: ["frontdesk.view"] },
+      { href: "/front-desk", label: "Front desk", icon: ConciergeBell, exact: true, any: ["frontdesk.view"] },
+      { href: "/front-desk/shifts", label: "Cash shifts", icon: Wallet, any: ["folio.cashier", "folio.cashier_audit"] },
       { href: "/bookings", label: "Bookings", icon: CalendarCheck, any: ["bookings.view"] },
       { href: "/guests", label: "Guests", icon: Contact, any: ["guests.view"] },
       { href: "/groups", label: "Groups", icon: UsersRound, any: ["bookings.groups"] },
       { href: "/tape-chart", label: "Tape chart", icon: GanttChart, any: ["bookings.view", "frontdesk.view"] },
+      { href: "/night-audit", label: "Night audit", icon: MoonStar, any: ["frontdesk.night_audit"] },
     ],
   },
   {
@@ -88,6 +93,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Wrench,
         any: ["maintenance.report", "maintenance.work", "maintenance.manage"],
       },
+      { href: "/inventory", label: "Inventory", icon: Boxes, any: ["inventory.view", "inventory.manage"] },
       {
         href: "/pos",
         label: "Point of sale",
@@ -119,7 +125,7 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/billing/invoices",
         label: "Billing",
         icon: ReceiptIndianRupee,
-        any: ["folio.invoice", "folio.refund_approve"],
+        any: ["folio.view", "folio.invoice", "folio.refund_approve", "folio.credit_note", "reports.financial"],
       },
       {
         href: "/reports",

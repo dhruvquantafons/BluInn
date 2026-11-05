@@ -32,6 +32,7 @@ import type {
   EventPayment,
   EventSpace,
   Invoice,
+  CreditNote,
 } from "../../../../lib/types";
 import {
   EVENT_LINE_KIND_LABELS,
@@ -59,6 +60,7 @@ import {
   secondaryButtonClass,
   tableHeadClass,
 } from "../../../components/ui";
+import { BillToFields, InvoiceCorrections } from "../../../components/InvoiceCorrections";
 import ActionForm from "../../../components/ActionForm";
 import {
   addEventLine,
@@ -113,6 +115,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     { data: packageRows },
     { data: equipmentRows },
     { data: invoiceRows },
+    { data: creditRows },
     { data: sameDayRows },
     { data: residentRows },
   ] = await Promise.all([
@@ -122,6 +125,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     supabase.from("event_packages").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("event_equipment").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("invoices").select("*").eq("event_id", id).order("issued_at", { ascending: false }),
+    supabase.from("credit_notes").select("*").eq("event_id", id).order("issued_at"),
     supabase
       .from("event_bookings")
       .select("id, number, title, status, space_id, event_date, setup_from, teardown_to")
@@ -142,6 +146,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const packages = (packageRows ?? []) as EventPackage[];
   const equipment = equipmentForSpace((equipmentRows ?? []) as EventEquipment[], event.space_id);
   const invoices = (invoiceRows ?? []) as Invoice[];
+  const creditNotes = (creditRows ?? []) as CreditNote[];
   const sameDay = (sameDayRows ?? []) as (Pick<
     EventBooking,
     "id" | "number" | "title" | "status" | "space_id" | "event_date" | "setup_from" | "teardown_to"
@@ -773,6 +778,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   }
                 >
                   <input type="hidden" name="id" value={id} />
+                  <BillToFields
+                    defaults={{ name: clientName(event), gstin: "", address: "" }}
+                    taxRegime={settings.tax_regime}
+                  />
                 </ActionForm>
               )}
             </div>
@@ -783,7 +792,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <p className="text-[11px] text-slate-500 mb-2">Invoices raised for this event</p>
               <ul className="space-y-1 text-xs">
                 {invoices.map((i) => (
-                  <li key={i.id} className="flex items-center gap-2">
+                  <li key={i.id} className="flex flex-wrap items-center gap-2">
                     <Link href={`/events/${id}/invoice/${i.id}`} className="font-mono text-brand-700 hover:underline">
                       {i.number}
                     </Link>
@@ -791,6 +800,13 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                       {i.status === "issued" ? "Issued" : "Cancelled"}
                     </Tag>
                     <span className="ml-auto">{fmtMoney(i.grand_total)}</span>
+                    <InvoiceCorrections
+                      invoice={i}
+                      creditNotes={creditNotes.filter((c) => c.invoice_id === i.id)}
+                      canCancel={can(session, "folio.invoice")}
+                      canCreditNote={can(session, "folio.credit_note")}
+                      timeZone={settings.timezone}
+                    />
                   </li>
                 ))}
               </ul>

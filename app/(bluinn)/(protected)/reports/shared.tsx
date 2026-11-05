@@ -6,7 +6,7 @@ import {
   type RangePreset,
   type ReportDefinition,
 } from "../../../lib/reports";
-import { Card, EmptyState, Notice, SectionTitle, fmtDate, fmtMoney, tableHeadClass } from "../../components/ui";
+import { Card, EmptyState, Notice, SectionTitle, Tag, fmtDate, fmtMoney, tableHeadClass } from "../../components/ui";
 
 /** A bare yyyy-mm-dd reads as "06 Oct 2026" on screen; the CSV keeps ISO. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -165,9 +165,14 @@ export function ReportTable({
                 <tr key={i} className="hover:bg-slate-50/60">
                   {row.map((value, j) => {
                     const column = definition.columns[j];
+                    const isSource = column.key === "source" && definition.kind === "daily_revenue";
                     return (
                       <td key={column.key} className={`py-2 px-3 ${column.money ? "text-right" : ""}`}>
-                        {column.money && typeof value === "number" ? (
+                        {isSource ? (
+                          <Tag tone={value === "audit" ? "green" : "neutral"}>
+                            {value === "audit" ? "Closed" : "Live"}
+                          </Tag>
+                        ) : column.money && typeof value === "number" ? (
                           fmtMoney(value)
                         ) : (
                           shown(value)
@@ -182,5 +187,27 @@ export function ReportTable({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * The note that explains a mixed report. Dates the night audit has closed are
+ * fixed for ever; dates it has not are still moving, and a manager should know
+ * which is which before quoting a figure to an owner.
+ */
+export function SourceNote({ audited, days }: { audited: number; days: number }) {
+  if (days === 0) return null;
+  if (audited === days) {
+    return (
+      <p className="text-[11px] text-slate-500">
+        Every day in this period is closed by a night audit, so these figures will not change.
+      </p>
+    );
+  }
+  return (
+    <p className="text-[11px] text-slate-500">
+      {audited} of {days} day(s) are closed by a night audit and fixed. The rest are computed live and may still
+      change as charges are posted.
+    </p>
   );
 }

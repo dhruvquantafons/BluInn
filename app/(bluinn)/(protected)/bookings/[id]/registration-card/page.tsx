@@ -21,10 +21,18 @@ export default async function RegistrationCardPage({ params }: { params: Promise
   const supabase = await createClient();
   const settings = await getSettings();
 
-  const [{ data: bookingData }, { data: card }] = await Promise.all([
+  const [{ data: bookingData }, { data: card }, { data: sharerRows }] = await Promise.all([
     supabase.from("bookings").select("*, rooms(room_number), room_types(name)").eq("id", id).maybeSingle(),
     supabase.from("registration_cards").select("*").eq("booking_id", id).maybeSingle(),
+    // Everyone else in the room (0030), one line each.
+    supabase
+      .from("booking_guests")
+      .select("guest_id, guests(full_name, nationality)")
+      .eq("booking_id", id)
+      .eq("is_primary", false)
+      .order("added_at"),
   ]);
+  const sharers = (sharerRows ?? []) as unknown as { guest_id: string; guests: { full_name: string; nationality: string } | null }[];
   if (!bookingData) notFound();
   const booking = bookingData as Booking;
 
@@ -88,6 +96,16 @@ export default async function RegistrationCardPage({ params }: { params: Promise
         {row("Contact", [card.phone, card.email].filter(Boolean).join(" · "))}
         {row("Room", `${booking.rooms?.room_number ?? "—"} · ${booking.room_types?.name ?? ""}`)}
         {row("Stay", `${fmtDate(booking.check_in)} → ${fmtDate(booking.check_out)} · ${booking.adults} adult(s)${booking.children ? `, ${booking.children} child(ren)` : ""}`)}
+        {row("Arriving from", card.arriving_from)}
+        {row("Next destination", card.next_destination)}
+        {card.purpose_of_visit && row("Purpose of visit", card.purpose_of_visit)}
+        {(sharers.length > 0 || card.accompanying) &&
+          row(
+            "Sharing the room",
+            sharers.length > 0
+              ? sharers.map((g) => `${g.guests?.full_name ?? ""} (${g.guests?.nationality ?? ""})`).join(" · ")
+              : card.accompanying,
+          )}
 
         <p className="text-xs text-slate-700 mt-6 leading-relaxed">
           I agree to the hotel&apos;s house rules. Check-out is by {hhmm(settings.check_out_time)}. I am responsible for all

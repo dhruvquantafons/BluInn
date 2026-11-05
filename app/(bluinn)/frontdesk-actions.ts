@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/server";
-import { requirePermission, type Session } from "../lib/auth";
+import { requirePermission, requireSession, type Session } from "../lib/auth";
 import { can } from "../lib/permissions";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
@@ -141,7 +141,10 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
     .single();
   if (!room) return { error: "Room not found." };
   if (room.status !== "available") return { error: `Room ${room.room_number} is not vacant.` };
-  if (room.housekeeping_status !== "inspected") {
+  // Only inspected rooms, unless someone who may override says why (0032).
+  const overrideReason = str(fd, "override_reason", 300);
+  const overridden = room.housekeeping_status !== "inspected";
+  if (overridden && !(can(session, "frontdesk.checkin_override") && overrideReason)) {
     return { error: `Room ${room.room_number} has not been inspected (it is ${room.housekeeping_status}).` };
   }
 
@@ -152,7 +155,7 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
   if (!idType || !idNumber) return { error: "Record the guest's government ID." };
   const foreign = !/^indian?$/i.test(nationality);
   if (foreign && idType !== "passport") {
-    return { error: "Foreign nationals must present a passport (needed for Form C)." };
+    return { error: "Foreign nationals must present a passport." };
   }
 
   // ── Registration card ──
@@ -175,6 +178,10 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
   if (foreign && !docs.some((d) => d.kind === "visa")) {
     return { error: "Upload the visa page for a foreign national." };
   }
+
+  // ── Personal details for the registration card ──
+  const gender = oneOf(fd, "gender", ["", "female", "male", "other"] as const, "");
+  const dob = dateStr(fd, "date_of_birth") || null;
 
   // ── Payment confirmation ──
   const payNow = num(fd, "payment_amount");
@@ -212,7 +219,12 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
 
   await supabase
     .from("guests")
-    .update({ nationality, address: str(fd, "address", 500) })
+    .update({
+      nationality,
+      address: str(fd, "address", 500),
+      ...(gender ? { gender } : {}),
+      ...(dob ? { date_of_birth: dob } : {}),
+    })
     .eq("id", guestId);
 
   const { error: idError } = await supabase.rpc("set_guest_identity", {
@@ -251,6 +263,9 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
       nationality,
       phone: booking.contact_phone,
       email: booking.contact_email,
+      arriving_from: str(fd, "arriving_from", 200),
+      next_destination: str(fd, "next_destination", 200),
+      purpose_of_visit: str(fd, "purpose_of_visit", 200),
       terms_accepted: true,
       signature_path: sigPath,
       signed_at: new Date().toISOString(),
@@ -308,6 +323,15 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
     })
     .eq("id", booking.id);
   if (error) return { error: friendlyDbError(error.message) };
+
+  if (overridden) {
+    await supabase.rpc("log_event", {
+      p_module: "frontdesk",
+      p_action: "checkin_override",
+      p_record_id: booking.id,
+      p_summary: `Checked into room ${room.room_number} before inspection (${room.housekeeping_status}): ${overrideReason}`,
+    });
+  }
 
   if (early && earlyFee > 0 && !applyEarly) {
     await supabase.rpc("log_event", {
@@ -490,9 +514,16 @@ export async function createGuestRequest(_prev: ActionState, fd: FormData): Prom
   const kind = oneOf(
     fd,
     "kind",
-    ["wake_up_call", "housekeeping", "maintenance", "message", "request", "complaint"] as const,
+    ["wake_up_call", "housekeeping", "maintenance", "message", "request", "complaint", "trace"] as const,
     "request",
   );
+  // A trace is a follow-up for a department on a date (0031).
+  const departmentId = uuidOrNull(fd, "department_id");
+  if (kind === "trace" && !dueAt && dueDate) {
+    // A trace with a date but no time is for the start of that day's shift.
+    dueAt = zonedTime(dueDate, "09:00", settings.timezone).toISOString();
+  }
+  if (kind === "trace" && !dueAt) return { error: "Give the trace a date for the follow-up." };
   // A maintenance request also becomes a maintenance ticket (0011_maintenance.sql).
   const { error } = await supabase.from("guest_requests").insert({
     booking_id: bookingId,
@@ -500,6 +531,7 @@ export async function createGuestRequest(_prev: ActionState, fd: FormData): Prom
     kind,
     description,
     due_at: dueAt,
+    department_id: departmentId,
     created_by: session.staff.id,
   });
   if (error) return { error: friendlyDbError(error.message) };
@@ -530,4 +562,102 @@ export async function updateGuestRequest(fd: FormData) {
 
   if (data?.booking_id) revalidatePath(`/bookings/${data.booking_id}`);
   revalidatePath("/front-desk");
+}
+
+/**
+ * Marks a trace done from its department's board. Any staff member may: the
+ * trace was sent to their department (RLS, 0031), and the audit log keeps who.
+ */
+export async function completeTrace(fd: FormData) {
+  const session = await requireSession();
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  if (!id) return;
+  await supabase
+    .from("guest_requests")
+    .update({ status: "done", completed_by: session.staff.id, completed_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("kind", "trace");
+  revalidatePath("/front-desk");
+  revalidatePath("/housekeeping");
+  revalidatePath("/maintenance");
+}
+
+// ── Everyone in the room (0030) ─────────────────────────────────────────────
+
+/**
+ * Adds a sharer to a stay: a guest profile of their own, with their ID, so
+ * every adult in the room is on record.
+ */
+export async function addRoomGuest(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await requirePermission("frontdesk.checkin");
+  const supabase = await createClient();
+  const booking = await loadBooking(supabase, uuidOrNull(fd, "booking_id"));
+  if (!booking) return { error: "Booking not found." };
+  if (!["tentative", "confirmed", "checked_in"].includes(booking.status)) {
+    return { error: "This stay is closed." };
+  }
+
+  const name = str(fd, "full_name", 200);
+  const nationality = str(fd, "nationality", 80);
+  const idType = oneOfOrNull(fd, "id_type", ID_TYPES);
+  const idNumber = str(fd, "id_number", 50);
+  if (!name) return { error: "Enter the guest's name." };
+  if (!nationality) return { error: "Enter the guest's nationality." };
+  if (!idType || !idNumber) return { error: "Record the guest's government ID." };
+  const foreign = !/^indian?$/i.test(nationality);
+  if (foreign && idType !== "passport") return { error: "Foreign nationals must present a passport." };
+
+  const dob = dateStr(fd, "date_of_birth") || null;
+
+  const { data: guest, error: guestError } = await supabase
+    .from("guests")
+    .insert({
+      full_name: name,
+      nationality,
+      gender: oneOf(fd, "gender", ["", "female", "male", "other"] as const, ""),
+      date_of_birth: dob,
+    })
+    .select("id")
+    .single();
+  if (guestError) return { error: friendlyDbError(guestError.message) };
+
+  const { error: idError } = await supabase.rpc("set_guest_identity", {
+    p_guest: guest.id,
+    p_type: idType,
+    p_number: idNumber,
+    p_country: str(fd, "issuing_country", 80) || (foreign ? "" : "India"),
+    p_expiry: dateStr(fd, "id_expiry") || null,
+    p_visa: str(fd, "visa_number", 50),
+  });
+  if (idError) return { error: friendlyDbError(idError.message) };
+
+  const { error } = await supabase
+    .from("booking_guests")
+    .insert({ booking_id: booking.id, guest_id: guest.id, added_by: session.staff.id });
+  if (error) return { error: friendlyDbError(error.message) };
+
+  revalidateDesk(booking.id);
+  return { success: `${name} added to the stay.` };
+}
+
+export async function removeRoomGuest(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("frontdesk.checkin");
+  const supabase = await createClient();
+  const bookingId = uuidOrNull(fd, "booking_id");
+  const guestId = uuidOrNull(fd, "guest_id");
+  if (!bookingId || !guestId) return { error: "Guest not found." };
+
+  const { data: removed, error } = await supabase
+    .from("booking_guests")
+    .delete()
+    .eq("booking_id", bookingId)
+    .eq("guest_id", guestId)
+    .eq("is_primary", false)
+    .select("guest_id");
+  if (error) return { error: friendlyDbError(error.message) };
+  if (!removed?.length) return { error: "The main guest stays on the booking; change the booker instead." };
+
+  revalidateDesk(bookingId);
+  return { success: "Guest removed from the stay. Their profile and ID record are kept." };
 }

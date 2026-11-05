@@ -320,6 +320,8 @@ export interface Guest {
   city: string;
   country: string;
   nationality: string;
+  /** Registration cards and police registers ask for it (0030). */
+  gender?: Gender;
   tags: string[];
   notes: string;
   preferences: string;
@@ -496,6 +498,20 @@ export interface Booking {
   confirmation_sent_at: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
+  /** Airport or station transfers (0031). */
+  pickup_required?: boolean;
+  pickup_at?: string | null;
+  pickup_details?: string;
+  drop_required?: boolean;
+  drop_at?: string | null;
+  drop_details?: string;
+  /** When the deposit must be in by (0031). */
+  deposit_due_on?: string | null;
+  /** Complimentary and house-use stays post room nights at zero (0031). */
+  stay_type?: StayType;
+  comp_reason?: string;
+  comp_approved_by?: string | null;
+  comp_approved_at?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -510,6 +526,28 @@ export interface Booking {
   rate_plans?: Pick<RatePlan, "id" | "code" | "name"> | null;
   companies?: Pick<Company, "id" | "name"> | null;
 }
+
+export type StayType = "paid" | "complimentary" | "house_use";
+
+export const STAY_TYPE_LABELS: Record<StayType, string> = {
+  paid: "Paid",
+  complimentary: "Complimentary",
+  house_use: "House use",
+};
+
+export type Gender = "" | "female" | "male" | "other";
+
+export const ROOM_MOVE_REASONS = {
+  upgrade: "Upgrade",
+  downgrade: "Downgrade",
+  guest_request: "Guest request",
+  maintenance: "Maintenance problem",
+  housekeeping: "Room not ready",
+  noise: "Noise or neighbours",
+  overbooking: "Overbooking",
+  other: "Other",
+} as const;
+export type RoomMoveReason = keyof typeof ROOM_MOVE_REASONS;
 
 export interface BookingGroup {
   id: string;
@@ -544,8 +582,126 @@ export interface FolioEntry {
   fx_amount: number | null;
   fx_rate: number | null;
   night_audit_date: string | null;
+  /** The cashier shift a payment or refund was taken on (0029). */
+  shift_id?: string | null;
+  /** GST classification, filled in by the database on insert (0036). */
+  sac_code?: string;
+  revenue_dept?: RevenueDept | null;
+  /** On an allowance: the charge it reduces (0036). */
+  applies_to?: string | null;
+  /** On the folio credit a credit note produced (0036). */
+  credit_note_id?: string | null;
   voided_at: string | null;
   void_reason: string;
+  created_at: string;
+}
+
+// ── Inventory and stores (0033) ─────────────────────────────────────────────
+
+export type InventoryCategory = "amenity" | "linen" | "minibar" | "cleaning" | "engineering" | "food" | "beverage" | "other";
+
+export const INVENTORY_CATEGORY_LABELS: Record<InventoryCategory, string> = {
+  amenity: "Guest amenities",
+  linen: "Linen",
+  minibar: "Minibar",
+  cleaning: "Cleaning supplies",
+  engineering: "Engineering spares",
+  food: "Food",
+  beverage: "Beverage",
+  other: "Other",
+};
+
+export type InventoryLocationKind = "store" | "floor" | "outlet" | "other";
+
+export const INVENTORY_LOCATION_LABELS: Record<InventoryLocationKind, string> = {
+  store: "Store",
+  floor: "Floor pantry",
+  outlet: "Outlet",
+  other: "Other",
+};
+
+export interface InventoryLocation {
+  id: string;
+  name: string;
+  kind: InventoryLocationKind;
+  outlet_id: string | null;
+  hk_default: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface InventoryItem {
+  id: string;
+  sku: string;
+  name: string;
+  category: InventoryCategory;
+  unit: string;
+  par_level: number;
+  reorder_level: number;
+  unit_cost: number;
+  pos_item_id: string | null;
+  hk_checklist_item_id: string | null;
+  is_active: boolean;
+}
+
+export type InventoryMovementKind = "receive" | "issue" | "transfer" | "consume" | "adjust" | "wastage";
+
+export const INVENTORY_MOVEMENT_LABELS: Record<InventoryMovementKind, string> = {
+  receive: "Received",
+  issue: "Issued",
+  transfer: "Transfer",
+  consume: "Used",
+  adjust: "Count adjustment",
+  wastage: "Wastage",
+};
+
+export interface InventoryMovement {
+  id: string;
+  item_id: string;
+  location_id: string;
+  kind: InventoryMovementKind;
+  qty: number;
+  unit_cost: number;
+  reason: string;
+  reference: string;
+  transfer_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+// ── Cashier shifts (0029) ───────────────────────────────────────────────────
+
+export interface CashierShift {
+  id: string;
+  property_id: string;
+  staff_id: string;
+  opened_at: string;
+  opening_float: number;
+  closed_at: string | null;
+  closed_by: string | null;
+  expected_cash: number | null;
+  counted_cash: number | null;
+  variance: number | null;
+  notes: string;
+}
+
+export type CashMovementKind = "pay_in" | "paid_out" | "safe_drop";
+
+export const CASH_MOVEMENT_LABELS: Record<CashMovementKind, string> = {
+  pay_in: "Pay-in",
+  paid_out: "Paid-out",
+  safe_drop: "Safe drop",
+};
+
+export interface CashMovement {
+  id: string;
+  shift_id: string;
+  kind: CashMovementKind;
+  amount: number;
+  reason: string;
+  booking_id: string | null;
+  folio_entry_id: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -568,18 +724,88 @@ export interface Folio {
 export interface InvoiceLine {
   date: string;
   description: string;
+  /** A folio kind, or "allowance" for a discount against a charge (0036). */
   kind: string;
   net: number;
   tax_rate: number;
   tax: number;
   total: number;
+  /** GST invoices (0036) only. Absent on invoices issued before. */
+  sac?: string;
+  dept?: RevenueDept | null;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
 }
 
-/** Charges grouped by tax rate — the rate-wise summary a GST invoice shows. */
+/**
+ * Charges grouped by tax rate — the rate-wise summary a GST invoice shows.
+ * GST invoices group by SAC code and rate and carry the CGST/SGST/IGST split.
+ */
 export interface TaxBand {
   rate: number;
   net: number;
   tax: number;
+  sac?: string;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+}
+
+export type TaxRegime = "gst" | "simple";
+
+/** Where a charge's revenue belongs (folio_entries.revenue_dept, 0036). */
+export type RevenueDept = "rooms" | "fnb" | "laundry" | "spa" | "events" | "other" | "paid_out";
+
+export type CreditNoteReason = "deficiency" | "discount" | "cancellation" | "billing_error" | "other";
+
+export interface CreditNoteLine {
+  /** Position of the credited line on the invoice. */
+  line: number;
+  date: string | null;
+  description: string;
+  sac: string;
+  dept: RevenueDept | null;
+  rate: number;
+  net: number;
+  tax: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+}
+
+export interface CreditNote {
+  id: string;
+  property_id: string;
+  number: string;
+  series: string;
+  financial_year: string;
+  seq: number;
+  invoice_id: string;
+  booking_id: string | null;
+  folio_id: string | null;
+  event_id: string | null;
+  reason_code: CreditNoteReason;
+  note: string;
+  bill_to_name: string;
+  bill_to_address: string;
+  bill_to_gstin: string;
+  bill_to_state_code: string;
+  place_of_supply: string;
+  tax_regime: TaxRegime;
+  is_interstate: boolean;
+  currency: string;
+  net_total: number;
+  tax_total: number;
+  cgst_total: number;
+  sgst_total: number;
+  igst_total: number;
+  grand_total: number;
+  tax_breakdown: TaxBand[];
+  lines: CreditNoteLine[];
+  issued_at: string;
+  issued_by: string | null;
 }
 
 export type InvoiceStatus = "issued" | "cancelled";
@@ -610,6 +836,15 @@ export interface Invoice {
   cancel_reason: string;
   issued_at: string;
   issued_by: string | null;
+  /** "simple" for every invoice issued before 0036, which prints the old way. */
+  tax_regime: TaxRegime;
+  supplier_gstin: string;
+  supplier_state_code: string;
+  bill_to_state_code: string;
+  is_interstate: boolean;
+  cgst_total: number;
+  sgst_total: number;
+  igst_total: number;
   /** The rate a foreign-currency copy of this invoice reprints at. */
   fx_currency: string | null;
   fx_rate: number | null;
@@ -673,9 +908,11 @@ export interface GuestRequest {
   id: string;
   booking_id: string | null;
   room_id: string | null;
-  kind: "wake_up_call" | "housekeeping" | "maintenance" | "message" | "request" | "complaint";
+  kind: "wake_up_call" | "housekeeping" | "maintenance" | "message" | "request" | "complaint" | "trace";
   description: string;
   due_at: string | null;
+  /** A trace is for a department (0031). */
+  department_id?: string | null;
   status: "open" | "done" | "cancelled";
   created_at: string;
   completed_at: string | null;
@@ -713,6 +950,8 @@ export interface PropertySettings {
   id_document_retention_days: number;
   hk_default_minutes: number;
   hk_deep_clean_days: number;
+  /** Daily stay-over service tasks (0032). */
+  hk_stayover_enabled: boolean;
   mt_sla_low_hours: number;
   mt_sla_medium_hours: number;
   mt_sla_high_hours: number;
@@ -726,9 +965,21 @@ export interface PropertySettings {
   languages: string[];
   invoice_prefix: string;
   invoice_terms: string;
+  /** GST tax invoice or a plain one (0036). */
+  tax_regime: TaxRegime;
+  /** Two-digit GST state code of the hotel (0036). */
+  gst_state_code: string;
+  /** Default SAC codes (0036). */
+  sac_room: string;
+  sac_fnb: string;
+  sac_event: string;
+  sac_other: string;
+  credit_note_prefix: string;
   refund_approval_threshold: number;
   online_payments_enabled: boolean;
   multi_currency_enabled: boolean;
+  /** Cash can only be taken on an open cashier shift (0029). */
+  require_cashier_shift: boolean;
   ar_reminder_days: number;
   loyalty_enabled: boolean;
   loyalty_program_name: string;
@@ -960,6 +1211,7 @@ export const REQUEST_KIND_LABELS: Record<GuestRequest["kind"], string> = {
   message: "Message",
   request: "Request",
   complaint: "Complaint",
+  trace: "Trace",
 };
 
 /** Tailwind classes per booking status, used by the status pill. */
@@ -1344,6 +1596,8 @@ export interface Outlet {
   service_charge_percent: number;
   orders_by: "table" | "room" | "either";
   sends_kot: boolean;
+  /** SAC code for GST invoices; blank uses the property's default (0036). */
+  sac_code?: string;
   is_active: boolean;
   sort_order: number;
 }

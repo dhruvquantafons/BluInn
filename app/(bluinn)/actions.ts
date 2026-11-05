@@ -8,8 +8,9 @@ import { getSettings } from "../lib/settings";
 import { getCurrentProperty } from "../lib/properties";
 import { friendlyDbError } from "../lib/db-errors";
 import { passwordProblems, describePasswordProblems } from "../lib/password-policy";
-import { isPermission } from "../lib/permissions";
+import { ALL_PERMISSIONS, isPermission } from "../lib/permissions";
 import { parseTaxSlabs } from "../lib/tax";
+import { MAX_GST_PREFIX_LENGTH, gstinError, normaliseGstin, stateCodeFor, stateFromGstin } from "../lib/gst";
 import { LANGUAGES } from "../lib/types";
 import { isDemoTwoFactor, clearDemoVerified } from "../lib/two-factor";
 import { type ActionState, str, num, int, bool, oneOf } from "./form-utils";
@@ -237,7 +238,14 @@ export async function saveRole(_prev: ActionState, fd: FormData): Promise<Action
 
   // The superuser role holds everything by definition; its list is not edited.
   if (!current?.is_superuser) {
-    const { error: clearError } = await supabase.from("role_permissions").delete().eq("role_key", key);
+    // Only the keys this page offers are replaced. Anything else on the role
+    // (HIDDEN_PERMISSIONS, or a key from a newer migration than this build)
+    // is left alone, so saving a role can never quietly revoke it.
+    const { error: clearError } = await supabase
+      .from("role_permissions")
+      .delete()
+      .eq("role_key", key)
+      .in("permission", ALL_PERMISSIONS);
     if (clearError) return { error: friendlyDbError(clearError.message) };
     if (permissions.length) {
       const { error: permError } = await supabase
@@ -315,6 +323,33 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
 
   const fee = (key: string) => oneOf(fd, key, ["none", "percent", "flat"] as const, "percent");
 
+  // GST (0036). The hotel's own GSTIN is checked here so a typo is caught
+  // before it is printed on every invoice; its first two digits are the state.
+  const taxRegime = oneOf(fd, "tax_regime", ["gst", "simple"] as const, "gst");
+  const gstin = normaliseGstin(str(fd, "gstin", 20));
+  if (gstin) {
+    const problem = gstinError(gstin);
+    if (problem) return { error: `Hotel GSTIN: ${problem}` };
+  }
+  // Without a GSTIN yet, the state's name gives the code; invoices are
+  // refused until the GSTIN is entered (invoiceTaxFields).
+  const gstStateCode = gstin ? stateFromGstin(gstin) : stateCodeFor(str(fd, "state", 100));
+  const invoicePrefix = str(fd, "invoice_prefix", 10).toUpperCase().replace(/[^A-Z0-9]/g, "") || "INV";
+  const creditNotePrefix = str(fd, "credit_note_prefix", 6).toUpperCase().replace(/[^A-Z0-9]/g, "") || "CN";
+  if (taxRegime === "gst" && invoicePrefix.length > MAX_GST_PREFIX_LENGTH) {
+    return { error: `A GST invoice number is at most 16 characters, so the prefix can be ${MAX_GST_PREFIX_LENGTH} at most.` };
+  }
+  if (taxRegime === "gst" && creditNotePrefix.length > MAX_GST_PREFIX_LENGTH) {
+    return { error: `The credit-note prefix can be ${MAX_GST_PREFIX_LENGTH} characters at most.` };
+  }
+  if (creditNotePrefix === invoicePrefix) {
+    return { error: "Credit notes need their own series: choose a prefix different from the invoice prefix." };
+  }
+  const sac = (key: string, fallback: string) => {
+    const v = str(fd, key, 8).replace(/\D/g, "");
+    return v || fallback;
+  };
+
   const defaultLanguage = str(fd, "default_language", 2) in LANGUAGES ? str(fd, "default_language", 2) : "en";
   const languages = [
     ...new Set([defaultLanguage, ...fd.getAll("languages").map(String).filter((l) => l in LANGUAGES)]),
@@ -338,7 +373,14 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
       postcode: str(fd, "postcode", 20),
       phone: str(fd, "phone", 50),
       email: str(fd, "email", 200),
-      gstin: str(fd, "gstin", 15).toUpperCase(),
+      gstin,
+      gst_state_code: gstStateCode,
+      tax_regime: taxRegime,
+      sac_room: sac("sac_room", "996311"),
+      sac_fnb: sac("sac_fnb", "996331"),
+      sac_event: sac("sac_event", "996334"),
+      sac_other: sac("sac_other", "999799"),
+      credit_note_prefix: creditNotePrefix,
       currency,
       timezone,
       check_in_time: time("check_in_time", "14:00"),
@@ -359,15 +401,17 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
       id_document_retention_days: int(fd, "id_document_retention_days", 365, 30, 3650),
       hk_default_minutes: int(fd, "hk_default_minutes", 30, 5, 480),
       hk_deep_clean_days: int(fd, "hk_deep_clean_days", 30, 1, 365),
+      hk_stayover_enabled: bool(fd, "hk_stayover_enabled"),
       default_language: defaultLanguage,
       languages,
       // The prefix goes into the invoice number, so keep it to letters and
       // digits: "INV/2026-27/0001".
-      invoice_prefix: str(fd, "invoice_prefix", 10).toUpperCase().replace(/[^A-Z0-9]/g, "") || "INV",
+      invoice_prefix: invoicePrefix,
       invoice_terms: str(fd, "invoice_terms", 1000),
       refund_approval_threshold: Math.max(0, num(fd, "refund_approval_threshold") ?? 5000),
       online_payments_enabled: bool(fd, "online_payments_enabled"),
       multi_currency_enabled: bool(fd, "multi_currency_enabled"),
+      require_cashier_shift: bool(fd, "require_cashier_shift"),
       pos_room_charge_limit: Math.max(0, num(fd, "pos_room_charge_limit") ?? 0),
       event_quote_approval_threshold: Math.max(0, num(fd, "event_quote_approval_threshold") ?? 100000),
       event_service_charge_percent: Math.min(100, Math.max(0, num(fd, "event_service_charge_percent") ?? 0)),

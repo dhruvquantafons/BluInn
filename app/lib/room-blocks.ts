@@ -24,7 +24,7 @@ export async function blockClashes(
   return (data ?? []).map((b) => `${b.reference} (${b.check_in} → ${b.check_out})`);
 }
 
-/** A block starting today takes the room off the board now. */
+/** A block starting today takes the room off the board now rather than at night audit. */
 export async function applyBlockNow(
   supabase: SupabaseClient,
   roomId: string,

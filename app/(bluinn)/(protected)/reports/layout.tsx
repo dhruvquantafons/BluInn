@@ -11,6 +11,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
 
   const tabs = [
     { href: "/reports", label: "Overview" },
+    financial && { href: "/reports/flash", label: "Flash" },
     financial && { href: "/reports/financial", label: "Financial" },
     { href: "/reports/operations", label: "Operations" },
     { href: "/reports/guests", label: "Guests" },
@@ -23,7 +24,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
       <PageHeader
         icon={<ChartColumn />}
         title="Reports"
-        description="Occupancy, revenue and performance, computed live from bookings and folios."
+        description="Occupancy, revenue and performance. Figures from a closed night audit never change; live ones still can."
       />
       <SectionTabs tabs={tabs} label="Report sections" />
       {children}

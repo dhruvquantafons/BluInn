@@ -4,7 +4,7 @@ import { createClient } from "../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
-import { minutesSince, todayIn, zonedTime } from "../../../lib/dates";
+import { addDays, minutesSince, todayIn, zonedTime } from "../../../lib/dates";
 import type { Asset, MaintenanceTicket, MtPriority, MtStatus, Room } from "../../../lib/types";
 import { MT_PRIORITIES, MT_PRIORITY_LABELS, MT_STATUS_LABELS } from "../../../lib/types";
 import { assignTicket } from "../../maintenance-actions";
@@ -25,6 +25,7 @@ import {
   outOfRange,
   clampPage,
 } from "../../components/ui";
+import TracesCard from "../../components/TracesCard";
 import { DueTag, OPEN_STATUSES, PRIORITY_TONE, ReportTicketForm, STATUS_TONE, nameOf, staffWith, whereOf } from "./shared";
 
 const VIEWS = { open: "Open", resolved: "Resolved", all: "All" } as const;
@@ -89,6 +90,11 @@ export default async function MaintenanceBoard({
 
   return (
     <div className="space-y-6">
+      <TracesCard
+        supabase={supabase}
+        departmentMatch={["engineering", "maintenance"]}
+        untilIso={zonedTime(addDays(todayIn(settings.timezone), 1), "00:00", settings.timezone).toISOString()}
+      />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Open" value={open.length} hint={`${open.filter((t) => !t.assigned_to).length} unassigned`} />
         <StatCard label="Urgent" value={open.filter((t) => t.priority === "urgent").length} />

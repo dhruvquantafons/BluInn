@@ -25,13 +25,13 @@ import {
 } from "../../../event-actions";
 
 /**
- * What a quotation is built from: the hall and its rates, the seating plans
+ * What a quotation is built from: each space and its rates, the seating plans
  * it can be laid out in, the per-head catering packages and the equipment
  * that can be hired.
  *
  * The seeded figures are placeholders. Every one of them has to be set by the
  * hotel before the first quotation goes out, which is why this page says so
- * rather than quietly letting a zero-rated hall be quoted.
+ * rather than quietly letting a zero-rated space be quoted.
  */
 export default async function EventSetupPage() {
   await requirePermission("events.manage");
@@ -62,7 +62,7 @@ export default async function EventSetupPage() {
         <Notice tone="warn">
           {unpriced.length > 0 && (
             <>
-              {unpriced.map((s) => s.name).join(", ")} {unpriced.length === 1 ? "has" : "have"} no hall rate set.{" "}
+              {unpriced.map((s) => s.name).join(", ")} {unpriced.length === 1 ? "has" : "have"} no rental rate set.{" "}
             </>
           )}
           {unpricedPackages.length > 0 && (
@@ -75,11 +75,11 @@ export default async function EventSetupPage() {
         </Notice>
       )}
 
-      {/* ── The hall ── */}
+      {/* ── Each space ── */}
       {spaces.map((space) => (
         <Card key={space.id} className="p-5">
           <SectionTitle>{space.name}</SectionTitle>
-          <ActionForm action={saveEventSpace} submitLabel="Save the hall" pendingLabel="Saving…">
+          <ActionForm action={saveEventSpace} submitLabel="Save the space" pendingLabel="Saving…">
             <input type="hidden" name="id" value={space.id} />
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Field label="Name">
@@ -94,7 +94,7 @@ export default async function EventSetupPage() {
               <Field label="Floor area (sq ft)" hint="Printed on the quotation if given">
                 <input type="number" name="area_sqft" min={1} defaultValue={space.area_sqft ?? ""} className={inputClass} />
               </Field>
-              <Field label={`${settings.tax_label} rate %`} hint="Hall rental is usually 18% in India">
+              <Field label={`${settings.tax_label} rate %`} hint="Space rental is usually 18% in India">
                 <input type="number" name="tax_rate" min={0} max={100} step="0.01" defaultValue={space.tax_rate} className={inputClass} />
               </Field>
 
@@ -107,11 +107,11 @@ export default async function EventSetupPage() {
               <Field label="Per hour">
                 <input type="number" name="rental_per_hour" min={0} step="0.01" defaultValue={space.rental_per_hour} className={inputClass} />
               </Field>
-              <Field label="Minimum charge" hint="The least the hall is let for, whatever the basis works out to">
+              <Field label="Minimum charge" hint="The least the space is let for, whatever the basis works out to">
                 <input type="number" name="min_charge" min={0} step="0.01" defaultValue={space.min_charge} className={inputClass} />
               </Field>
 
-              <Field label="Setting-up time (minutes)" hint="The hall is held this long before the event starts">
+              <Field label="Setting-up time (minutes)" hint="The space is held this long before the event starts">
                 <input type="number" name="setup_minutes" min={0} max={1440} defaultValue={space.setup_minutes} className={inputClass} />
               </Field>
               <Field label="Clearing time (minutes)" hint="And this long after it finishes">
@@ -133,7 +133,7 @@ export default async function EventSetupPage() {
           <div className="mt-6 pt-5 border-t border-slate-100">
             <SectionTitle>Seating plans</SectionTitle>
             <p className="text-[11px] text-slate-500 -mt-2 mb-3">
-              One hall, laid out several ways. The capacity of each plan is what decides how many the hotel can
+              One space, laid out several ways. The capacity of each plan is what decides how many the hotel can
               actually take, so these have to be measured rather than guessed.
             </p>
 
@@ -218,14 +218,13 @@ export default async function EventSetupPage() {
         </Card>
       ))}
 
-      {spaces.length === 0 && (
-        <Card className="p-5">
-          <SectionTitle>Add the hall</SectionTitle>
+      <Card className="p-5">
+          <SectionTitle>{spaces.length === 0 ? "Add a space" : "Add another space"}</SectionTitle>
           <ActionForm action={saveEventSpace} submitLabel="Add the space" pendingLabel="Saving…">
             <input type="hidden" name="is_active" value="on" />
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Field label="Name">
-                <input name="name" required maxLength={80} className={inputClass} placeholder="Grand Conference Hall" />
+                <input name="name" required maxLength={80} className={inputClass} placeholder="Conference hall, garden lawn, boardroom…" />
               </Field>
               <Field label="Code" hint="2 to 8 letters or digits">
                 <input name="code" required maxLength={8} className={inputClass} placeholder="HALL" />
@@ -242,7 +241,6 @@ export default async function EventSetupPage() {
             </div>
           </ActionForm>
         </Card>
-      )}
 
       {/* ── Catering packages ── */}
       <Card>
@@ -354,9 +352,9 @@ export default async function EventSetupPage() {
         <div className="px-5 pt-5">
           <SectionTitle>Equipment for hire</SectionTitle>
           <p className="text-[11px] text-slate-500 -mt-2 mb-3">
-            How many the hotel owns is shown to whoever is quoting, so the hall is not promised three projectors when
-            there is one. An item tied to a space is only offered for that space; one left as &ldquo;any space&rdquo;
-            travels between rooms.
+            How many the hotel owns is shown to whoever is quoting, and a confirmed function cannot be given more
+            than that while it overlaps another that has them. An item tied to a space is only offered for that space;
+            one left as &ldquo;any space&rdquo; travels between rooms.
           </p>
         </div>
 

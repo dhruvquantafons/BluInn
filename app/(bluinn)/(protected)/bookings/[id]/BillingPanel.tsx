@@ -1,15 +1,15 @@
 import Link from "next/link";
-import type { Folio, FolioEntry, Invoice, PaymentTransaction } from "../../../../lib/types";
+import type { CreditNote, Folio, FolioEntry, Invoice, PaymentTransaction, TaxRegime } from "../../../../lib/types";
 import { PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import {
   createFolio,
   moveFolioEntry,
   issueInvoice,
-  cancelInvoice,
   createPaymentRequest,
   cancelPaymentRequest,
   requestRefund,
 } from "../../../billing-actions";
+import { BillToFields, InvoiceCorrections, type BillToDefaults } from "../../../components/InvoiceCorrections";
 import {
   Card,
   Field,
@@ -46,6 +46,11 @@ export default function BillingPanel({
   canInvoice,
   canPay,
   canAdjust,
+  creditNotes,
+  canCreditNote,
+  taxRegime,
+  timeZone,
+  billTo,
 }: {
   bookingId: string;
   folios: Folio[];
@@ -61,6 +66,13 @@ export default function BillingPanel({
   canInvoice: boolean;
   canPay: boolean;
   canAdjust: boolean;
+  creditNotes: CreditNote[];
+  canCreditNote: boolean;
+  taxRegime: TaxRegime;
+  /** The hotel's time zone, for the GST cancel window. */
+  timeZone: string;
+  /** Prefilled bill-to: the guest, or their last business invoice. */
+  billTo: BillToDefaults;
 }) {
   const live = entries.filter((e) => !e.voided_at);
   const invoicedFolios = new Set(invoices.filter((i) => i.status === "issued").map((i) => i.folio_id));
@@ -115,9 +127,15 @@ export default function BillingPanel({
                   ) : (
                     canInvoice &&
                     folioEntries.length > 0 && (
-                      <ActionForm action={issueInvoice} submitLabel="Issue invoice" submitClassName={secondaryButtonClass}>
-                        <input type="hidden" name="folio_id" value={f.id} />
-                      </ActionForm>
+                      <details className="relative inline-block text-left">
+                        <summary className={`${secondaryButtonClass} cursor-pointer list-none`}>Issue invoice</summary>
+                        <div className="absolute right-0 z-10 mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-md p-3">
+                          <ActionForm action={issueInvoice} submitLabel="Issue invoice" submitClassName={secondaryButtonClass} className="space-y-2">
+                            <input type="hidden" name="folio_id" value={f.id} />
+                            <BillToFields defaults={billTo} taxRegime={taxRegime} />
+                          </ActionForm>
+                        </div>
+                      </details>
                     )
                   )}
                 </span>
@@ -340,23 +358,14 @@ export default function BillingPanel({
                 </span>
                 <span className="flex items-center gap-3">
                   <span className="font-medium">{fmtMoney(i.grand_total)}</span>
-                  {canInvoice && i.status === "issued" && (
-                    <details className="relative inline-block text-left">
-                      <summary className="text-[11px] text-slate-500 hover:text-rose-700 cursor-pointer list-none">
-                        Cancel
-                      </summary>
-                      <div className="absolute right-0 z-10 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-md p-3">
-                        <ActionForm action={cancelInvoice} submitLabel="Cancel invoice" submitClassName={secondaryButtonClass} className="space-y-2">
-                          <input type="hidden" name="id" value={i.id} />
-                          <input name="reason" required placeholder="Reason" className={inputClass} />
-                          <p className="text-[10px] text-slate-500">
-                            The number stays used and is never given to another invoice.
-                          </p>
-                        </ActionForm>
-                      </div>
-                    </details>
-                  )}
                 </span>
+                <InvoiceCorrections
+                  invoice={i}
+                  creditNotes={creditNotes.filter((c) => c.invoice_id === i.id)}
+                  canCancel={canInvoice}
+                  canCreditNote={canCreditNote}
+                  timeZone={timeZone}
+                />
               </div>
             ))}
           </div>

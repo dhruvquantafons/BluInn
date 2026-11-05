@@ -5,7 +5,8 @@ import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
-import { financialYearOf, formatInvoiceNumber, invoiceTotals, taxBreakdown } from "../lib/invoices";
+import { financialYearOf, formatInvoiceNumber, gstTotals, invoiceTotals, taxBreakdown } from "../lib/invoices";
+import { invoiceTaxFields, splitGst } from "../lib/gst";
 import { clientName, defaultPaymentTerms, eventHours, formatEventNumber, holdWindow } from "../lib/events";
 import { todayIn } from "../lib/dates";
 import type {
@@ -565,18 +566,44 @@ export async function issueEventInvoice(_prev: ActionState, fd: FormData): Promi
   }));
   if (bands.length === 0) return { error: "There is nothing to invoice on this event yet." };
 
-  const invoiceLines: InvoiceLine[] = bands.map((b) => ({
-    date: event.event_date,
-    description:
-      `${event.title} — ${event.event_spaces?.name ?? "Event"} on ${event.event_date}` +
-      (b.rate ? ` (taxed at ${b.rate}%)` : ""),
-    kind: "event",
-    net: b.net,
-    tax_rate: b.rate,
-    tax: b.tax,
-    total: Math.round((b.net + b.tax) * 100) / 100,
-  }));
+  const regime = settings.tax_regime ?? "gst";
+  const grand = Math.round(bands.reduce((s, b) => s + b.net + b.tax, 0) * 100) / 100;
+  const tax = invoiceTaxFields(
+    {
+      name: str(fd, "bill_to_name", 200) || clientName(event),
+      gstin: str(fd, "bill_to_gstin", 20),
+      address: str(fd, "bill_to_address", 500),
+    },
+    {
+      regime,
+      propertyGstin: settings.gstin,
+      propertyStateCode: settings.gst_state_code,
+      propertyState: settings.state,
+      invoicePrefix: settings.invoice_prefix,
+      grandTotal: grand,
+    },
+  );
+  if ("error" in tax) return { error: tax.error };
+
+  const invoiceLines: InvoiceLine[] = bands.map((b) => {
+    const line: InvoiceLine = {
+      date: event.event_date,
+      description:
+        `${event.title} — ${event.event_spaces?.name ?? "Event"} on ${event.event_date}` +
+        (b.rate ? ` (taxed at ${b.rate}%)` : ""),
+      kind: "event",
+      net: b.net,
+      tax_rate: b.rate,
+      tax: b.tax,
+      total: Math.round((b.net + b.tax) * 100) / 100,
+      dept: "events",
+    };
+    return regime === "gst"
+      ? { ...line, sac: settings.sac_event, ...splitGst(b.tax, tax.fields.is_interstate) }
+      : line;
+  });
   const totals = invoiceTotals(invoiceLines);
+  const split = gstTotals(invoiceLines);
 
   const fy = financialYearOf(todayIn(settings.timezone));
   const { data: seq, error: seqError } = await supabase.rpc("next_invoice_number", {
@@ -595,14 +622,14 @@ export async function issueEventInvoice(_prev: ActionState, fd: FormData): Promi
       financial_year: fy,
       seq,
       event_id: id,
-      bill_to_name: clientName(event),
-      bill_to_address: "",
-      bill_to_gstin: "",
-      place_of_supply: settings.state,
+      ...tax.fields,
       currency: settings.currency,
       net_total: totals.net,
       tax_total: totals.tax,
       grand_total: totals.grand,
+      cgst_total: split.cgst,
+      sgst_total: split.sgst,
+      igst_total: split.igst,
       tax_breakdown: taxBreakdown(invoiceLines),
       lines: invoiceLines,
       issued_by: session.staff.id,

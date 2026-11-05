@@ -9,10 +9,12 @@ import {
   invoiceLines,
   invoiceTotals,
   taxBreakdown,
+  gstTotals,
   formatInvoiceNumber,
   financialYearOf,
   refundNeedsApproval,
 } from "../lib/invoices";
+import { invoiceTaxFields } from "../lib/gst";
 import {
   createPaymentLink,
   cancelPaymentLink,
@@ -148,10 +150,35 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
     .order("created_at");
   const entries = (entryRows ?? []) as FolioEntry[];
 
-  const lines = invoiceLines(entries);
-  if (lines.length === 0) return { error: "There is nothing to invoice on this folio yet." };
+  const regime = settings.tax_regime ?? "gst";
+  const draft = invoiceLines(entries, { regime });
+  if (draft.length === 0) return { error: "There is nothing to invoice on this folio yet." };
+  const draftTotals = invoiceTotals(draft);
+
+  // Who it is to, checked against what a tax invoice must carry. A business
+  // guest gives their GSTIN; place of supply is always the hotel's state.
+  const tax = invoiceTaxFields(
+    {
+      name: str(fd, "bill_to_name", 200) || booking.contact_name,
+      gstin: str(fd, "bill_to_gstin", 20),
+      address: str(fd, "bill_to_address", 500),
+    },
+    {
+      regime,
+      propertyGstin: settings.gstin,
+      propertyStateCode: settings.gst_state_code,
+      propertyState: settings.state,
+      invoicePrefix: settings.invoice_prefix,
+      grandTotal: draftTotals.grand,
+    },
+  );
+  if ("error" in tax) return { error: tax.error };
+
+  const lines = invoiceLines(entries, { regime, interstate: tax.fields.is_interstate });
   const totals = invoiceTotals(lines);
+  if (totals.net < 0) return { error: "Allowances on this folio are larger than its charges." };
   const bands = taxBreakdown(lines);
+  const split = gstTotals(lines);
 
   // The number is claimed inside the database so two people issuing at the
   // same moment cannot take the same sequence.
@@ -179,14 +206,14 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
       seq,
       booking_id: folio.booking_id,
       folio_id: folioId,
-      bill_to_name: booking.contact_name,
-      bill_to_address: "",
-      bill_to_gstin: "",
-      place_of_supply: settings.state,
+      ...tax.fields,
       currency: settings.currency,
       net_total: totals.net,
       tax_total: totals.tax,
       grand_total: totals.grand,
+      cgst_total: split.cgst,
+      sgst_total: split.sgst,
+      igst_total: split.igst,
       tax_breakdown: bands,
       lines,
       fx_currency: settledIn?.fx_currency ?? null,
@@ -223,12 +250,64 @@ export async function cancelInvoice(_prev: ActionState, fd: FormData): Promise<A
     })
     .eq("id", id)
     .eq("status", "issued")
-    .select("booking_id, number")
+    .select("booking_id, event_id, number")
     .single();
   if (error) return { error: friendlyDbError(error.message) };
 
-  revalidateBilling(data.booking_id);
+  revalidateBilling(data.booking_id ?? undefined);
+  if (data.event_id) revalidatePath(`/events/${data.event_id}`);
   return { success: `Invoice ${data.number} cancelled. The number stays on record.` };
+}
+
+// ── Credit notes (0036) ─────────────────────────────────────────────────────
+
+const CREDIT_NOTE_REASONS = ["deficiency", "discount", "cancellation", "billing_error", "other"] as const;
+
+/**
+ * Issues a GST credit note against an invoice. Everything happens inside
+ * credit_note_issue(): the lines are checked against what is still
+ * uncredited, the number comes from the credit-note series, and the folio is
+ * credited — so a half-issued credit note cannot exist.
+ *
+ * The form either credits everything still open ("all") or names an amount
+ * per invoice line (amount_<line>).
+ */
+export async function issueCreditNote(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("folio.credit_note");
+  const supabase = await createClient();
+  const invoiceId = uuidOrNull(fd, "invoice_id");
+  if (!invoiceId) return { error: "Invoice not found." };
+  const reason = oneOfOrNull(fd, "reason_code", CREDIT_NOTE_REASONS);
+  if (!reason) return { error: "Choose why the credit note is being issued." };
+  const note = str(fd, "note", 300);
+  if (!note) return { error: "Describe what is being credited and why." };
+
+  let lines: { line: number; amount: number }[] | null = null;
+  if (fd.get("scope") !== "all") {
+    lines = [];
+    for (const [key, value] of fd.entries()) {
+      const m = /^amount_(\d+)$/.exec(key);
+      if (!m || typeof value !== "string" || value.trim() === "") continue;
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount < 0) return { error: "Enter amounts of zero or more." };
+      if (amount > 0) lines.push({ line: Number(m[1]), amount: Math.round(amount * 100) / 100 });
+    }
+    if (lines.length === 0) return { error: "Enter the amount to credit against at least one line." };
+  }
+
+  const { data, error } = await supabase.rpc("credit_note_issue", {
+    p_invoice: invoiceId,
+    p_reason_code: reason,
+    p_note: note,
+    p_lines: lines,
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+  const cn = data as { number: string; booking_id: string | null; event_id: string | null; grand_total: number };
+
+  revalidateBilling(cn.booking_id ?? undefined);
+  if (cn.event_id) revalidatePath(`/events/${cn.event_id}`);
+  revalidatePath("/billing/credit-notes");
+  return { success: `Credit note ${cn.number} issued for ₹${Number(cn.grand_total).toLocaleString("en-IN")}.` };
 }
 
 // ── Online payments ─────────────────────────────────────────────────────────

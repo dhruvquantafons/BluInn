@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  flashKpis,
+  variancePct,
   REPORTS,
   bookingKpis,
   daysInRange,
@@ -257,19 +259,19 @@ describe("turning rows into a grid for export", () => {
 
   it("uses the column order, so the export matches the screen", () => {
     const grid = toGrid(definition, [
-      { rate: 5, net: 1000, tax: 50, entries: 3 },
-      { rate: 18, net: 800, tax: 144, entries: 1 },
+      { sac: "996311", rate: 5, net: 1000, cgst: 25, sgst: 25, igst: 0, tax: 50, entries: 3 },
+      { sac: "996331", rate: 18, net: 800, cgst: 72, sgst: 72, igst: 0, tax: 144, entries: 1 },
     ]);
-    expect(grid.header).toEqual(["Rate %", "Taxable value", "Tax", "Charges"]);
+    expect(grid.header).toEqual(["SAC", "Rate %", "Taxable value", "CGST", "SGST", "IGST", "Total tax", "Lines"]);
     expect(grid.body).toEqual([
-      [5, 1000, 50, 3],
-      [18, 800, 144, 1],
+      ["996311", 5, 1000, 25, 25, 0, 50, 3],
+      ["996331", 18, 800, 72, 72, 0, 144, 1],
     ]);
   });
 
   it("renders a missing value as blank rather than 'null'", () => {
-    const grid = toGrid(definition, [{ rate: 5, net: 1000, tax: null, entries: undefined }]);
-    expect(grid.body[0]).toEqual([5, 1000, "", ""]);
+    const grid = toGrid(definition, [{ sac: "996311", rate: 5, net: 1000, cgst: null, sgst: null, igst: 0, tax: null, entries: undefined }]);
+    expect(grid.body[0]).toEqual(["996311", 5, 1000, "", "", 0, "", ""]);
   });
 
   it("copes with no rows", () => {
@@ -279,5 +281,41 @@ describe("turning rows into a grid for export", () => {
   it("names the download after the report and its range", () => {
     expect(exportFilename("tax_summary", "2026-09-01", "2026-09-30")).toBe("tax_summary_2026-09-01_2026-09-30.csv");
     expect(exportFilename("outstanding", "2026-09-22", "2026-09-22")).toBe("outstanding_2026-09-22.csv");
+  });
+});
+
+describe("flash report figures", () => {
+  const period = {
+    from: "2026-11-04",
+    to: "2026-11-04",
+    days: 1,
+    audited_days: 1,
+    rooms_available: 40,
+    rooms_sold: 30,
+    room_revenue: 120000,
+    comp_rooms: 1,
+    house_rooms: 0,
+    revenue: { rooms: 121500, fnb: 18000.5, events: 0 },
+    tax: 7000,
+    credit_notes: 0,
+  };
+
+  it("works out occupancy, ADR and RevPAR from room-night revenue", () => {
+    expect(flashKpis(period)).toEqual({ occupancy: 75, adr: 4000, revpar: 3000, totalRevenue: 139500.5 });
+  });
+
+  it("copes with an empty period", () => {
+    expect(flashKpis({ ...period, rooms_available: 0, rooms_sold: 0, revenue: {} })).toEqual({
+      occupancy: 0,
+      adr: 0,
+      revpar: 0,
+      totalRevenue: 0,
+    });
+  });
+
+  it("compares with last year, and says nothing when there was nothing last year", () => {
+    expect(variancePct(110, 100)).toBe(10);
+    expect(variancePct(90, 100)).toBe(-10);
+    expect(variancePct(50, 0)).toBeNull();
   });
 });

@@ -24,6 +24,7 @@ export default function CheckInForm({
   earlyFee,
   earlyTime,
   canTakePayment,
+  overrideRooms = [],
   fmt,
 }: {
   bookingId: string;
@@ -39,10 +40,14 @@ export default function CheckInForm({
   earlyFee: number;
   earlyTime: string | null;
   canTakePayment: boolean;
+  /** Rooms not yet inspected, offered to someone who may override that. */
+  overrideRooms?: { id: string; label: string }[];
   fmt: { deposit: string; paid: string; earlyFee: string };
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(checkIn, {});
   const [nation, setNation] = useState(nationality);
+  const [roomId, setRoomId] = useState(suggestedRoom);
+  const overriding = overrideRooms.some((r) => r.id === roomId);
   const foreign = !/^indian?$/i.test(nation.trim());
   const depositShort = !guaranteed && paid < depositRequired;
 
@@ -52,19 +57,34 @@ export default function CheckInForm({
 
       <fieldset className="space-y-4">
         <legend className={legend}>1 · Room</legend>
-        {rooms.length === 0 ? (
+        {rooms.length === 0 && overrideRooms.length === 0 ? (
           <p className="text-sm text-rose-800">
             No room of this type is vacant and inspected. Ask housekeeping to inspect one, or move the guest to another type.
           </p>
         ) : (
           <Field label="Room" hint="Vacant and inspected only. Ranked by the guest's floor and view preference and VIP status.">
-            <select name="room_id" defaultValue={suggestedRoom} required className={inputClass}>
+            <select name="room_id" value={roomId} onChange={(e) => setRoomId(e.target.value)} required className={inputClass}>
+              {rooms.length === 0 && <option value="">Choose…</option>}
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
                 </option>
               ))}
+              {overrideRooms.length > 0 && (
+                <optgroup label="Not inspected — manager override">
+                  {overrideRooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+          </Field>
+        )}
+        {overriding && (
+          <Field label="Why check in before inspection?" hint="Recorded in the audit log with your name.">
+            <input name="override_reason" required placeholder="VIP arriving early; supervisor checked the room by phone…" className={inputClass} />
           </Field>
         )}
         {notReady.length > 0 && (
@@ -100,12 +120,25 @@ export default function CheckInForm({
             <input name="issuing_country" defaultValue={foreign ? "" : "India"} key={foreign ? "fc" : "dc"} className={inputClass} />
           </Field>
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <Field label="Gender">
+            <select name="gender" defaultValue="" className={inputClass}>
+              <option value="">—</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Date of birth" hint="Optional. Shows a birthday on later stays.">
+            <input type="date" name="date_of_birth" className={inputClass} />
+          </Field>
+        </div>
         {foreign && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Passport expiry">
               <input type="date" name="id_expiry" className={inputClass} />
             </Field>
-            <Field label="Visa number" hint="Foreign nationals are reported on Form C.">
+            <Field label="Visa number">
               <input name="visa_number" required className={inputClass} />
             </Field>
           </div>
@@ -133,6 +166,17 @@ export default function CheckInForm({
           </Field>
           <Field label="Home address">
             <input name="address" defaultValue={address} required className={inputClass} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Arriving from">
+            <input name="arriving_from" className={inputClass} />
+          </Field>
+          <Field label="Next destination">
+            <input name="next_destination" className={inputClass} />
+          </Field>
+          <Field label="Purpose of visit">
+            <input name="purpose_of_visit" placeholder="Business, leisure…" className={inputClass} />
           </Field>
         </div>
         <Check

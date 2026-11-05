@@ -452,6 +452,8 @@ export async function saveOutlet(_prev: ActionState, fd: FormData): Promise<Acti
     tax_rate: Math.min(100, Math.max(0, num(fd, "tax_rate") ?? 0)),
     tax_inclusive: bool(fd, "tax_inclusive"),
     service_charge_percent: Math.min(100, Math.max(0, num(fd, "service_charge_percent") ?? 0)),
+    // Blank uses the property's default SAC code (Settings → Tax).
+    sac_code: str(fd, "sac_code", 8).replace(/\D/g, ""),
     orders_by: oneOf(fd, "orders_by", ["table", "room", "either"] as const, "either"),
     sends_kot: bool(fd, "sends_kot"),
     is_active: bool(fd, "is_active"),

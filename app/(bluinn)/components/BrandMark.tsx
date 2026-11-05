@@ -2,33 +2,43 @@ import { useId } from "react";
 import { PRODUCT } from "../../lib/app-config";
 
 /**
- * The BluInn mark: an inn's roofline over a "B", on a line of water — drawn
- * in white-to-pale-blue line work for the blue surfaces it sits on (the top
- * bar, the hero banner, the sign-in panel).
+ * The BluInn mark: a bold "B" monogram cut by a diagonal slit that echoes
+ * the fluted-glass stripes of the sign-in panel, with a small cyan spark at
+ * the top right. Solid shapes, so it holds up at 28px. The counters and the
+ * slit are cut out with a mask, so the surface it sits on (the top bar, the
+ * hero banner, the sign-in panel) shows through them.
  *
- * The gradient id comes from useId because the sidebar renders the mark more
- * than once (mobile bar, drawer, desktop rail), and a gradient referenced by
- * a shared id stops painting when its first copy sits in a hidden subtree.
+ * Ids come from useId because the sidebar renders the mark more than once
+ * (mobile bar, drawer, desktop rail), and a gradient or mask referenced by a
+ * shared id stops painting when its first copy sits in a hidden subtree.
  */
 export default function BrandMark({ className = "w-10 h-10" }: { className?: string }) {
-  const tint = `brand-tint-${useId().replace(/:/g, "")}`;
-  const stroke = `url(#${tint})`;
+  const id = useId().replace(/:/g, "");
+  const tint = `brand-tint-${id}`;
+  const cut = `brand-cut-${id}`;
   return (
     <svg viewBox="0 0 40 40" className={className} role="img" aria-label={PRODUCT.name} fill="none">
       <defs>
-        <linearGradient id={tint} x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
+        <linearGradient id={tint} x1="9" y1="6" x2="30" y2="34" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#c2d7fd" />
+          <stop offset="1" stopColor="#b5d0ff" />
         </linearGradient>
+        <mask id={cut} maskUnits="userSpaceOnUse" x="0" y="0" width="40" height="40">
+          <rect width="40" height="40" fill="#fff" />
+          {/* Counters */}
+          <path d="M15 11h5.6a2.5 2.5 0 0 1 0 5H15zM15 23.2h6.6a2.9 2.9 0 0 1 0 5.8H15z" fill="#000" />
+          {/* Glass slit */}
+          <path d="M3 9.5 37 33.5" stroke="#000" strokeWidth="1.7" strokeLinecap="round" />
+        </mask>
       </defs>
-      <g stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {/* Roofline */}
-        <path d="M5 17.5 20 6l15 11.5" />
-        {/* The B */}
-        <path d="M15 16v14.5M15 16h5.5a3.6 3.6 0 0 1 0 7.2H15M15 23.2h6.3a3.65 3.65 0 0 1 0 7.3H15" />
-        {/* Water */}
-        <path d="M6 35.5q3.5-2.4 7 0t7 0 7 0 7 0" strokeWidth="1.6" />
-      </g>
+      {/* The B */}
+      <path
+        d="M11.5 6H21a6.9 6.9 0 0 1 4.9 11.8A7.4 7.4 0 0 1 22.6 34H11.5A2.5 2.5 0 0 1 9 31.5v-23A2.5 2.5 0 0 1 11.5 6Z"
+        fill={`url(#${tint})`}
+        mask={`url(#${cut})`}
+      />
+      {/* Spark */}
+      <path d="M32.5 3.5q.45 2.55 3 3-2.55.45-3 3-.45-2.55-3-3 2.55-.45 3-3Z" fill="#8fe6ff" />
     </svg>
   );
 }
@@ -46,7 +56,7 @@ export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`admin-display ${className}`} aria-label={name}>
       <span aria-hidden="true">{name.slice(0, at)}</span>
-      <span aria-hidden="true" className="text-[#a9c6ff]">
+      <span aria-hidden="true" className="admin-wordmark-tail">
         {name.slice(at)}
       </span>
     </span>

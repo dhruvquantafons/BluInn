@@ -1,7 +1,7 @@
 import type { FolioEntry, FolioKind } from "../../../../lib/types";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import type { FolioTotals } from "../../../../lib/policies";
-import { recordPayment, postCharge, voidFolioEntry } from "../../../booking-actions";
+import { recordPayment, postCharge, postAdjustment, voidFolioEntry } from "../../../booking-actions";
 import {
   Card,
   Field,
@@ -29,9 +29,11 @@ const KIND_LABEL: Record<FolioKind, string> = {
 };
 
 /**
- * The guest's running bill: room charges and tax (posted at check-out), fees,
+ * The guest's running bill: room charges and tax (posted nightly by night
+ * audit, and at check-out for any night it missed), fees,
  * extras, penalties, and payments. Entries are never edited — mistakes are
- * voided with a reason, which keeps the ledger auditable.
+ * voided with a reason the same day, or corrected with an allowance once
+ * night audit has closed that day, which keeps the ledger auditable.
  */
 export default function FolioPanel({
   bookingId,
@@ -85,7 +87,7 @@ export default function FolioPanel({
 
       {entries.length === 0 ? (
         <p className="text-sm text-slate-500 mb-4">
-          Nothing posted yet. Room charges and tax for the stay are posted at check-out.
+          Nothing posted yet. Night audit posts room charges each night of the stay.
         </p>
       ) : (
         <div className="overflow-x-auto mb-5">
@@ -127,7 +129,15 @@ export default function FolioPanel({
                     </td>
                     {canAdjust && (
                       <td className="py-2 text-right">
-                        {!e.voided_at && (
+                        {!e.voided_at && e.night_audit_date && (
+                          <span
+                            className="text-[11px] text-slate-400"
+                            title={`Closed by night audit for ${fmtDate(e.night_audit_date)}. Correct it with an allowance.`}
+                          >
+                            Closed
+                          </span>
+                        )}
+                        {!e.voided_at && !e.night_audit_date && (
                           <details className="relative inline-block text-left">
                             <summary className="text-[11px] text-slate-500 hover:text-rose-700 cursor-pointer list-none">
                               Void
@@ -214,6 +224,41 @@ export default function FolioPanel({
               </Field>
             </div>
             <input type="hidden" name="stay_date" value={today} />
+          </ActionForm>
+        )}
+
+        {canAdjust && (
+          <ActionForm action={postAdjustment} submitLabel="Post allowance" submitClassName={secondaryButtonClass} className="space-y-3">
+            <p className="text-xs font-medium text-brand-700">Allowance</p>
+            <p className="text-[11px] text-slate-500">
+              A credit with a reason: a goodwill discount, or the way to correct a line from a day night audit has
+              closed. Name the charge it reduces and it prints on the invoice as a discount, lowering the tax too.
+            </p>
+            <input type="hidden" name="booking_id" value={bookingId} />
+            <Field label="Reason">
+              <input name="description" required placeholder="Minibar posted twice on 12 Nov, service recovery…" className={inputClass} />
+            </Field>
+            <Field label="Against charge" hint="Leave blank for a credit that is not a discount on a charge.">
+              <select name="applies_to" defaultValue="" className={inputClass}>
+                <option value="">Not against a particular charge</option>
+                {entries
+                  .filter((e) => !e.voided_at && ["room", "fee", "penalty", "extra"].includes(e.kind))
+                  .map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.stay_date ? `${fmtDate(e.stay_date)} · ` : ""}
+                      {e.description || KIND_LABEL[e.kind]} — {fmtMoney(Number(e.amount) + Number(e.tax_amount))}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Amount (₹)">
+                <input type="number" name="amount" min={0.01} step="0.01" required className={inputClass} />
+              </Field>
+              <Field label="Reference">
+                <input name="reference" className={inputClass} />
+              </Field>
+            </div>
           </ActionForm>
         )}
       </div>

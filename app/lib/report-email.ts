@@ -102,10 +102,13 @@ async function buildReportBody(db: SupabaseClient, schedule: ReportSchedule): Pr
               `<td style="border-bottom:1px solid #eee;text-align:right"><strong>${escape(value)}</strong></td></tr>`,
           )
           .join("") +
-        `</table>`,
+        `</table>` +
+        `<p style="color:#666;font-size:12px">${k.auditedDays} of ${k.days} day(s) closed by night audit. ` +
+        `Figures for days not yet closed may still change.</p>`,
       text:
         `${hotel}\n${range.from} to ${range.to}\n\n` +
-        lines.map(([label, value]) => `${label}: ${value}`).join("\n"),
+        lines.map(([label, value]) => `${label}: ${value}`).join("\n") +
+        `\n\n${k.auditedDays} of ${k.days} day(s) closed by night audit.`,
       error: null,
     };
   }

@@ -5,6 +5,7 @@ import { getSettings } from "../../lib/settings";
 import { getProperties, getCurrentProperty } from "../../lib/properties";
 import { hasSupabaseConfig } from "../../lib/supabase/config";
 import { todayIn } from "../../lib/dates";
+import { can } from "../../lib/permissions";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import StatusStrip from "../components/StatusStrip";
@@ -53,7 +54,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <IdleTimer minutes={settings.session_timeout_minutes} />
         <div className="admin-canvas lg:pl-60 min-h-[calc(100vh-3.5rem)] print:pl-0 print:min-h-0">
           <StatusStrip
+            businessDate={settings.business_date}
             today={todayIn(settings.timezone)}
+            canAudit={can(session, "frontdesk.night_audit")}
             propertyName={currentProperty?.name ?? (properties.length === 1 ? properties[0].name : null)}
           />
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-7 print:p-0 print:max-w-none">{children}</main>

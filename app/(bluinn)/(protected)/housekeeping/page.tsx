@@ -4,10 +4,10 @@ import { createClient } from "../../../lib/supabase/server";
 import { requireSession } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
-import { todayIn, minutesSince } from "../../../lib/dates";
+import { addDays, todayIn, minutesSince, zonedTime } from "../../../lib/dates";
 import type { HousekeepingTask, Room, Staff } from "../../../lib/types";
 import { HK_KIND_LABELS, HK_STATUS_LABELS } from "../../../lib/types";
-import { generateTasks, createTask, reassignTask, inspectTask, setDnd } from "../../housekeeping-actions";
+import { generateTasks, createTask, reassignTask, inspectTask, setDnd, setLaundryStatus } from "../../housekeeping-actions";
 import {
   Card,
   Field,
@@ -23,6 +23,8 @@ import {
   fmtDate,
 } from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
+import TracesCard from "../../components/TracesCard";
+import DiscrepancyCard, { loadDiscrepancies } from "../../components/DiscrepancyCard";
 
 type BoardTask = HousekeepingTask & { rooms: Pick<Room, "id" | "room_number" | "floor" | "status" | "housekeeping_status" | "dnd"> };
 
@@ -39,7 +41,7 @@ export default async function HousekeepingBoard() {
   const assign = can(session, "housekeeping.assign");
   const inspect = can(session, "housekeeping.inspect");
 
-  const [{ data: taskRows }, { data: staffRows }, { data: perms }, { data: roomRows }] = await Promise.all([
+  const [{ data: taskRows }, { data: staffRows }, { data: perms }, { data: roomRows }, discrepancies, { data: laundryRows }] = await Promise.all([
     supabase
       .from("housekeeping_tasks")
       .select("*, rooms(id, room_number, floor, status, housekeeping_status, dnd)")
@@ -50,7 +52,22 @@ export default async function HousekeepingBoard() {
     supabase.from("staff").select("id, full_name, email, role, on_duty, is_active").eq("is_active", true).order("full_name"),
     supabase.from("role_permissions").select("role_key, permission").in("permission", ["housekeeping.tasks", "housekeeping.assign"]),
     supabase.from("rooms").select("id, room_number, floor, status, dnd").order("room_number"),
+    loadDiscrepancies(supabase),
+    // Laundry collected from rooms and not yet back (0032).
+    supabase
+      .from("pos_orders")
+      .select("id, number, guest_name, laundry_status, opened_at, rooms(room_number)")
+      .in("laundry_status", ["collected", "processing"])
+      .order("opened_at"),
   ]);
+  const laundry = (laundryRows ?? []) as unknown as {
+    id: string;
+    number: string;
+    guest_name: string;
+    laundry_status: "collected" | "processing";
+    opened_at: string;
+    rooms: { room_number: string } | null;
+  }[];
 
   const tasks = (taskRows ?? []) as BoardTask[];
   const rolesWith = (p: string) => new Set((perms ?? []).filter((r) => r.permission === p).map((r) => r.role_key));
@@ -71,6 +88,36 @@ export default async function HousekeepingBoard() {
 
   return (
     <div className="space-y-6">
+      <TracesCard
+        supabase={supabase}
+        departmentMatch={["housekeeping"]}
+        untilIso={zonedTime(addDays(today, 1), "00:00", settings.timezone).toISOString()}
+      />
+      <DiscrepancyCard rows={discrepancies} />
+      {laundry.length > 0 && (
+        <Card>
+          <div className="px-5 py-3.5 border-b border-slate-100 text-slate-900">Laundry out ({laundry.length})</div>
+          <ul className="divide-y divide-slate-100">
+            {laundry.map((l) => (
+              <li key={l.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
+                <span className="font-medium text-slate-900">Room {l.rooms?.room_number ?? "—"}</span>
+                <span className="text-slate-600">{l.guest_name}</span>
+                <span className="text-[11px] text-slate-500">{l.number}</span>
+                <Tag tone={l.laundry_status === "collected" ? "neutral" : "blue"}>
+                  {l.laundry_status === "collected" ? "Collected" : "Processing"}
+                </Tag>
+                <form action={setLaundryStatus} className="ml-auto">
+                  <input type="hidden" name="order_id" value={l.id} />
+                  <input type="hidden" name="laundry_status" value={l.laundry_status === "collected" ? "processing" : "delivered"} />
+                  <button type="submit" className={`${secondaryButtonClass} !py-1.5`}>
+                    {l.laundry_status === "collected" ? "Sent to laundry" : "Delivered to room"}
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="To do" value={pending.length} hint={unassigned.length ? `${unassigned.length} unassigned` : undefined} icon={<ListTodo />} highlight />
         <StatCard label="Cleaning now" value={cleaning.length} hint={late.length ? `${late.length} over target` : undefined} icon={<SprayCan />} />
@@ -90,10 +137,16 @@ export default async function HousekeepingBoard() {
 
       {assign && (
         <Card className="p-4 flex flex-wrap items-start gap-4">
-          <ActionForm action={generateTasks} submitLabel="Schedule due deep cleans" pendingLabel="Scheduling…" className="space-y-2">
+          <ActionForm
+            action={generateTasks}
+            submitLabel={settings.hk_stayover_enabled ? "Schedule stay-overs and deep cleans" : "Schedule due deep cleans"}
+            pendingLabel="Scheduling…"
+            className="space-y-2"
+          >
             <p className="text-sm text-slate-600 max-w-md">
-              Check-out cleans are created automatically when a guest leaves. Deep cleans fall due every{" "}
-              {settings.hk_deep_clean_days} days; schedule the ones that are due here.
+              Check-out cleans are created automatically when a guest leaves.
+              {settings.hk_stayover_enabled && " Every room whose guest is staying on gets a daily service task."} Deep
+              cleans fall due every {settings.hk_deep_clean_days} days; night audit schedules them, or do it now.
             </p>
           </ActionForm>
           <details className="ml-auto">

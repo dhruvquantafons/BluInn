@@ -6,7 +6,7 @@ import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
 import { addDays, isIsoDate, todayIn } from "../../../lib/dates";
 import type { Booking, Room, RoomBlock, RoomType } from "../../../lib/types";
-import { PageHeader, Card, secondaryButtonClass } from "../../components/ui";
+import { PageHeader, Card, EmptyState, secondaryButtonClass } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
 import TapeChart, { TapeChartLegend } from "../../components/TapeChart";
 
@@ -84,6 +84,25 @@ export default async function TapeChartPage({
       />
 
       <TapeChartLegend />
+
+      {roomList.length === 0 && (
+        <Card className="mb-4">
+          <EmptyState icon={<GanttChart />} message="No rooms have been added for this property yet, so there is nothing to chart." />
+          <p className="px-5 pb-5 -mt-2 text-center text-sm text-slate-600">
+            {can(session, "rooms.manage") ? (
+              <>
+                Add them under{" "}
+                <Link href="/rooms" className="text-brand-700 hover:underline">
+                  Operations → Rooms
+                </Link>
+                , each with its room type. Bookings without a room still appear here under their room type.
+              </>
+            ) : (
+              "Ask an administrator to add the rooms under Operations → Rooms."
+            )}
+          </p>
+        </Card>
+      )}
 
       <Card className="overflow-x-auto">
         <TapeChart

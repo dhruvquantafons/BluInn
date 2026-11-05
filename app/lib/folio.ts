@@ -8,12 +8,13 @@ import { folioTotals } from "./policies";
 
 type ChargeableBooking = Pick<
   Booking,
-  "id" | "check_in" | "check_out" | "rooms_count" | "rate_breakdown" | "quoted_rate"
+  "id" | "check_in" | "check_out" | "rooms_count" | "rate_breakdown" | "quoted_rate" | "stay_type"
 > & { rooms?: { room_number: string } | null };
 
 /**
  * Posts the room charge (and its tax) for each given night that has not been
- * charged yet. Check-out uses it to charge every night of the stay.
+ * charged yet. Night audit uses it for one night across every in-house
+ * booking; check-out uses it to catch any night an audit missed.
  *
  * A unique index guarantees one room charge per booking per night, so a
  * retry can never double-charge.
@@ -44,7 +45,10 @@ export async function postRoomCharges(
   for (const b of bookings) {
     for (const night of nights(b)) {
       if (done.has(`${b.id}:${night}`)) continue;
-      const rate = rateForNight(b.rate_breakdown, night, b.quoted_rate);
+      // Complimentary and house-use stays (0031) still post each night, at
+      // zero, so the folio and the night audit show the room was occupied.
+      const comp = Boolean(b.stay_type && b.stay_type !== "paid");
+      const rate = comp ? 0 : rateForNight(b.rate_breakdown, night, b.quoted_rate);
       // Slabs apply per room per night, so split one room's rate then scale.
       const split = splitRoomTax(rate, slabs, settings.tax_inclusive);
       const net = Math.round(split.net * b.rooms_count * 100) / 100;
@@ -54,7 +58,7 @@ export async function postRoomCharges(
       rows.push({
         booking_id: b.id,
         kind: "room",
-        description: `${b.rooms?.room_number ? `Room ${b.rooms.room_number}` : "Room"} — night of ${night}${b.rooms_count > 1 ? ` × ${b.rooms_count}` : ""}`,
+        description: `${b.rooms?.room_number ? `Room ${b.rooms.room_number}` : "Room"} — night of ${night}${b.rooms_count > 1 ? ` × ${b.rooms_count}` : ""}${comp ? ` (${b.stay_type === "house_use" ? "house use" : "complimentary"})` : ""}`,
         stay_date: night,
         amount: net,
         tax_amount: t,

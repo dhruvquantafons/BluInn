@@ -17,7 +17,7 @@ import {
 import { runReport } from "../../../lib/report-data";
 import { Card, Notice, SectionTitle, StatCard, fmtMoney } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
-import { RangePicker, ReportTable } from "./shared";
+import { RangePicker, ReportTable, SourceNote } from "./shared";
 
 /**
  * The management overview: the Core KPIs for a chosen period, with a
@@ -62,7 +62,7 @@ export default async function ReportsOverviewPage({
 
   return (
     <div className="space-y-6">
-      <LiveRefresh tables={["folio_entries", "bookings"]} />
+      <LiveRefresh tables={["folio_entries", "bookings", "night_audits"]} />
 
       <RangePicker basePath="/reports" preset={preset} from={fromParam ?? ""} to={toParam ?? ""} resolved={range} />
 
@@ -105,6 +105,8 @@ export default async function ReportsOverviewPage({
           hint={`${guestRow.repeat_guests ?? 0} of ${guestRow.distinct_guests ?? 0} guests`}
         />
       </div>
+
+      <SourceNote audited={kpis.auditedDays} days={kpis.days} />
 
       {kpis.goppar === null && financial && (
         <Notice tone="info">

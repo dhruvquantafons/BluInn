@@ -14,7 +14,7 @@ import { cancellationPenalty, noShowPenalty, describePenalty } from "../lib/poli
 import { friendlyDbError, isOverbooked } from "../lib/db-errors";
 import { sendBookingMessage, describeSend, type Template } from "../lib/notifications";
 import { alertNewBooking } from "../lib/staff-alerts";
-import { eachNight, hoursUntil, todayIn } from "../lib/dates";
+import { eachNight, hoursUntil, todayIn, zonedTime } from "../lib/dates";
 import type {
   Booking,
   BookingSource,
@@ -22,7 +22,9 @@ import type {
   PaymentMethod,
   PropertySettings,
   RatePlan,
+  RoomMoveReason,
 } from "../lib/types";
+import { ROOM_MOVE_REASONS } from "../lib/types";
 import { rankRooms } from "../lib/room-assignment";
 import {
   type ActionState,
@@ -382,6 +384,32 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
   }
 
   revalidateBooking();
+
+  // Walk-in fast path: the guest is standing at the desk, so give them the
+  // best ready room and go straight to check-in. If no single room is free
+  // for every night, the booking stands and the desk assigns one by hand.
+  if (bool(fd, "walk_in") && checkIn === todayIn(settings.timezone) && rooms === 1 && status !== "waitlisted") {
+    const roomId = await bestRoomFor(
+      supabase,
+      {
+        id: data.id,
+        room_type_id: roomTypeId,
+        check_in: checkIn,
+        check_out: checkOut,
+        adults,
+        rooms_count: rooms,
+        preferred_floor: preferredFloor === null ? null : Math.round(preferredFloor),
+        preferred_view: str(fd, "preferred_view", 80),
+        is_vip: isVip,
+      },
+      true,
+    );
+    if (roomId) {
+      const { error: assignError } = await supabase.from("bookings").update({ room_id: roomId }).eq("id", data.id);
+      if (!assignError && can(session, "frontdesk.checkin")) redirect(`/bookings/${data.id}/check-in`);
+    }
+  }
+
   redirect(`/bookings/${data.id}`);
 }
 
@@ -510,7 +538,7 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
   if (!["tentative", "confirmed"].includes(booking.status)) {
     return { error: "Only an expected arrival can be marked as a no-show." };
   }
-  if (booking.check_in > todayIn(settings.timezone)) {
+  if (booking.check_in > settings.business_date) {
     return { error: "The guest is not due yet." };
   }
 
@@ -695,6 +723,49 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
 
 // ── Rooms: assign, move, split ─────────────────────────────────────────────
 
+/**
+ * The best free room of the booking's type for every night of the stay, or
+ * null. For a guest checking in now, rooms that are ready (inspected) rank
+ * first (rankRooms, app/lib/room-assignment.ts).
+ */
+async function bestRoomFor(
+  supabase: SupabaseClient,
+  booking: Pick<
+    Booking,
+    "id" | "room_type_id" | "check_in" | "check_out" | "adults" | "rooms_count" | "preferred_floor" | "preferred_view" | "is_vip"
+  >,
+  forImmediateCheckIn: boolean,
+): Promise<string | null> {
+  const [{ data: rooms }, { data: stays }, { data: blocks }] = await Promise.all([
+    supabase.from("rooms").select("*").eq("room_type_id", booking.room_type_id ?? ""),
+    supabase
+      .from("bookings")
+      .select("room_id, check_in, check_out")
+      .in("status", ["tentative", "confirmed", "checked_in"])
+      .neq("id", booking.id)
+      .not("room_id", "is", null)
+      .lt("check_in", booking.check_out)
+      .gt("check_out", booking.check_in),
+    supabase.from("room_blocks").select("room_id, start_date, end_date").is("released_at", null),
+  ]);
+  const { ranked } = rankRooms(
+    {
+      roomTypeId: booking.room_type_id,
+      checkIn: booking.check_in,
+      checkOut: booking.check_out,
+      adults: Math.ceil(booking.adults / booking.rooms_count),
+      preferredFloor: booking.preferred_floor,
+      preferredView: booking.preferred_view,
+      isVip: booking.is_vip,
+      forImmediateCheckIn,
+    },
+    rooms ?? [],
+    stays ?? [],
+    blocks ?? [],
+  );
+  return ranked[0]?.room.id ?? null;
+}
+
 export async function assignRoom(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAnyPermission(["bookings.edit", "frontdesk.checkin"]);
   const supabase = await createClient();
@@ -709,34 +780,7 @@ export async function assignRoom(_prev: ActionState, fd: FormData): Promise<Acti
   const auto = bool(fd, "auto");
 
   if (auto) {
-    const [{ data: rooms }, { data: stays }, { data: blocks }] = await Promise.all([
-      supabase.from("rooms").select("*").eq("room_type_id", booking.room_type_id ?? ""),
-      supabase
-        .from("bookings")
-        .select("room_id, check_in, check_out")
-        .in("status", ["tentative", "confirmed", "checked_in"])
-        .neq("id", booking.id)
-        .not("room_id", "is", null)
-        .lt("check_in", booking.check_out)
-        .gt("check_out", booking.check_in),
-      supabase.from("room_blocks").select("room_id, start_date, end_date").is("released_at", null),
-    ]);
-    const { ranked } = rankRooms(
-      {
-        roomTypeId: booking.room_type_id,
-        checkIn: booking.check_in,
-        checkOut: booking.check_out,
-        adults: Math.ceil(booking.adults / booking.rooms_count),
-        preferredFloor: booking.preferred_floor,
-        preferredView: booking.preferred_view,
-        isVip: booking.is_vip,
-        forImmediateCheckIn: false,
-      },
-      rooms ?? [],
-      stays ?? [],
-      blocks ?? [],
-    );
-    roomId = ranked[0]?.room.id ?? null;
+    roomId = await bestRoomFor(supabase, booking, false);
     if (!roomId) return { error: "No free room of this type for every night of the stay." };
   }
 
@@ -779,6 +823,7 @@ export async function moveRoom(_prev: ActionState, fd: FormData): Promise<Action
     from_room_id: booking.room_id,
     to_room_id: toRoom,
     reason,
+    reason_code: oneOf(fd, "reason_code", Object.keys(ROOM_MOVE_REASONS) as RoomMoveReason[], "other"),
     moved_by: session.staff.id,
   });
 
@@ -995,6 +1040,40 @@ export async function postCharge(_prev: ActionState, fd: FormData): Promise<Acti
   return { success: "Charge posted." };
 }
 
+/**
+ * An allowance: a credit on the folio with a reason, for a goodwill discount
+ * or to correct a line from a day night audit has already closed (those can
+ * no longer be voided, 0028). It is a separate line, posted today, so the
+ * closed day's figures stay as they were reported.
+ */
+export async function postAdjustment(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await requirePermission("folio.adjust");
+  const supabase = await createClient();
+  const bookingId = uuidOrNull(fd, "booking_id");
+  const amount = num(fd, "amount");
+  const reason = str(fd, "description", 200);
+
+  if (!bookingId) return { error: "Booking not found." };
+  if (!reason) return { error: "Give a reason for the allowance." };
+  if (amount === null || amount <= 0) return { error: "Enter an amount above zero." };
+
+  const { error } = await supabase.from("folio_entries").insert({
+    booking_id: bookingId,
+    kind: "adjustment",
+    description: reason,
+    amount,
+    reference: str(fd, "reference", 100),
+    // The charge it reduces, if any: the database then takes that charge's
+    // SAC and tax rate, so the allowance lowers the taxable value (0036).
+    applies_to: uuidOrNull(fd, "applies_to"),
+    created_by: session.staff.id,
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+
+  revalidateBooking(bookingId);
+  return { success: "Allowance posted." };
+}
+
 export async function voidFolioEntry(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("folio.adjust");
   const supabase = await createClient();
@@ -1014,4 +1093,55 @@ export async function voidFolioEntry(_prev: ActionState, fd: FormData): Promise<
 
   revalidateBooking(data.booking_id);
   return { success: "Entry voided." };
+}
+
+// ── Arrangements: transfers, deposit due date, complimentary stays (0031) ───
+
+/** "2026-11-05T14:30" from a datetime-local input, read as hotel time. */
+function localDateTime(fd: FormData, key: string, timeZone: string): string | null {
+  const v = str(fd, key, 16);
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(v);
+  return m ? zonedTime(m[1], m[2], timeZone).toISOString() : null;
+}
+
+export async function updateArrangements(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await requirePermission("bookings.edit");
+  const supabase = await createClient();
+  const settings = await getSettings();
+  const booking = await loadBooking(supabase, uuidOrNull(fd, "id"));
+  if (!booking) return { error: "Booking not found." };
+  if (["checked_out", "cancelled", "no_show"].includes(booking.status)) return { error: "This booking is closed." };
+
+  const pickup = bool(fd, "pickup_required");
+  const drop = bool(fd, "drop_required");
+  const pickupAt = localDateTime(fd, "pickup_at", settings.timezone);
+  const dropAt = localDateTime(fd, "drop_at", settings.timezone);
+  if (pickup && !pickupAt) return { error: "Give the pick-up date and time." };
+  if (drop && !dropAt) return { error: "Give the drop date and time." };
+
+  const update: Record<string, unknown> = {
+    pickup_required: pickup,
+    pickup_at: pickup ? pickupAt : null,
+    pickup_details: pickup ? str(fd, "pickup_details", 300) : "",
+    drop_required: drop,
+    drop_at: drop ? dropAt : null,
+    drop_details: drop ? str(fd, "drop_details", 300) : "",
+    deposit_due_on: dateStr(fd, "deposit_due_on") || null,
+  };
+
+  // Only someone who may approve one changes the stay type; for everyone else
+  // the field is not on the form and the stay keeps what it has.
+  if (can(session, "bookings.complimentary") && fd.has("stay_type")) {
+    const stayType = oneOf(fd, "stay_type", ["paid", "complimentary", "house_use"] as const, "paid");
+    const reason = str(fd, "comp_reason", 300);
+    if (stayType !== "paid" && !reason) return { error: "Give a reason for the complimentary or house-use stay." };
+    update.stay_type = stayType;
+    update.comp_reason = stayType === "paid" ? "" : reason;
+  }
+
+  const { error } = await supabase.from("bookings").update(update).eq("id", booking.id);
+  if (error) return { error: friendlyDbError(error.message) };
+
+  revalidateBooking(booking.id);
+  return { success: "Arrangements saved." };
 }

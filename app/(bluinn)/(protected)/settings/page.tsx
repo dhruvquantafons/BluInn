@@ -5,7 +5,8 @@ import { LANGUAGES } from "../../../lib/types";
 import { getSettings, hhmm, taxSlabsOf } from "../../../lib/settings";
 import { emailConfigured, smsConfigured } from "../../../lib/integrations";
 import { saveSettings } from "../../actions";
-import { PageHeader, Card, Field, Check, Notice, Tag, SectionTitle, inputClass } from "../../components/ui";
+import { GST_STATES, stateLabel } from "../../../lib/gst";
+import { PageHeader, Card, Field, Check, Notice, Tag, SectionTitle, inputClass, fmtDate } from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
 
 export default async function SettingsPage() {
@@ -25,7 +26,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader icon={<Settings />} title="Settings" description="Property details, policies, tax and security." />
+      <PageHeader icon={<Settings />} title="Settings" description="Property details, policies, tax and security. Business date is moved only by night audit." />
       <ActionForm action={saveSettings} submitLabel="Save settings" className="space-y-6">
         <Card className="p-5 space-y-4">
           <SectionTitle>Property</SectionTitle>
@@ -36,8 +37,8 @@ export default async function SettingsPage() {
             <Field label="Legal name">
               <input name="legal_name" defaultValue={s.legal_name} className={inputClass} />
             </Field>
-            <Field label="GSTIN">
-              <input name="gstin" defaultValue={s.gstin} maxLength={15} className={`${inputClass} uppercase`} />
+            <Field label="GSTIN" hint={s.gst_state_code ? `GST state ${stateLabel(s.gst_state_code)}` : "Printed on every GST invoice."}>
+              <input name="gstin" defaultValue={s.gstin} maxLength={15} className={`${inputClass} font-mono uppercase`} />
             </Field>
           </div>
           <Field label="Address">
@@ -48,7 +49,12 @@ export default async function SettingsPage() {
               <input name="city" defaultValue={s.city} className={inputClass} />
             </Field>
             <Field label="State">
-              <input name="state" defaultValue={s.state} className={inputClass} />
+              <input name="state" defaultValue={s.state} list="gst-states" className={inputClass} />
+              <datalist id="gst-states">
+                {GST_STATES.map((st) => (
+                  <option key={st.code} value={st.name} />
+                ))}
+              </datalist>
             </Field>
             <Field label="Country">
               <input name="country" defaultValue={s.country} className={inputClass} />
@@ -71,6 +77,7 @@ export default async function SettingsPage() {
               <input name="timezone" defaultValue={s.timezone} className={inputClass} />
             </Field>
           </div>
+          <p className="text-xs text-slate-600">Business date: {fmtDate(s.business_date)}</p>
         </Card>
 
         <Card className="p-5 space-y-4">
@@ -82,7 +89,7 @@ export default async function SettingsPage() {
             <Field label="Check-out by">
               <input type="time" name="check_out_time" defaultValue={hhmm(s.check_out_time)} className={inputClass} />
             </Field>
-            <Field label="Tentative hold (hours)" hint="How long a tentative booking is held. Confirm or cancel it before then; it is not released automatically.">
+            <Field label="Tentative hold (hours)" hint="Night audit releases unconfirmed holds after this.">
               <input type="number" name="hold_hours" min={1} max={720} defaultValue={s.hold_hours} className={inputClass} />
             </Field>
             <Field label="Cleaning target (minutes)" hint="Default turnaround per room; room types can override.">
@@ -102,6 +109,12 @@ export default async function SettingsPage() {
               <input type="number" name="late_checkout_fee_value" min={0} step="0.01" defaultValue={s.late_checkout_fee_value} className={inputClass} />
             </Field>
           </div>
+          <Check
+            name="hk_stayover_enabled"
+            defaultChecked={s.hk_stayover_enabled}
+            label="Daily service for stay-over rooms"
+            hint="Night audit (or Housekeeping → schedule) creates a cleaning task for every room whose guest is staying on."
+          />
         </Card>
 
         <Card className="p-5 space-y-4">
@@ -117,17 +130,42 @@ export default async function SettingsPage() {
               <Check name="tax_inclusive" defaultChecked={s.tax_inclusive} label="Published rates include tax" />
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="Invoice format" hint="GST invoices carry SAC codes, CGST/SGST and the buyer's GSTIN.">
+              <select name="tax_regime" defaultValue={s.tax_regime} className={inputClass}>
+                <option value="gst">GST tax invoice (India)</option>
+                <option value="simple">Plain invoice, one tax line</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Field label="SAC — rooms" hint="Also cancellation and no-show fees.">
+              <input name="sac_room" defaultValue={s.sac_room} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            </Field>
+            <Field label="SAC — food & beverage" hint="Outlets can set their own under POS.">
+              <input name="sac_fnb" defaultValue={s.sac_fnb} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            </Field>
+            <Field label="SAC — events">
+              <input name="sac_event" defaultValue={s.sac_event} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            </Field>
+            <Field label="SAC — other charges">
+              <input name="sac_other" defaultValue={s.sac_other} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            </Field>
+          </div>
           <Notice tone="warn">
-            Seeded with India&apos;s accommodation GST from 22 September 2025 (5% up to ₹7,500, 18% above). Confirm with
-            the hotel&apos;s accountant.
+            Seeded with India&apos;s accommodation GST from 22 September 2025 (5% up to ₹7,500, 18% above) and the usual SAC
+            codes (996311 rooms, 996331 restaurant, 996334 event catering). Confirm both with the hotel&apos;s accountant.
           </Notice>
         </Card>
 
         <Card className="p-5 space-y-4">
           <SectionTitle>Billing &amp; invoicing</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Invoice number prefix" hint="Numbers read PREFIX/2026-27/0001.">
+            <Field label="Invoice number prefix" hint="Numbers read PREFIX/2026-27/0001. Up to 3 letters for GST.">
               <input name="invoice_prefix" defaultValue={s.invoice_prefix} maxLength={10} className={`${inputClass} uppercase`} />
+            </Field>
+            <Field label="Credit note prefix" hint="Its own series: CN/2026-27/0001.">
+              <input name="credit_note_prefix" defaultValue={s.credit_note_prefix} maxLength={6} className={`${inputClass} uppercase`} />
             </Field>
             <Field label="Refund approval above (₹)" hint="0 = every refund needs approval.">
               <input type="number" name="refund_approval_threshold" min={0} step="0.01" defaultValue={s.refund_approval_threshold} className={inputClass} />
@@ -160,6 +198,12 @@ export default async function SettingsPage() {
               />
             </div>
           </div>
+          <Check
+            name="require_cashier_shift"
+            defaultChecked={s.require_cashier_shift}
+            label="Cash needs an open cashier shift"
+            hint="Desk and outlet staff open a shift with a float before they can take or refund cash, and close it by counting the drawer."
+          />
           <Field
             label="Monthly operating cost (₹)"
             hint="Used only to report GOPPAR, prorated over the days reported. 0 = GOPPAR is not reported."
@@ -369,7 +413,7 @@ export default async function SettingsPage() {
             <Field label="Lockout (minutes)">
               <input type="number" name="lockout_minutes" min={1} max={1440} defaultValue={s.lockout_minutes} className={inputClass} />
             </Field>
-            <Field label="Keep ID scans (days)" hint="Your retention policy. Scans are not deleted automatically.">
+            <Field label="Keep ID scans (days)" hint="Purged at night audit.">
               <input type="number" name="id_document_retention_days" min={30} max={3650} defaultValue={s.id_document_retention_days} className={inputClass} />
             </Field>
           </div>

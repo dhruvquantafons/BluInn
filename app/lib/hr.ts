@@ -142,9 +142,13 @@ export function payrollSummary(input: {
   });
 }
 
-/** Comma-separated values, quoted, with spreadsheet formulas neutralised. */
+/**
+ * Comma-separated values, quoted, with spreadsheet formulas neutralised.
+ * Numbers cannot carry a formula, so a negative amount stays a number.
+ */
 export function toCsv(rows: (string | number)[][]): string {
   const cell = (v: string | number) => {
+    if (typeof v === "number") return String(v);
     let s = String(v);
     if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     return /[",\n\r]/.test(s) || s !== String(v) ? `"${s.replace(/"/g, '""')}"` : s;

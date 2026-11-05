@@ -20,6 +20,7 @@ export const PERMISSION_GROUPS = [
       { key: "bookings.cancel", label: "Cancel and mark no-show" },
       { key: "bookings.waive_penalty", label: "Waive cancellation penalties" },
       { key: "bookings.overbook", label: "Override overbooking" },
+      { key: "bookings.complimentary", label: "Approve complimentary and house-use stays" },
       { key: "bookings.groups", label: "Group bookings" },
     ],
   },
@@ -30,6 +31,8 @@ export const PERMISSION_GROUPS = [
       { key: "frontdesk.checkin", label: "Check guests in" },
       { key: "frontdesk.checkout", label: "Check guests out" },
       { key: "frontdesk.requests", label: "Log and complete guest requests" },
+      { key: "frontdesk.night_audit", label: "Run night audit and close the business day" },
+      { key: "frontdesk.checkin_override", label: "Check a guest into a room not yet inspected (with a reason)" },
     ],
   },
   {
@@ -52,6 +55,9 @@ export const PERMISSION_GROUPS = [
       { key: "folio.adjust", label: "Adjustments and voids" },
       { key: "folio.invoice", label: "Issue and cancel tax invoices" },
       { key: "folio.refund_approve", label: "Approve refunds" },
+      { key: "folio.credit_note", label: "Issue GST credit notes against invoices" },
+      { key: "folio.cashier", label: "Open and close my cash shift; pay-ins, paid-outs and safe drops" },
+      { key: "folio.cashier_audit", label: "See every cash shift, close anyone's and review variances" },
     ],
   },
   {
@@ -90,6 +96,7 @@ export const PERMISSION_GROUPS = [
       { key: "housekeeping.inspect", label: "Inspect and approve rooms" },
       { key: "housekeeping.assign", label: "Assign tasks, zones and checklists" },
       { key: "housekeeping.lost_found", label: "Lost & found" },
+      { key: "housekeeping.post_charges", label: "Post minibar and laundry to a guest's room" },
     ],
   },
   {
@@ -98,6 +105,13 @@ export const PERMISSION_GROUPS = [
       { key: "maintenance.report", label: "Report problems (raise tickets)" },
       { key: "maintenance.work", label: "Work maintenance tickets" },
       { key: "maintenance.manage", label: "Assign tickets, assets, preventive schedules and targets" },
+    ],
+  },
+  {
+    module: "Inventory",
+    permissions: [
+      { key: "inventory.view", label: "View stock levels and movements" },
+      { key: "inventory.manage", label: "Receive, issue, count and write off stock; set up items and locations" },
     ],
   },
   {
@@ -159,6 +173,14 @@ export const ALL_PERMISSIONS: Permission[] = PERMISSION_GROUPS.flatMap((g) =>
 export function isPermission(value: string): value is Permission {
   return (ALL_PERMISSIONS as string[]).includes(value);
 }
+
+/**
+ * Keys that row level security still checks but that no screen offers any
+ * more (the corporate accounts and city ledger were removed in November 2026;
+ * their tables and data remain). They are not shown on the Roles page, and
+ * saving a role must leave them as they are rather than delete them.
+ */
+export const HIDDEN_PERMISSIONS = ["companies.manage", "folio.city_ledger"] as const;
 
 /** What the app needs to decide access for the signed-in person. */
 export interface Access {

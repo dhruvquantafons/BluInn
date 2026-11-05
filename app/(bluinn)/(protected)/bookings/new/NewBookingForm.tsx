@@ -92,6 +92,7 @@ export default function NewBookingForm({
 
   return (
     <form action={formAction} onSubmit={keepFormOnSubmit(formAction)} className="space-y-5">
+      {defaults.walkIn && <input type="hidden" name="walk_in" value="1" />}
       <fieldset className="space-y-4">
         <legend className={legend}>Guest</legend>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -340,7 +341,7 @@ export default function NewBookingForm({
       )}
 
       <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? "Creating…" : "Create booking"}
+        {pending ? "Creating…" : defaults.walkIn ? "Book and check in" : "Create booking"}
       </button>
     </form>
   );

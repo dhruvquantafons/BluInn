@@ -172,6 +172,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }, {});
 
   const alerts: { text: string; href: string }[] = [];
+  if (settings.business_date < today && can(session, "frontdesk.night_audit")) {
+    alerts.push({ text: `Night audit has not closed ${fmtDate(settings.business_date)}.`, href: "/night-audit" });
+  }
   if ((unassigned.count ?? 0) > 0) {
     alerts.push({ text: `${unassigned.count} arriving or in-house booking(s) have no room assigned.`, href: "/front-desk" });
   }
@@ -233,7 +236,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PageHeader
         eyebrow={new Date(today + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
         title={`Good day, ${session.staff.full_name.split(" ")[0] || "there"}`}
-        description={fmtDate(today)}
+        description={`${fmtDate(today)} · business date ${fmtDate(settings.business_date)}`}
         // One summary chip: the items themselves are listed in "Needs
         // attention" right below, so repeating each one here said it twice.
         chips={

@@ -265,7 +265,7 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "daily_revenue",
     label: "Daily revenue",
-    description: "Rooms sold, occupancy and revenue for each day.",
+    description: "Rooms sold, occupancy and revenue for each day, from the closed night audit where there is one.",
     fn: "report_daily",
     financial: true,
     ranged: true,
@@ -282,15 +282,20 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "tax_summary",
     label: "Tax summary",
-    description: "What was charged at each tax rate — the figures a GST return needs.",
+    description:
+      "Taxable value and tax by SAC code and rate, split into CGST, SGST and IGST: folio charges, outlet bills paid at the outlet and events billed on their own, less allowances and credit notes.",
     fn: "report_tax_summary",
     financial: true,
     ranged: true,
     columns: [
+      { key: "sac", label: "SAC" },
       { key: "rate", label: "Rate %" },
       { key: "net", label: "Taxable value", money: true },
-      { key: "tax", label: "Tax", money: true },
-      { key: "entries", label: "Charges" },
+      { key: "cgst", label: "CGST", money: true },
+      { key: "sgst", label: "SGST", money: true },
+      { key: "igst", label: "IGST", money: true },
+      { key: "tax", label: "Total tax", money: true },
+      { key: "entries", label: "Lines" },
     ],
   },
   {
@@ -493,3 +498,72 @@ export function exportFilename(kind: string, from: string, to: string): string {
   const range = from === to ? from : `${from}_${to}`;
   return `${kind}_${range}.csv`;
 }
+
+// ── The manager's flash report (0037) ───────────────────────────────────────
+
+/** One period of report_flash(): day, month to date or year to date. */
+export interface FlashPeriod {
+  from: string;
+  to: string;
+  days: number;
+  audited_days: number;
+  rooms_available: number;
+  rooms_sold: number;
+  room_revenue: number;
+  comp_rooms: number;
+  house_rooms: number;
+  /** Net revenue by department: rooms, fnb, laundry, spa, events, other. */
+  revenue: Record<string, number>;
+  tax: number;
+  credit_notes: number;
+}
+
+export interface FlashReport {
+  date: string;
+  periods: Record<"day" | "mtd" | "ytd" | "ly_day" | "ly_mtd" | "ly_ytd", FlashPeriod>;
+  today: {
+    arrivals: number;
+    departures: number;
+    walk_ins: number;
+    no_shows: number;
+    cancellations: number;
+    in_house_rooms: number;
+    in_house_guests: number;
+    rooms_off_sale: number;
+  };
+  ahead: { day: string; rooms_sold: number; rooms_available: number }[];
+  in_house_balance: number;
+}
+
+export interface FlashKpis {
+  occupancy: number;
+  adr: number;
+  revpar: number;
+  totalRevenue: number;
+}
+
+/** Occupancy, ADR and RevPAR as the rest of the reports compute them. */
+export function flashKpis(p: FlashPeriod | undefined): FlashKpis {
+  if (!p) return { occupancy: 0, adr: 0, revpar: 0, totalRevenue: 0 };
+  const available = Number(p.rooms_available);
+  const sold = Number(p.rooms_sold);
+  const roomRevenue = Number(p.room_revenue);
+  return {
+    occupancy: available > 0 ? round1((sold / available) * 100) : 0,
+    adr: sold > 0 ? round2(roomRevenue / sold) : 0,
+    revpar: available > 0 ? round2(roomRevenue / available) : 0,
+    totalRevenue: round2(Object.values(p.revenue ?? {}).reduce((s, v) => s + Number(v), 0)),
+  };
+}
+
+/**
+ * Change against last year, in percent. Null when last year had nothing to
+ * compare with, which reads better as "—" than as an infinite rise.
+ */
+export function variancePct(current: number, previous: number): number | null {
+  if (!previous) return null;
+  return round1(((current - previous) / Math.abs(previous)) * 100);
+}
+
+/** The departments in the order a flash report lists them. */
+export const FLASH_DEPARTMENTS = ["rooms", "fnb", "laundry", "spa", "events", "other"] as const;

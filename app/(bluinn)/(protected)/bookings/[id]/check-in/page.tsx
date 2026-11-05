@@ -129,6 +129,13 @@ export default async function CheckInPage({ params }: { params: Promise<{ id: st
             guaranteed={booking.payment_method === "ota_prepaid"}
             earlyFee={earlyFee}
             earlyTime={early ? now : null}
+            overrideRooms={
+              can(session, "frontdesk.checkin_override")
+                ? ineligible
+                    .filter(({ why }) => why.startsWith("Not inspected"))
+                    .map(({ room, why }) => ({ id: room.id, label: `${room.room_number} — ${why.toLowerCase()}` }))
+                : []
+            }
             canTakePayment={can(session, "folio.payment")}
             fmt={{ deposit: fmtMoney(booking.deposit_required), paid: fmtMoney(folio.totals.payments), earlyFee: fmtMoney(earlyFee) }}
           />

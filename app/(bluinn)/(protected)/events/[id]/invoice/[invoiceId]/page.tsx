@@ -5,10 +5,11 @@ import { createClient } from "../../../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../../../lib/auth";
 import { getSettings } from "../../../../../../lib/settings";
 import { hhmm } from "../../../../../../lib/events";
-import type { EventBooking, Invoice } from "../../../../../../lib/types";
+import type { CreditNote, EventBooking, Invoice } from "../../../../../../lib/types";
 import { fmtDate, fmtDateTime, fmtMoney } from "../../../../../components/ui";
 import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
+import GstDocument, { gstRows } from "../../../../../components/GstDocument";
 
 /**
  * A GST invoice for an event.
@@ -46,6 +47,12 @@ export default async function EventInvoicePage({
   };
   const event = invoice.event_bookings;
   const cancelled = invoice.status === "cancelled";
+  const { data: creditRows } = await supabase
+    .from("credit_notes")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .order("issued_at");
+  const creditNotes = (creditRows ?? []) as CreditNote[];
 
   return (
     <div className="max-w-3xl mx-auto bg-white print:shadow-none">
@@ -70,118 +77,181 @@ export default async function EventInvoicePage({
           </p>
         )}
 
-        <div className="flex justify-between gap-6 border-b border-slate-200 pb-5 mb-5">
-          <div>
-            <p className="text-xl font-semibold tracking-tight">{settings.name}</p>
-            <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">
-              {[
-                settings.legal_name,
-                settings.address,
-                [settings.city, settings.state, settings.postcode].filter(Boolean).join(", "),
-              ]
-                .filter(Boolean)
-                .join("\n")}
-            </p>
-            <p className="text-xs text-slate-700">
-              {[settings.phone, settings.email].filter(Boolean).join(" · ")}
-              {settings.gstin && ` · GSTIN ${settings.gstin}`}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Tax invoice</p>
-            <p className="font-mono text-base">{invoice.number}</p>
-            <p className="text-xs text-slate-700 mt-1">Issued {fmtDateTime(invoice.issued_at)}</p>
-            <p className="text-xs text-slate-700">Event {event?.number}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
-          <div>
-            <p className="text-slate-500 uppercase tracking-wider text-[10px]">Billed to</p>
-            <p className="text-sm">{invoice.bill_to_name}</p>
-            {invoice.bill_to_address && <p className="whitespace-pre-line">{invoice.bill_to_address}</p>}
-            {invoice.bill_to_gstin && <p>GSTIN {invoice.bill_to_gstin}</p>}
-            {invoice.place_of_supply && <p className="mt-1">Place of supply: {invoice.place_of_supply}</p>}
-          </div>
-          <div>
-            <p className="text-slate-500 uppercase tracking-wider text-[10px]">The function</p>
-            {event && (
-              <>
-                <p className="text-sm">{event.title}</p>
-                <p>
-                  {fmtDate(event.event_date)} · {hhmm(event.start_time)} to {hhmm(event.end_time)}
-                </p>
-                <p>{event.event_spaces?.name}</p>
-              </>
-            )}
-          </div>
-        </div>
-
-        <table className="w-full text-xs mb-6">
-          <thead>
-            <tr className="border-b border-slate-900 text-left">
-              <th className="py-2">Date</th>
-              <th className="py-2">Description</th>
-              <th className="py-2 text-right">Taxable value</th>
-              <th className="py-2 text-right">{settings.tax_label}</th>
-              <th className="py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoice.lines.map((l, i) => (
-              <tr key={i} className="border-b border-slate-100">
-                <td className="py-1.5 whitespace-nowrap">{fmtDate(l.date)}</td>
-                <td className="py-1.5">{l.description}</td>
-                <td className="py-1.5 text-right">{fmtMoney(l.net)}</td>
-                <td className="py-1.5 text-right">{l.tax ? `${fmtMoney(l.tax)} @ ${l.tax_rate}%` : "—"}</td>
-                <td className="py-1.5 text-right">{fmtMoney(l.total)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="flex flex-wrap justify-between gap-8">
-          {invoice.tax_breakdown.length > 0 && (
-            <div className="text-xs">
-              <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
-                {settings.tax_label} summary
-              </p>
-              <table>
-                <thead>
-                  <tr className="text-left text-slate-500">
-                    <th className="pr-6 font-medium">Rate</th>
-                    <th className="pr-6 font-medium">Taxable value</th>
-                    <th className="font-medium">Tax</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoice.tax_breakdown.map((b) => (
-                    <tr key={b.rate}>
-                      <td className="pr-6 py-0.5">{b.rate}%</td>
-                      <td className="pr-6 py-0.5">{fmtMoney(b.net)}</td>
-                      <td className="py-0.5">{fmtMoney(b.tax)}</td>
-                    </tr>
+        {invoice.tax_regime === "gst" ? (
+          <GstDocument
+            title={invoice.bill_to_gstin ? "Tax invoice (B2B)" : "Tax invoice"}
+            number={invoice.number}
+            issuedAt={invoice.issued_at}
+            settings={settings}
+            supplierGstin={invoice.supplier_gstin}
+            supplierStateCode={invoice.supplier_state_code}
+            billTo={{
+              name: invoice.bill_to_name,
+              address: invoice.bill_to_address,
+              gstin: invoice.bill_to_gstin,
+              stateCode: invoice.bill_to_state_code,
+            }}
+            placeOfSupply={invoice.place_of_supply}
+            interstate={invoice.is_interstate}
+            rows={gstRows(invoice.lines)}
+            breakdown={invoice.tax_breakdown}
+            totals={{
+              net: Number(invoice.net_total),
+              cgst: Number(invoice.cgst_total),
+              sgst: Number(invoice.sgst_total),
+              igst: Number(invoice.igst_total),
+              tax: Number(invoice.tax_total),
+              grand: Number(invoice.grand_total),
+            }}
+            aside={
+                <>
+                  <p className="text-slate-500 uppercase tracking-wider text-[10px]">The function</p>
+                  {event && (
+                    <>
+                      <p className="text-sm">
+                        {event.title} · {event.number}
+                      </p>
+                      <p>
+                        {fmtDate(event.event_date)} · {hhmm(event.start_time)} to {hhmm(event.end_time)}
+                      </p>
+                      <p>{event.event_spaces?.name}</p>
+                    </>
+                  )}
+                </>
+            }
+            footer={
+              creditNotes.length > 0 && (
+                <div className="mt-6 text-xs border-t border-slate-100 pt-3">
+                  <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">Credit notes against this invoice</p>
+                  {creditNotes.map((c) => (
+                    <p key={c.id} className="flex justify-between gap-4">
+                      <Link href={`/billing/credit-notes/${c.id}`} className="font-mono text-brand-700 hover:underline print:no-underline">
+                        {c.number}
+                      </Link>
+                      <span className="text-slate-600">{c.note}</span>
+                      <span>−{fmtMoney(c.grand_total)}</span>
+                    </p>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )
+            }
+          />
+        ) : (
+          <>
+          <div className="flex justify-between gap-6 border-b border-slate-200 pb-5 mb-5">
+            <div>
+              <p className="text-xl font-semibold tracking-tight">{settings.name}</p>
+              <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">
+                {[
+                  settings.legal_name,
+                  settings.address,
+                  [settings.city, settings.state, settings.postcode].filter(Boolean).join(", "),
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
+              </p>
+              <p className="text-xs text-slate-700">
+                {[settings.phone, settings.email].filter(Boolean).join(" · ")}
+                {settings.gstin && ` · GSTIN ${settings.gstin}`}
+              </p>
             </div>
-          )}
-
-          <div className="ml-auto min-w-[14rem] space-y-1 text-sm">
-            <p className="flex justify-between">
-              <span className="text-slate-700">Taxable value</span>
-              <span>{fmtMoney(invoice.net_total)}</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-slate-700">{settings.tax_label}</span>
-              <span>{fmtMoney(invoice.tax_total)}</span>
-            </p>
-            <p className="flex justify-between border-t border-slate-900 pt-2 font-semibold">
-              <span>Invoice total</span>
-              <span>{fmtMoney(invoice.grand_total)}</span>
-            </p>
+            <div className="text-right">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Tax invoice</p>
+              <p className="font-mono text-base">{invoice.number}</p>
+              <p className="text-xs text-slate-700 mt-1">Issued {fmtDateTime(invoice.issued_at)}</p>
+              <p className="text-xs text-slate-700">Event {event?.number}</p>
+            </div>
           </div>
-        </div>
+
+          <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
+            <div>
+              <p className="text-slate-500 uppercase tracking-wider text-[10px]">Billed to</p>
+              <p className="text-sm">{invoice.bill_to_name}</p>
+              {invoice.bill_to_address && <p className="whitespace-pre-line">{invoice.bill_to_address}</p>}
+              {invoice.bill_to_gstin && <p>GSTIN {invoice.bill_to_gstin}</p>}
+              {invoice.place_of_supply && <p className="mt-1">Place of supply: {invoice.place_of_supply}</p>}
+            </div>
+            <div>
+              <p className="text-slate-500 uppercase tracking-wider text-[10px]">The function</p>
+              {event && (
+                <>
+                  <p className="text-sm">{event.title}</p>
+                  <p>
+                    {fmtDate(event.event_date)} · {hhmm(event.start_time)} to {hhmm(event.end_time)}
+                  </p>
+                  <p>{event.event_spaces?.name}</p>
+                </>
+              )}
+            </div>
+          </div>
+
+          <table className="w-full text-xs mb-6">
+            <thead>
+              <tr className="border-b border-slate-900 text-left">
+                <th className="py-2">Date</th>
+                <th className="py-2">Description</th>
+                <th className="py-2 text-right">Taxable value</th>
+                <th className="py-2 text-right">{settings.tax_label}</th>
+                <th className="py-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.lines.map((l, i) => (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="py-1.5 whitespace-nowrap">{fmtDate(l.date)}</td>
+                  <td className="py-1.5">{l.description}</td>
+                  <td className="py-1.5 text-right">{fmtMoney(l.net)}</td>
+                  <td className="py-1.5 text-right">{l.tax ? `${fmtMoney(l.tax)} @ ${l.tax_rate}%` : "—"}</td>
+                  <td className="py-1.5 text-right">{fmtMoney(l.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="flex flex-wrap justify-between gap-8">
+            {invoice.tax_breakdown.length > 0 && (
+              <div className="text-xs">
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
+                  {settings.tax_label} summary
+                </p>
+                <table>
+                  <thead>
+                    <tr className="text-left text-slate-500">
+                      <th className="pr-6 font-medium">Rate</th>
+                      <th className="pr-6 font-medium">Taxable value</th>
+                      <th className="font-medium">Tax</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.tax_breakdown.map((b) => (
+                      <tr key={b.rate}>
+                        <td className="pr-6 py-0.5">{b.rate}%</td>
+                        <td className="pr-6 py-0.5">{fmtMoney(b.net)}</td>
+                        <td className="py-0.5">{fmtMoney(b.tax)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="ml-auto min-w-[14rem] space-y-1 text-sm">
+              <p className="flex justify-between">
+                <span className="text-slate-700">Taxable value</span>
+                <span>{fmtMoney(invoice.net_total)}</span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-700">{settings.tax_label}</span>
+                <span>{fmtMoney(invoice.tax_total)}</span>
+              </p>
+              <p className="flex justify-between border-t border-slate-900 pt-2 font-semibold">
+                <span>Invoice total</span>
+                <span>{fmtMoney(invoice.grand_total)}</span>
+              </p>
+            </div>
+          </div>
+          </>
+        )}
 
         {settings.invoice_terms && (
           <p className="mt-8 pt-4 border-t border-slate-100 text-[11px] text-slate-600 whitespace-pre-line">

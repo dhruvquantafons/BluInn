@@ -51,8 +51,8 @@ separate, and head office pushes shared standards to every hotel.
 <td width="50%" valign="top">
 
 ### 🇮🇳 Built for India first
-GST invoices and tax summaries, ₹ amounts, Indian ID types, Razorpay payment links, and payments in
-foreign currencies.
+GST tax invoices with SAC codes, CGST/SGST and the buyer's GSTIN, numbered credit notes, a monthly
+GSTR-1 register, ₹ amounts, Indian ID types, Razorpay payment links, and payments in foreign currencies.
 
 </td>
 <td width="50%" valign="top">
@@ -77,22 +77,28 @@ The app has five sections, matching its top navigation.
 
 <table>
 <tr>
-<td width="20%" valign="top"><b>Front Office</b><br /><sub>Dashboard · Front desk · Bookings · Guests · Groups · Tape chart</sub></td>
-<td valign="top">Individual, group and split bookings, the waitlist and room moves. Check-in with ID capture, a
-registration card and an e-signature, and check-out with an emailed bill. Guest profiles and the loyalty
-programme.</td>
+<td width="20%" valign="top"><b>Front Office</b><br /><sub>Dashboard · Front desk · Cash shifts · Bookings · Guests · Groups · Tape chart · Night audit</sub></td>
+<td valign="top">Individual, group and split bookings, the waitlist, room moves with a reason, and a walk-in fast path.
+Check-in with ID capture for everyone in the room, a registration card and an e-signature, and check-out with an
+emailed bill. Cashier shifts with float, paid-outs, safe drops and
+cash-up variance. Traces, transfers, deposits due, VIP and birthday alerts, complimentary and house-use stays.
+Night audit closes the business day and locks it. Guest profiles and the loyalty programme.</td>
 </tr>
 <tr>
-<td valign="top"><b>Operations</b><br /><sub>Rooms · Housekeeping · Maintenance · Point of sale · Events</sub></td>
-<td valign="top">The live room board. Cleaning tasks, inspections, lost & found. Maintenance tickets with targets,
-assets and preventive schedules. Seven outlet types with kitchen tickets and charge to room. Banquets with a
-diary, quotations, contracts and banquet event orders.</td>
+<td valign="top"><b>Operations</b><br /><sub>Rooms · Housekeeping · Maintenance · Inventory · Point of sale · Events</sub></td>
+<td valign="top">The live room board. Check-out, stay-over and deep-clean tasks, inspections, room discrepancies
+(skips and sleepers), minibar and laundry posted from the room, lost & found. Maintenance tickets with targets,
+assets and preventive schedules. Inventory: stores, par levels, receipts, issues, counts and automatic consumption.
+Seven outlet types with kitchen tickets and charge to room. Banquets across several spaces with a diary,
+quotations, contracts, banquet event orders and an equipment clash check.</td>
 </tr>
 <tr>
 <td valign="top"><b>Commercial</b><br /><sub>Rates · Revenue · Billing · Reports · Notifications</sub></td>
 <td valign="top">Rate plans, seasons, restrictions and channel allocations. Dynamic pricing rules with approval,
-packages, promo codes and competitor rates. GST invoices, refund approval and exchange rates. Operational and
-financial reports, a custom report builder, scheduled report emails and the notification log.</td>
+packages, promo codes and competitor rates. GST tax invoices (SAC, CGST/SGST/IGST, B2B with the buyer's
+GSTIN), credit notes, a monthly GST register for GSTR-1, refund approval and exchange rates. The manager's daily
+flash report (day, month and year to date against last year), operational and financial reports, a custom
+report builder, scheduled report emails and the notification log.</td>
 </tr>
 <tr>
 <td valign="top"><b>People</b><br /><sub>HR & attendance · Staff</sub></td>
@@ -121,6 +127,138 @@ at the foot.
 </table>
 
 <br />
+
+## User roles and permissions
+
+Every staff login has one **role**, and a role is a set of **permissions**. Permissions are named
+`module.action` (for example `frontdesk.checkin`). Administrators manage both under **Admin → Roles**.
+
+How it works:
+
+- **Two layers of checks.** Every page and server action checks the permission first. Row level security in
+  the database then checks it again (`has_permission()`), so a missed check in the app can't expose data.
+- **Superuser.** System Administrator is a superuser: it holds every permission, including ones added in
+  later releases. Its permission list can't be edited.
+- **Two-factor sign-in per role.** A role can require 2FA. System Administrator and Finance require it by
+  default.
+- **System roles.** The 14 roles that ship with BluInn can be renamed and their permissions changed, but
+  they can't be deleted. A hotel can also add its own roles. A role in use by any staff member can't be
+  deleted.
+- **When changes apply.** A change to a role takes effect on each person's next page load.
+- **Hidden permissions.** `companies.manage` and `folio.city_ledger` belong to the switched-off corporate
+  accounts. They are not shown on the Roles page, and saving a role leaves them as they are.
+- **Groups of hotels.** Roles apply across the whole group, and a person has one role at every hotel they can
+  reach. Which hotels a person can reach is set on their staff record.
+
+> [!IMPORTANT]
+> Give **Manage staff accounts** and **Manage roles and permissions** only to people you would make an
+> administrator. Today either one can be used to give someone administrator access (see
+> [the PMS review](docs/pms-review.md), R2).
+
+### Roles that ship
+
+| Role | Who it is for | What it can do | 2FA |
+|---|---|---|---|
+| System Administrator | The owner or IT | Everything | Yes |
+| General Manager | Runs the property | Reservations, front desk, night audit, folios and billing, rooms, housekeeping, maintenance (including assigning tickets and preventive schedules), outlets, events (including quotation approval), rates, revenue (including approvals), reports, HR and payroll export, inventory, audit log | |
+| Front Office Manager | Head of front office | Everything the desk does, plus overrides (overbooking, penalty waivers, complimentary stays, check-in before inspection), night audit, voids and allowances, cash-shift audit, housekeeping assignment | |
+| Front Desk Agent | Reception | Bookings, check-in and check-out, guest requests, payments and invoices, cash shift, outlet bills | |
+| Reservations Agent | Reservations office | Bookings and groups end to end, and deposits. No check-in | |
+| Night Auditor | Night shift | Front desk at night, night audit, no-shows, cash-shift audit | |
+| Guest Relations | Guest experience | Guest profiles, requests, VIP arrivals, lost & found | |
+| Housekeeping Supervisor | Head of housekeeping | Assigns and inspects rooms, room blocks, minibar and laundry posting, inventory, team leave | |
+| Housekeeping Staff | Room attendants | Their cleaning tasks, room reports, minibar and laundry posting, lost & found | |
+| Maintenance / Engineering | Technicians | Works tickets, blocks rooms for repair | |
+| POS Cashier | Outlet staff | Takes orders and settles bills, including charging them to a room; cash shift | |
+| F&B Manager | Head of food and beverage | Outlets, menus, prices and voids, outlet takings, inventory, team leave | |
+| Banquet Manager | Banquets and events | Enquiries, quotations, event orders and banquet billing (approval above the threshold stays with the GM) | |
+| Finance / Accounts | Accounts | Folios, payments, invoices and credit notes, refund approval, voids, cash-shift audit, financial reports and the GST register, payroll export | Yes |
+
+Every role except System Administrator can also report maintenance problems (`maintenance.report`).
+
+Sales & Marketing, HR Manager, Engineering Supervisor and Front Office Cashier no longer ship (`0035`); the General
+Manager covers them. A hotel that wants one can create it under **Admin → Roles**.
+
+### Permissions
+
+| Module | Permission | Allows |
+|---|---|---|
+| Dashboard | `dashboard.view` | View the dashboard |
+| Reservations | `bookings.view` | View bookings |
+| | `bookings.create` | Create bookings |
+| | `bookings.edit` | Change dates, rooms and rates |
+| | `bookings.cancel` | Cancel and mark no-show |
+| | `bookings.waive_penalty` | Waive cancellation penalties |
+| | `bookings.overbook` | Override overbooking |
+| | `bookings.complimentary` | Approve complimentary and house-use stays |
+| | `bookings.groups` | Group bookings |
+| Front desk | `frontdesk.view` | View arrivals, departures and in-house guests |
+| | `frontdesk.checkin` | Check guests in |
+| | `frontdesk.checkout` | Check guests out |
+| | `frontdesk.requests` | Log and complete guest requests and traces |
+| | `frontdesk.night_audit` | Run night audit and close the business day |
+| | `frontdesk.checkin_override` | Check a guest into a room not yet inspected, with a reason |
+| Guests | `guests.view` | View guest profiles |
+| | `guests.edit` | Edit guest profiles |
+| | `guests.view_id` | View identity documents |
+| | `guests.privacy` | Merge duplicates, export and erase guest data |
+| | `loyalty.manage` | Loyalty programme: tiers, enrolment and corrections |
+| | `loyalty.redeem` | Redeem loyalty points against a bill |
+| Folio & payments | `folio.view` | View folios |
+| | `folio.post` | Post charges |
+| | `folio.payment` | Take payments and refunds |
+| | `folio.adjust` | Allowances and voids |
+| | `folio.invoice` | Issue and cancel tax invoices |
+| | `folio.refund_approve` | Approve refunds |
+| | `folio.credit_note` | Issue GST credit notes against invoices (seeded to every role that approves refunds) |
+| | `folio.cashier` | Open and close one's own cash shift; pay-ins, paid-outs and safe drops |
+| | `folio.cashier_audit` | See every cash shift, close anyone's and review variances |
+| Point of sale | `pos.view` | View outlets, bills and takings |
+| | `pos.order` | Open bills and take orders |
+| | `pos.pay` | Settle bills and charge them to a room |
+| | `pos.manage` | Manage outlets, menus and prices, and void bills |
+| Events & banquets | `events.view` | View the events diary and event orders |
+| | `events.book` | Take enquiries, confirm and cancel events |
+| | `events.quote` | Prepare and send quotations |
+| | `events.approve` | Approve quotations above the threshold |
+| | `events.bill` | Take deposits and bill events |
+| | `events.manage` | Manage spaces, layouts, catering packages and equipment |
+| Rooms | `rooms.view` | View the room board |
+| | `rooms.status` | Change room and housekeeping status |
+| | `rooms.block` | Block rooms (out of order or out of service) |
+| | `rooms.manage` | Add, edit and remove rooms |
+| Housekeeping | `housekeeping.tasks` | Work cleaning tasks and report rooms |
+| | `housekeeping.inspect` | Inspect and approve rooms |
+| | `housekeeping.assign` | Assign tasks, zones and checklists |
+| | `housekeeping.lost_found` | Lost & found |
+| | `housekeeping.post_charges` | Post minibar and laundry to a guest's room |
+| Maintenance | `maintenance.report` | Report problems (raise tickets) |
+| | `maintenance.work` | Work maintenance tickets |
+| | `maintenance.manage` | Assign tickets; assets, preventive schedules and targets |
+| Inventory | `inventory.view` | View stock levels and movements |
+| | `inventory.manage` | Receive, issue, count and write off stock; set up items and locations |
+| HR | `hr.view` | View rosters, attendance and staff profiles |
+| | `hr.manage` | Edit profiles, rosters, attendance and shift setup |
+| | `hr.approve_leave` | Approve leave requests |
+| | `hr.export` | Export payroll data |
+| Rates | `rates.view` | View rates and plans |
+| | `rates.manage` | Change rates, plans, seasons, restrictions and packages |
+| Revenue | `revenue.view` | View the forecast, pricing rules and competitor rates |
+| | `revenue.manage` | Set pricing rules, promo codes and competitor rates |
+| | `revenue.approve` | Approve rate changes above the automatic threshold |
+| Reports | `reports.view` | Operational and guest reports |
+| | `reports.financial` | Financial reports: revenue, tax, outlet sales, money owed |
+| | `reports.schedule` | Set up scheduled email reports |
+| Properties | `properties.view` | Compare properties across the group |
+| | `properties.manage` | Add properties and push group standards |
+| Administration | `staff.manage` | Manage staff accounts |
+| | `roles.manage` | Manage roles and permissions |
+| | `settings.manage` | Change property settings |
+| | `audit.view` | View the audit log |
+
+**Adding a permission:** add the key to `app/lib/permissions.ts` (that list drives the Roles page). Grant it to
+the right roles in a new migration, using the `where exists (select 1 from roles …)` pattern. Check it with
+`has_permission('…')` in the RLS policies or SQL functions it protects.
 
 ## Quick start
 
@@ -255,8 +393,9 @@ Create the customer's Vercel project and environment variables, as in [Deploymen
 Sign in as that administrator and work through:
 
 - [ ] **Settings:** name, legal name, address, GSTIN, phone, email, timezone, check-in and check-out times,
-      tax slabs, invoice prefix and policies. Every invoice, folio, registration card and guest message
-      reads them from here.
+      tax slabs, invoice format (GST or plain), SAC codes, invoice and credit-note prefixes, and policies.
+      Every invoice, folio, registration card and guest message reads them from here. A GST invoice cannot be
+      issued until the hotel's GSTIN is entered; confirm the SAC codes and slabs with the hotel's accountant.
 - [ ] **Rates:** replace the sample room types and rate plan with the hotel's own.
 - [ ] **Rooms:** add every room.
 - [ ] **Point of sale, Events, Housekeeping, HR:** close the outlets the hotel doesn't run, then set up
@@ -363,7 +502,8 @@ Migrations live in `neon/migrations/` and are applied in name order.
 > needs it.
 
 Migrations upgrade a database in place and keep its data. Some tables are kept for their data but are no
-longer used by the app: `night_audits`, `companies`, `city_ledger_entries`, and the `company_id` columns.
+longer used by the app: `companies`, `city_ledger_entries`, and the `company_id` columns (`night_audits` is in
+use again since `0027`).
 Leave them alone unless you remove them on purpose in a new migration.
 [docs/client-era-audit.md](docs/client-era-audit.md) lists these and other clean-up candidates.
 
@@ -518,20 +658,21 @@ The full model, and the traps to know before changing database code, are in
 
 <br />
 
-1. **Cash outlet bills are missing from the GST tax summary.** The summary reads folio charges and event
-   bills, and an outlet bill paid in cash never touches a folio (the POS reports total it separately). Fix
-   this before a hotel files a GST return from BluInn.
-2. **No automatic end-of-day clean-up.** Expired tentative holds aren't released, ID scans aren't deleted at
-   the end of their retention period, and expired loyalty points aren't retired. Room charges are posted at
-   check-out, and no-shows are marked by hand.
-3. **Reports are always live.** There is no closed-day snapshot, so amending an old stay changes the report
-   for its dates.
+1. **No e-invoicing (IRN).** A hotel whose turnover is above ₹5 crore must also register B2B invoices with the
+   GST invoice registration portal. BluInn prints a compliant tax invoice and the GSTR-1 register, but does not
+   connect to the portal, and it does not file returns.
+2. **Night audit is run by hand.** Someone with the night-audit permission runs it from **Front Office → Night
+   audit** each night; nothing runs it on a schedule. Until it has run, the status bar turns amber.
+3. **Days not yet closed are live.** A closed day's figures are fixed, and its folio lines can no longer be
+   voided (correct them with an allowance). Days night audit has not closed are computed live.
 4. **No expense ledger.** GOPPAR uses a monthly operating cost entered under **Settings**.
-5. **No stock or recipe tracking** in the outlets.
+5. **No recipe costing in the outlets.** Inventory consumes linked items as bills settle, but a dish is not
+   broken down into its ingredients.
 6. **Guest profiles are per property.** A guest who stays at two hotels in a group has a profile at each;
    loyalty rules are shared from head office, and points are earned per property.
 7. **The app is in English.** Other languages apply to guest messages.
-8. **Event equipment isn't held against a date**, so there is no clash check between functions.
+8. **Corporate accounts and the city ledger are switched off.** Invoices bill the guest; there is no
+   bill-to-company or receivables ledger (see [the PMS review](docs/pms-review.md)).
 9. **On Neon, nothing updates live.** The dashboard, front desk and housekeeping boards refresh every 15
    seconds while on screen.
 10. **On Neon, files live in the database.** Room photos, ID scans and maintenance photos count towards the
@@ -549,6 +690,7 @@ The full model, and the traps to know before changing database code, are in
 |---|---|
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
+| [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations and Commercial review, with the fix and build-out plan |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

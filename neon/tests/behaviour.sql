@@ -169,7 +169,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-000000000008', 'eng2@x.test', '{"full_name":"Ravi Engineer"}');
 insert into staff (id, email, full_name, role) values
   ('00000000-0000-0000-0000-000000000006', 'eng@x.test', 'Esha Engineer', 'maintenance'),
-  ('00000000-0000-0000-0000-000000000007', 'chief@x.test', 'Chetan Chief', 'maintenance_supervisor'),
+  ('00000000-0000-0000-0000-000000000007', 'chief@x.test', 'Chetan Chief', 'manager'),
   ('00000000-0000-0000-0000-000000000008', 'eng2@x.test', 'Ravi Engineer', 'maintenance')
 on conflict (id) do update set role = excluded.role;
 
@@ -237,7 +237,7 @@ select count(*) as escalated_again_expect_0 from mt_escalate_overdue();
 reset role;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-000000000009', 'hr@x.test', '{"full_name":"Hema HR"}');
-update staff set role = 'hr_manager' where email = 'hr@x.test';
+update staff set role = 'manager' where email = 'hr@x.test';
 set role authenticated;
 
 \echo '--- HR sets Hana''s profile; desk cannot'
@@ -913,10 +913,10 @@ select event_confirm(id) from event_bookings where number = 'EVT/2026-27/0001';
 \echo '--- the person who prepared it approves it: EXPECT EVENT_SELF_APPROVAL'
 select event_approve_quote(id) from event_bookings where number = 'EVT/2026-27/0001';
 
-\echo '--- the sales manager is who the SOW puts the approval with, and holds it'
+\echo '--- quotation approval sits with the general manager'
 select has_permission('events.approve') as admin_may_approve from (select 1) x;
-select count(*) as sales_manager_approve_expect_1
-  from role_permissions where role_key = 'sales_marketing' and permission = 'events.approve';
+select count(*) as gm_approve_expect_1
+  from role_permissions where role_key = 'manager' and permission = 'events.approve';
 
 \echo '--- prepared by someone else, so the approval and the confirmation stand'
 update event_bookings set quoted_by = '00000000-0000-0000-0000-000000000002' where number = 'EVT/2026-27/0001';
@@ -1409,3 +1409,369 @@ select count(*) > 0 as public_sees_sr_types_expect_t from room_types;
 
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+
+-- ── 0027 / 0028: roles and the closed-day lock ───────────────────────────────
+
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+
+\echo '--- new system roles ship: EXPECT 5'
+select count(*) as fo_ops_roles_expect_5 from roles
+ where key in ('night_auditor','reservations_agent','guest_relations','fb_manager','banquet_manager');
+\echo '--- trimmed roles are gone: EXPECT 0'
+select count(*) as trimmed_roles_expect_0 from roles
+ where key in ('fo_cashier','hr_manager','sales_marketing','maintenance_supervisor');
+\echo '--- the POS cashier can no longer post arbitrary folio charges: EXPECT 0'
+select count(*) as pos_cashier_folio_post_expect_0 from role_permissions
+ where role_key = 'pos_cashier' and permission = 'folio.post';
+\echo '--- night audit is granted to the GM and FOM: EXPECT 2'
+select count(*) as night_audit_grants_expect_2 from role_permissions
+ where permission = 'frontdesk.night_audit' and role_key in ('manager','front_office_manager');
+
+\echo '--- a posted line''s amount cannot be edited: EXPECT FOLIO_IMMUTABLE'
+update folio_entries set amount = 1 where id = (
+  select id from folio_entries where kind = 'payment' and voided_at is null and night_audit_date is null limit 1);
+\echo '--- a void needs a reason: EXPECT FOLIO_VOID_REASON'
+update folio_entries set voided_at = now(), voided_by = auth.uid() where id = (
+  select id from folio_entries where kind = 'payment' and voided_at is null and night_audit_date is null limit 1);
+\echo '--- folio lines are never deleted: EXPECT FOLIO_IMMUTABLE'
+reset role;
+delete from folio_entries where id = (select id from folio_entries limit 1);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+\echo '--- close the day, then try to void a closed line: EXPECT FOLIO_DAY_CLOSED'
+select close_folio_day((select business_date from property_settings)) > 0 as closed_some_expect_t;
+update folio_entries set voided_at = now(), voided_by = auth.uid(), void_reason = 'late void'
+ where id = (select id from folio_entries where night_audit_date is not null and voided_at is null limit 1);
+\echo '--- a closed line cannot be re-stamped: EXPECT FOLIO_IMMUTABLE'
+update folio_entries set night_audit_date = night_audit_date + 1
+ where id = (select id from folio_entries where night_audit_date is not null limit 1);
+reset role;
+
+-- ── 0029: cashier shifts ─────────────────────────────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+\echo '--- desk opens a shift with a 1000 float'
+select cashier_open_shift(1000) is not null as opened_expect_t;
+\echo '--- a second open shift: EXPECT CASHIER_SHIFT_OPEN'
+select cashier_open_shift(0);
+\echo '--- cash payment lands on the shift'
+insert into folio_entries (booking_id, kind, amount, method, description)
+  select id, 'payment', 500, 'cash', 'Cash on account' from bookings where reference = 'BK-OLD1';
+select count(*) as tagged_expect_1 from folio_entries where shift_id = my_open_shift();
+\echo '--- pay-in 200, safe drop 300'
+select cashier_cash_movement('pay_in', 200, 'Change from bank') is not null as pay_in_expect_t;
+select cashier_cash_movement('safe_drop', 300, 'Drop to safe') is not null as drop_expect_t;
+\echo '--- a movement without a reason: EXPECT CASHIER_REASON'
+select cashier_cash_movement('paid_out', 50, ' ');
+\echo '--- expected cash: EXPECT 1400 (1000 + 500 + 200 - 300)'
+select cashier_shift_expected(my_open_shift()) as expected_expect_1400;
+\echo '--- close counting 1390: EXPECT variance -10'
+select variance as variance_expect_minus_10 from cashier_close_shift(my_open_shift(), 1390, 'short 10');
+\echo '--- the closed shift cannot take more cash movements: EXPECT CASHIER_NO_SHIFT'
+select cashier_cash_movement('pay_in', 1, 'late');
+
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+update properties set require_cashier_shift = true where id = current_property();
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+\echo '--- strict property, no open shift, cash: EXPECT CASHIER_NO_SHIFT'
+insert into folio_entries (booking_id, kind, amount, method, description)
+  select id, 'payment', 10, 'cash', 'No shift' from bookings where reference = 'BK-OLD1';
+\echo '--- strict property, card is fine without a shift: EXPECT 1 row'
+insert into folio_entries (booking_id, kind, amount, method, description)
+  select id, 'payment', 10, 'card', 'Card, no shift' from bookings where reference = 'BK-OLD1';
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+update properties set require_cashier_shift = false where id = current_property();
+reset role;
+
+-- ── 0030 / 0031: room guests, complimentary stays ────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+insert into guests (full_name, nationality) values ('Fay Foreign', 'British'), ('Sam Sharer', 'French');
+insert into bookings (room_type_id, check_in, check_out, status, contact_name, guest_id)
+values ((select id from room_types where slug='premier-room'), current_date + 30, current_date + 32, 'confirmed', 'Fay Foreign',
+        (select id from guests where full_name = 'Fay Foreign'));
+\echo '--- the booker is the primary room guest: EXPECT 1'
+select count(*) as primary_expect_1 from booking_guests
+ where booking_id = (select id from bookings where contact_name = 'Fay Foreign') and is_primary;
+\echo '--- a sharer is added alongside: EXPECT 2'
+insert into booking_guests (booking_id, guest_id)
+select (select id from bookings where contact_name = 'Fay Foreign'), id from guests where full_name = 'Sam Sharer';
+select count(*) as room_guests_expect_2 from booking_guests
+ where booking_id = (select id from bookings where contact_name = 'Fay Foreign');
+\echo '--- a second primary guest: EXPECT unique violation'
+insert into booking_guests (booking_id, guest_id, is_primary)
+select (select id from bookings where contact_name = 'Fay Foreign'), id, true from guests where full_name = 'Sam Sharer'
+on conflict (booking_id, guest_id) do update set is_primary = true;
+
+\echo '--- complimentary without a reason: EXPECT COMP_REASON'
+update bookings set stay_type = 'complimentary' where reference = 'BK-OLD1';
+\echo '--- with a reason it is approved by the caller: EXPECT t'
+update bookings set stay_type = 'complimentary', comp_reason = 'Owner''s guest' where reference = 'BK-OLD1';
+select comp_approved_by = auth.uid() as approved_by_me_expect_t from bookings where reference = 'BK-OLD1';
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+\echo '--- the desk cannot make a stay house use: EXPECT COMP_NOT_PERMITTED'
+update bookings set stay_type = 'house_use', comp_reason = 'Staff' where reference = 'BK-OLD1';
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+update bookings set stay_type = 'paid' where reference = 'BK-OLD1';
+reset role;
+
+-- ── 0032: operations ─────────────────────────────────────────────────────────
+
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+update properties set hk_stayover_enabled = true where id = current_property();
+
+insert into bookings (room_type_id, room_id, check_in, check_out, status, contact_name)
+values ((select id from room_types where slug='premier-room'),
+        (select id from rooms where room_number = '102' and property_id = current_property()),
+        current_date + 100, current_date + 103, 'confirmed', 'Ops Guest');
+update bookings set status = 'checked_in' where contact_name = 'Ops Guest';
+
+\echo '--- stay-over: a task for the room on a middle night: EXPECT 1'
+select hk_generate_tasks(current_date + 101) >= 1 as generated_expect_t;
+select count(*) as stayover_expect_1 from housekeeping_tasks
+ where kind = 'stayover' and task_date = current_date + 101
+   and room_id = (select room_id from bookings where contact_name = 'Ops Guest');
+\echo '--- running it again adds nothing for that room: EXPECT 1'
+select hk_generate_tasks(current_date + 101) is not null;
+select count(*) as still_one_expect_1 from housekeeping_tasks
+ where kind = 'stayover' and task_date = current_date + 101
+   and room_id = (select room_id from bookings where contact_name = 'Ops Guest');
+
+\echo '--- a block over an occupied room: EXPECT ROOM_IN_USE'
+insert into room_blocks (room_id, start_date, end_date, reason)
+select room_id, current_date + 101, current_date + 101, 'AC' from bookings where contact_name = 'Ops Guest';
+
+\echo '--- housekeeping finds the room empty: EXPECT a skip'
+select hk_report_room((select room_id from bookings where contact_name = 'Ops Guest'), 'vacant', false, 'Bed not slept in') is not null as reported;
+select kind as kind_expect_skip, reference is not null as has_booking
+  from room_discrepancies where room_id = (select room_id from bookings where contact_name = 'Ops Guest');
+
+\echo '--- part-paid outlet bill charged to room: folio owes only the balance'
+insert into pos_items (id, outlet_id, name, price, tax_rate)
+select '00000000-0000-0000-0000-0000000000f1', id, 'Club sandwich', 1000, 0 from pos_outlets
+ where code = 'RST' and property_id = current_property();
+select pos_open_order((select id from pos_outlets where code='RST' and property_id = current_property()), 'T1') as part_id
+\gset
+select pos_add_line(:'part_id', '00000000-0000-0000-0000-0000000000f1', 1) is not null as added;
+select round(grand_total) as part_grand from pos_orders where id = :'part_id';
+select pos_take_payment(:'part_id', 'cash', 300) is not null as part_paid;
+select pos_charge_to_room(:'part_id', (select id from bookings where contact_name = 'Ops Guest')) is not null as charged;
+\echo '    EXPECT folio net of the bill = grand - 300'
+select round(sum(case when kind = 'adjustment' then -amount else amount + tax_amount end)) as folio_net,
+       round((select grand_total from pos_orders where id = :'part_id') - 300) as owed
+  from folio_entries where reference = (select number from pos_orders where id = :'part_id');
+\echo '--- a settled bill''s lines are frozen: EXPECT POS_ORDER_CLOSED'
+update pos_order_lines set net_amount = 1 where order_id = :'part_id';
+
+\echo '--- minibar from housekeeping lands on the guest''s folio'
+update pos_outlets set is_active = true where code = 'MIN' and property_id = current_property();
+insert into pos_items (id, outlet_id, name, price)
+select '00000000-0000-0000-0000-0000000000f2', id, 'Cola', 100 from pos_outlets
+ where code = 'MIN' and property_id = current_property();
+select room_id as ops_room from bookings where contact_name = 'Ops Guest'
+\gset
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+select hk_post_consumption(:'ops_room', 'mini_bar',
+       '[{"item_id": "00000000-0000-0000-0000-0000000000f2", "qty": 2}]'::jsonb) is not null as posted_expect_t;
+\echo '--- housekeeping cannot ring up the restaurant: EXPECT not permitted'
+select pos_open_order((select id from pos_outlets where code='RST' limit 1), 'T9');
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select count(*) as minibar_lines_expect_1 from folio_entries
+ where booking_id = (select id from bookings where contact_name = 'Ops Guest') and description like 'Mini-Bar%';
+update properties set hk_stayover_enabled = false where id = current_property();
+reset role;
+
+-- ── 0033: inventory ──────────────────────────────────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+insert into inventory_locations (name, kind) values ('Main store', 'store');
+insert into inventory_locations (name, kind, outlet_id)
+select 'Minibar stock', 'outlet', id from pos_outlets where code = 'MIN' and property_id = current_property();
+insert into inventory_locations (name, kind, hk_default) values ('Floor pantry', 'floor', true);
+insert into inventory_items (sku, name, category, unit, par_level, reorder_level, pos_item_id)
+values ('COLA', 'Cola 300 ml', 'minibar', 'can', 48, 12, '00000000-0000-0000-0000-0000000000f2');
+insert into inventory_items (sku, name, category, unit, par_level, reorder_level, hk_checklist_item_id)
+select 'SHMP', 'Shampoo 30 ml', 'amenity', 'bottle', 200, 50, id from hk_checklist_items where category = 'amenities' limit 1;
+
+\echo '--- receive 48 into the store, issue 24 to the minibar: EXPECT 24 and 24'
+select inventory_move((select id from inventory_items where sku='COLA'), 'receive', 48, null,
+       (select id from inventory_locations where name='Main store'), 'PO 1', 25) is not null as received;
+select inventory_move((select id from inventory_items where sku='COLA'), 'issue', 24,
+       (select id from inventory_locations where name='Main store'),
+       (select id from inventory_locations where name='Minibar stock'), 'Restock') is not null as issued;
+select l.name, s.qty from stock_levels s join inventory_locations l on l.id = s.location_id
+ where s.item_id = (select id from inventory_items where sku='COLA') order by l.name;
+
+\echo '--- a minibar bill settled takes its colas from the minibar stock: EXPECT 22'
+select hk_post_consumption(:'ops_room', 'mini_bar', '[{"item_id": "00000000-0000-0000-0000-0000000000f2", "qty": 2}]'::jsonb) is not null as posted;
+select qty as minibar_left_expect_22 from stock_levels
+ where item_id = (select id from inventory_items where sku='COLA')
+   and location_id = (select id from inventory_locations where name='Minibar stock');
+
+\echo '--- a count of 20 adjusts by -2: EXPECT 20'
+select inventory_move((select id from inventory_items where sku='COLA'), 'adjust', 20, null,
+       (select id from inventory_locations where name='Minibar stock'), 'Monthly count') is not null as counted;
+select qty as counted_expect_20 from stock_levels
+ where item_id = (select id from inventory_items where sku='COLA')
+   and location_id = (select id from inventory_locations where name='Minibar stock');
+
+\echo '--- wastage needs a reason: EXPECT INVENTORY_REASON'
+select inventory_move((select id from inventory_items where sku='COLA'), 'wastage', 1,
+       (select id from inventory_locations where name='Main store'), null, '');
+\echo '--- movements are a ledger: EXPECT INVENTORY_IMMUTABLE'
+reset role;
+update inventory_movements set qty = 1 where kind = 'receive';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+\echo '--- housekeeping staff cannot move stock: EXPECT not permitted'
+select inventory_move((select id from inventory_items limit 1), 'receive', 1);
+reset role;
+
+-- ── 0034: event equipment is not promised twice ──────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+insert into event_spaces (code, name) values ('LAWN', 'Garden Lawn');
+insert into event_equipment (name, qty_available) values ('Only Projector', 1);
+insert into event_bookings (number, financial_year, seq, space_id, title, contact_name,
+  event_date, start_time, end_time, setup_from, teardown_to, pax_expected, status, created_by)
+values
+  ('EVT/TEST/0001', '2026-27', 901, (select id from event_spaces where code = 'HALL'), 'Morning seminar', 'A',
+   current_date + 60, '09:00', '13:00', '08:00', '13:30', 40, 'confirmed', '00000000-0000-0000-0000-000000000001'),
+  ('EVT/TEST/0002', '2026-27', 902, (select id from event_spaces where code = 'LAWN'), 'Product launch', 'B',
+   current_date + 60, '12:00', '16:00', '11:00', '16:30', 60, 'confirmed', '00000000-0000-0000-0000-000000000001'),
+  ('EVT/TEST/0003', '2026-27', 903, (select id from event_spaces where code = 'LAWN'), 'Evening dinner', 'C',
+   current_date + 60, '19:00', '23:00', '18:00', '23:30', 60, 'confirmed', '00000000-0000-0000-0000-000000000001');
+insert into event_lines (event_id, kind, equipment_id, description, qty, unit_price)
+select id, 'equipment', (select id from event_equipment where name = 'Only Projector'), 'Projector', 1, 3000
+  from event_bookings where number = 'EVT/TEST/0001';
+\echo '--- the same projector at an overlapping function: EXPECT EVENT_EQUIPMENT_CLASH'
+insert into event_lines (event_id, kind, equipment_id, description, qty, unit_price)
+select id, 'equipment', (select id from event_equipment where name = 'Only Projector'), 'Projector', 1, 3000
+  from event_bookings where number = 'EVT/TEST/0002';
+\echo '--- at a function later the same day it is free: EXPECT 1 row'
+insert into event_lines (event_id, kind, equipment_id, description, qty, unit_price)
+select id, 'equipment', (select id from event_equipment where name = 'Only Projector'), 'Projector', 1, 3000
+  from event_bookings where number = 'EVT/TEST/0003';
+reset role;
+
+-- ── 0036: GST invoicing and credit notes ────────────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+select id as gst_booking from bookings where contact_name = 'Ops Guest' \gset
+select id as gst_folio from folios where booking_id = :'gst_booking' and kind = 'master' \gset
+
+\echo '--- outlet charges are classified on insert: EXPECT fnb 996331'
+select distinct revenue_dept, sac_code from folio_entries
+ where booking_id = :'gst_booking' and description like 'Mini-Bar%' and kind = 'extra';
+\echo '--- a room night takes the room SAC: EXPECT rooms 996311'
+insert into folio_entries (booking_id, kind, description, stay_date, amount, tax_amount, tax_rate)
+values (:'gst_booking', 'room', 'GST test night', current_date + 300, 4000, 200, 5)
+returning revenue_dept, sac_code, id as gst_room_line \gset
+select :'revenue_dept' as dept, :'sac_code' as sac;
+
+\echo '--- an allowance against it carries its tax: EXPECT 1050 incl. 50 tax at 5%, 996311'
+insert into folio_entries (booking_id, kind, description, amount, applies_to)
+values (:'gst_booking', 'adjustment', 'Goodwill', 1050, :'gst_room_line')
+returning amount, tax_amount, tax_rate, sac_code;
+\echo '--- EXPECT ALLOWANCE_EXCEEDS_CHARGE'
+insert into folio_entries (booking_id, kind, description, amount, applies_to)
+values (:'gst_booking', 'adjustment', 'Too much', 4000, :'gst_room_line');
+
+insert into invoices (number, financial_year, seq, booking_id, folio_id, bill_to_name, bill_to_gstin,
+                      tax_regime, supplier_state_code, net_total, tax_total, cgst_total, sgst_total, grand_total, lines)
+values ('GST/TEST/0001', '2026-27', 9001, :'gst_booking', :'gst_folio', 'Acme Pvt Ltd', '27AAPFU0939F1ZV',
+        'gst', '27', 3000, 150, 75, 75, 3150,
+        '[{"date": "2027-09-01", "description": "Room night", "kind": "room", "sac": "996311", "dept": "rooms",
+           "net": 4000, "tax_rate": 5, "tax": 200, "cgst": 100, "sgst": 100, "igst": 0, "total": 4200},
+          {"date": "2026-11-05", "description": "Goodwill", "kind": "allowance", "sac": "996311", "dept": "rooms",
+           "net": -1000, "tax_rate": 5, "tax": -50, "cgst": -25, "sgst": -25, "igst": 0, "total": -1050}]')
+returning id as gst_invoice \gset
+
+\echo '--- a partial credit note: EXPECT CN/<fy>/0001, net 1000 tax 50 = 25 + 25'
+select number = 'CN/' || financial_year_of(local_day(now())) || '/0001' as numbered_in_own_series,
+       net_total, tax_total, cgst_total, sgst_total, grand_total
+  from credit_note_issue(:'gst_invoice', 'discount', 'Air conditioning failed', '[{"line": 0, "amount": 1050}]');
+\echo '--- it credits the folio: EXPECT 1 adjustment of 1050'
+select count(*), sum(amount) from folio_entries where credit_note_id is not null and booking_id = :'gst_booking';
+\echo '--- EXPECT CREDIT_NOTE_EXCEEDS_LINE (3150 left)'
+select credit_note_issue(:'gst_invoice', 'discount', '', '[{"line": 0, "amount": 4000}]');
+\echo '--- the discount line cannot be credited: EXPECT CREDIT_NOTE_BAD_LINE'
+select credit_note_issue(:'gst_invoice', 'discount', '', '[{"line": 1, "amount": 10}]');
+\echo '--- EXPECT INVOICE_HAS_CREDIT_NOTE'
+update invoices set status = 'cancelled', cancel_reason = 'test', cancelled_at = now() where id = :'gst_invoice';
+\echo '--- the rest of it: EXPECT CN/<fy>/0002 for 3150, then nothing left: EXPECT CREDIT_NOTE_NOTHING'
+select right(number, 4) as seq, grand_total from credit_note_issue(:'gst_invoice', 'cancellation', 'Stay cancelled');
+select credit_note_issue(:'gst_invoice', 'cancellation', '');
+
+\echo '--- a GST invoice from three months ago can no longer be cancelled: EXPECT INVOICE_CANCEL_WINDOW'
+insert into invoices (number, financial_year, seq, booking_id, folio_id, bill_to_name, tax_regime,
+                      net_total, tax_total, grand_total, issued_at)
+values ('GST/TEST/0002', '2026-27', 9002, :'gst_booking', :'gst_folio', 'Old', 'gst', 100, 5, 105, now() - interval '3 months');
+update invoices set status = 'cancelled', cancel_reason = 'late', cancelled_at = now() where number = 'GST/TEST/0002';
+
+\echo '--- deadlines: EXPECT 2027-11-30 2027-11-30 2026-12-11'
+select credit_note_deadline('2026-04-01'), credit_note_deadline('2027-03-31'), gst_cancel_deadline('2026-11-30');
+
+\echo '--- tax summary by SAC for that night: EXPECT 996311 5% 4000 = 100 + 100'
+select sac, rate, net, cgst, sgst, tax from report_tax_summary(current_date + 300, current_date + 300);
+reset role;
+
+\echo '--- EXPECT CREDIT_NOTE_IMMUTABLE'
+update credit_notes set note = 'changed';
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
+set role authenticated;
+\echo '--- the front desk cannot issue credit notes: EXPECT not permitted'
+select credit_note_issue(:'gst_invoice', 'discount', '', null);
+reset role;
+
+-- ── 0037: the manager's flash report ────────────────────────────────────────
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select set_active_property((select id from properties where code = 'H1'));
+\echo '--- the flash day agrees with report_daily: EXPECT t t'
+select (report_flash(current_date) -> 'periods' -> 'day' ->> 'rooms_sold')::int
+         = (select rooms_sold from report_daily(current_date, current_date)) as rooms_agree,
+       (report_flash(current_date) -> 'periods' -> 'mtd' ->> 'room_revenue')::numeric
+         = (select sum(room_revenue) from report_daily(date_trunc('month', current_date)::date, current_date)) as revenue_agree;
+\echo '--- the GST test night shows as rooms revenue (allowances and credit notes count on the day issued): EXPECT rooms 4000'
+select report_flash(current_date + 300) -> 'periods' -> 'day' -> 'revenue' as day_revenue;
+\echo '--- seven days ahead, and the year starts on 1 April: EXPECT 7 and an April date'
+select jsonb_array_length(report_flash(current_date) -> 'ahead') as days_ahead,
+       extract(month from (report_flash(current_date) -> 'periods' -> 'ytd' ->> 'from')::date) as ytd_month;
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+\echo '--- housekeeping cannot read it: EXPECT not permitted'
+select report_flash(current_date);
+reset role;

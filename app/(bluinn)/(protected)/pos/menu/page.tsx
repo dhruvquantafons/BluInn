@@ -96,6 +96,7 @@ export default async function PosMenuPage({
                   <th className="py-2 pr-3 font-semibold">Type</th>
                   <th className="py-2 pr-3 font-semibold text-right">Tax</th>
                   <th className="py-2 pr-3 font-semibold text-right">Service</th>
+                  <th className="py-2 pr-3 font-semibold">SAC</th>
                   <th className="py-2 pr-3 font-semibold">Orders by</th>
                   <th className="py-2 pr-3 font-semibold">Kitchen</th>
                   <th className="py-2 pr-3 font-semibold">Open</th>
@@ -114,6 +115,7 @@ export default async function PosMenuPage({
                       {o.tax_rate}%{o.tax_inclusive && <span className="text-slate-500"> incl.</span>}
                     </td>
                     <td className="py-2 pr-3 text-right">{o.service_charge_percent}%</td>
+                    <td className="py-2 pr-3 font-mono">{o.sac_code || <span className="text-slate-400">default</span>}</td>
                     <td className="py-2 pr-3 capitalize">{o.orders_by}</td>
                     <td className="py-2 pr-3">{o.sends_kot ? <Tag tone="green">KOT</Tag> : "—"}</td>
                     <td className="py-2 pr-3">{o.is_active ? <Tag tone="green">Yes</Tag> : <Tag tone="neutral">No</Tag>}</td>
@@ -165,6 +167,9 @@ export default async function PosMenuPage({
               </Field>
               <Field label="Service charge (%)">
                 <input type="number" name="service_charge_percent" min={0} max={100} step="0.01" defaultValue={0} className={inputClass} />
+              </Field>
+              <Field label="SAC code" hint="For GST invoices. Blank uses the default from Settings.">
+                <input name="sac_code" maxLength={8} inputMode="numeric" placeholder="996331" className={`${inputClass} font-mono`} />
               </Field>
               <Field label="Orders by">
                 <select name="orders_by" defaultValue="either" className={inputClass}>

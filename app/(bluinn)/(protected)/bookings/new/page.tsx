@@ -46,7 +46,7 @@ export default async function NewBookingPage({
       <h1 className="text-xl font-semibold tracking-tight text-slate-900 mb-1">{walkIn ? "Walk-in guest" : "New booking"}</h1>
       <p className="text-sm text-slate-600 mb-6">
         {walkIn
-          ? "Book the stay, then check the guest straight in."
+          ? "Book the stay for tonight. The best ready room of the type is assigned and you go straight to check-in."
           : "For reservations by phone, email, travel agent or at the desk. A returning guest is matched on email or phone."}
       </p>
 
