@@ -131,7 +131,7 @@ export default function TopBar({
           </Link>
         )}
 
-        <Link href="/security" title="Password & 2FA" className="shrink-0 flex items-center gap-2.5 rounded-lg pl-1 pr-1 2xl:pr-2 py-1 hover:bg-white/10 transition-colors duration-150">
+        <Link href="/hr/profile" title="My profile, password & 2FA" className="shrink-0 flex items-center gap-2.5 rounded-lg pl-1 pr-1 2xl:pr-2 py-1 hover:bg-white/10 transition-colors duration-150">
           <span className="rounded-full ring-2 ring-white/35">
             <Avatar name={name} size="md" />
           </span>

@@ -7,6 +7,7 @@ areas:
 2. Roles and permissions.
 3. What a Front Office and an Operations section normally contain, compared with what BluInn has.
 4. What a Commercial section normally contains (added later in November 2026).
+5. What People and Admin sections normally contain (added 6 November 2026).
 
 Severity levels: **Critical** must be fixed before a paying hotel goes live. **High** should be fixed soon.
 **Medium** can be fixed as part of related work.
@@ -330,6 +331,45 @@ pickup, segment, flash) and India's GST invoicing rules.
 
 ---
 
+## 5. People and Admin: what a PMS normally includes
+
+Compared with hotel HR and workforce tools (rosters against bookings, attendance by phone or biometric, leave,
+timesheets feeding payroll, service-charge distribution) and PMS administration (role-based users, audit
+trails, central multi-property configuration, backups).
+
+### What BluInn already does well
+
+- Weekly roster with shift types (including split shifts), copy last week, fill from each person's pattern.
+- Clock-in and clock-out from a phone with a geofence, manual entry, and a biometric device API.
+- Leave requests with approval (never your own), staff feedback and 30-day performance stats.
+- Staff accounts with 2FA per role, session ending, and sign-in activity; group standards pushed to hotels.
+
+### Gaps and decisions
+
+| Area | Gap | Decision |
+|---|---|---|
+| People | Staff cannot keep their own contact details current | **Built**: My profile (`0038`) |
+| People | No timesheets or overtime; payroll export had attendance only | **Built**: weekly timesheets, overtime rules, approval with attendance lock, approved hours in the export (`0038`) |
+| Admin | Audit log: no export, module filter missing five modules, dates compared in UTC | **Built** (`0038`) |
+| Admin | No security view of sign-ins and access changes | **Built**: Security events |
+| Admin | No data export or backup for the hotel | **Built**: ZIP of CSVs (`data.export`) |
+| Admin | No way to see what is configured or running | **Built**: System status, with `job_runs` recorded by the scheduled jobs |
+| People | Leave types, balances, accruals, holiday calendar, comp-off | Declined for now |
+| People | Staff documents with expiry, training records, performance reviews, onboarding/exit checklists | Declined for now |
+| People | Payroll with salary, PF/ESI/PT and payslips | Declined for now |
+| Admin | Email invites and forgot-password | Declined for now |
+| Admin | Hotel access per staff member, role self-escalation guard (R2), keeping history when staff leave (1.2) | Deferred to the security pass |
+
+**Bugs found and fixed in `0038`:**
+- Saving group standards wiped the group's event terms and languages (the form lacked the fields), and the
+  next "brand" push spread that to every hotel. The form now has event terms, languages and tax slabs.
+- `report_attendance` joined attendance and shifts by person only, multiplying present days and hours, counting
+  rostered days off as absences and counting leave requests instead of days.
+- Editing a department or shift type reset its order to 50.
+- The payroll export left out staff deactivated during the period.
+
+---
+
 ## What was fixed
 
 The Front Office and Operations build-out (migrations `0027`–`0034`) covers these items:
@@ -360,6 +400,7 @@ the shared-GSTIN part of 1.7, the rest of 1.8, 1.10, R2, R4–R7, and the Medium
 | `0034_event_equipment_clash` | Equipment cannot be over-committed across overlapping confirmed functions | **Events → Setup** adds several spaces |
 | `0035_trim_roles` | Drops four shipped roles: Front Office Cashier, HR Manager, Sales & Marketing, Engineering Supervisor. A role still held by a staff member is kept as a custom role | **Admin → Roles** lists 14 system roles |
 | `0036_gst_invoicing` | Tax regime, GST state code, default SAC codes and credit-note prefix per property; SAC per outlet. SAC and revenue department on every folio charge, filled in by trigger. Allowances that name a charge carry its tax. GST facts frozen on invoices. `credit_notes` and `credit_note_issue()` (own series, 30 November limit). Cancel window: the 11th of the next month, and never once a credit note exists. `report_tax_summary` by SAC with CGST/SGST/IGST, including outlet bills and less allowances and credit notes. `gst_outlet_sales()` | **Folio → Issue invoice** (bill-to, buyer GSTIN), **Issue credit note** under each invoice, **Allowance → Against charge**. GST print layout for room and event invoices. **Billing → Credit notes** and **GST register** (CSVs for GSTR-1). **Settings → Tax** and **POS → Menu** (SAC) |
+| `0038_people_admin` | `staff.date_of_birth`, `blood_group`, `set_my_profile()`. Overtime limits per property and `set_hr_overtime()`. `timesheets` with `timesheet_submit/decide/reopen()` (never your own, only finished weeks) and the attendance lock for approved weeks. `job_runs` and `system_status()`. `report_attendance` rewritten. Permissions `hr.approve_time`, `data.export` | **HR → My profile** (also the avatar in the top bar), **HR → Timesheets**, My timesheet on **My work**, **HR → Setup → Overtime**. **Admin → System status**, **Admin → Data export**, **Audit log → Download CSV / Security events** |
 | `0037_flash_report` | `flash_period()` and `report_flash()`: day, month and financial year to date against last year; rooms, ADR, RevPAR, revenue by department, the day's movements, the week ahead, in-house balances | **Reports → Flash**, linked from each night-audit day report |
 
 **New permissions:**
@@ -369,6 +410,7 @@ the shared-GSTIN part of 1.7, the rest of 1.8, 1.10, R2, R4–R7, and the Medium
 - `housekeeping.post_charges`
 - `inventory.view`, `inventory.manage`
 - `folio.credit_note` (`0036`)
+- `hr.approve_time`, `data.export` (`0038`)
 
 **New property settings:**
 - `require_cashier_shift`
@@ -385,7 +427,8 @@ From `0036`:
 **Tests:**
 - `neon/tests/behaviour.sql` has EXPECT checks for every new rule.
 - Unit tests: `tests/cashier.test.ts`, `tests/front-desk.test.ts`, `tests/inventory.test.ts`, `tests/gst.test.ts`,
-  `tests/gst-register.test.ts`, and the flash helpers in `tests/reports.test.ts`.
+  `tests/gst-register.test.ts`, the flash helpers in `tests/reports.test.ts`, `tests/timesheet.test.ts`,
+  `tests/audit.test.ts` and `tests/zip.test.ts`.
 
 ## Sources
 
@@ -403,4 +446,8 @@ From `0036`:
 - [Oracle OPERA Cloud – Commission codes](https://docs.oracle.com/en/industries/hospitality/opera-cloud/23.4/ocsuh/c_configuration_codes_commission_codes.htm) and [SetupMyHotel – Market segment codes](https://setupmyhotel.com/formats/fo/102-market-codes.html)
 - [AxisRooms – Hotel GST billing checklist](https://www.axisrooms.com/wp-content/uploads/2026/06/Hotel_GST_Billing_Checklist_Sample_by_AxisRooms-1.pdf) and [Busy – SAC 996311](https://busy.in/sac-code-996311/)
 - [Taxmann – GST on hotel accommodation](https://taxmann.com/post/blog/analysis-gst-on-hotel-accomodation-services) and [AxisRooms – Hotel GST 2025](https://blog.axisrooms.com/hotel-gst/)
+- [Roommaster – Hotel staff scheduling software buyer's guide](https://www.roommaster.com/blog/hotel-staff-scheduling-software) and [Pocket HRMS – Payroll for hotels](https://www.pockethrms.com/blog/payroll-for-hotel-and-hospitality-industry)
+- [Hotelogix – User management and audit trails in a PMS](https://blog.hotelogix.com/powerful-user-management-must-have-in-hotel-pms/) and [SmartOrder – Hotel PMS user permissions](https://www.smartorder.ai/resources/blog/hotel-pms-user-permissions/)
+- [Stayntouch – Multi-property configuration](https://stayntouch.freshdesk.com/support/solutions/articles/24000091238-multi-property-configuration)
+- [greytHR – HR statutory compliance checklist for India](https://www.greythr.com/guides/hr-statutory-compliance-checklist-in-india/)
 - [Grant Thornton – credit-note time limit extended to 30 November](https://grantthornton.in/link/25294f9523a04265a1007a9423f20149.aspx) and [Tally – Credit notes under GST](https://tallysolutions.com/gst/credit-note-under-gst/)

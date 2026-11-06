@@ -26,7 +26,16 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader icon={<Settings />} title="Settings" description="Property details, policies, tax and security. Business date is moved only by night audit." />
+      <PageHeader
+        icon={<Settings />}
+        title="Settings"
+        description="Property details, policies, tax and security. Business date is moved only by night audit."
+        action={
+          <Link href="/settings/status" className="text-xs text-brand-700 hover:underline">
+            System status
+          </Link>
+        }
+      />
       <ActionForm action={saveSettings} submitLabel="Save settings" className="space-y-6">
         <Card className="p-5 space-y-4">
           <SectionTitle>Property</SectionTitle>

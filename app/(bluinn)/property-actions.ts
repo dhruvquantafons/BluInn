@@ -6,6 +6,7 @@ import { requireSession, requirePermission } from "../lib/auth";
 import { friendlyDbError } from "../lib/db-errors";
 import { LANGUAGES } from "../lib/types";
 import { CENTRAL_CONFIG_ITEMS, type CentralConfigItem } from "../lib/types";
+import { parseTaxSlabs } from "../lib/tax";
 import { type ActionState, str, int, bool } from "./form-utils";
 
 /**
@@ -109,6 +110,23 @@ export async function saveGroupSettings(_prev: ActionState, fd: FormData): Promi
     ...new Set([defaultLanguage, ...fd.getAll("languages").map(String).filter((l) => l in LANGUAGES)]),
   ];
 
+  // Tax slabs as on the Settings page: "7500 5" per line, ending "* 18".
+  const slabLines = str(fd, "tax_slabs", 1000).split("\n").map((l) => l.trim()).filter(Boolean);
+  const slabs = slabLines.map((l) => {
+    const [upTo, rate] = l.split(/[\s,:]+/);
+    return { up_to: upTo === "*" ? null : Number(upTo), rate: Number(rate) };
+  });
+  const parsed = parseTaxSlabs(slabs);
+  if (
+    parsed.length !== slabs.length ||
+    parsed.some((s) => !Number.isFinite(s.rate) || (s.up_to !== null && !Number.isFinite(s.up_to)))
+  ) {
+    return { error: 'Tax slabs: one per line as "ceiling rate", e.g. "7500 5", ending with "* 18".' };
+  }
+  if (parsed.length && parsed[parsed.length - 1].up_to !== null) {
+    return { error: 'The last tax slab must be "* rate" to cover everything above.' };
+  }
+
   const supabase = await createClient();
   const { data: row } = await supabase.from("group_settings").select("id").maybeSingle();
   if (!row) return { error: "Group settings are not set up yet." };
@@ -127,6 +145,8 @@ export async function saveGroupSettings(_prev: ActionState, fd: FormData): Promi
       loyalty_min_redeem_points: int(fd, "loyalty_min_redeem_points", 500, 0, 1_000_000),
       tax_label: str(fd, "tax_label", 20) || "Tax",
       tax_inclusive: bool(fd, "tax_inclusive"),
+      // Only written when the form sends slabs, so an empty box never wipes them.
+      ...(parsed.length ? { tax_slabs: parsed } : {}),
     })
     .eq("id", row.id);
   if (error) return { error: friendlyDbError(error.message) };

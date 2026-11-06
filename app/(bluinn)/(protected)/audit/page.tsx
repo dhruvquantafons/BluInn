@@ -2,10 +2,13 @@ import { ScrollText } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
+import { getSettings } from "../../../lib/settings";
+import { AUDIT_MODULES } from "../../../lib/audit";
+import { auditQuery } from "../../../lib/audit-query";
 import type { AuditEntry } from "../../../lib/types";
-import { PageHeader, Card, EmptyState, Tag, fmtDateTime, inputClass, buttonClass, tableHeadClass } from "../../components/ui";
+import { PageHeader, Card, EmptyState, Tag, fmtDateTime, inputClass, buttonClass, secondaryButtonClass, tableHeadClass } from "../../components/ui";
+import SectionTabs from "../../components/SectionTabs";
 
-const MODULES = ["bookings", "frontdesk", "folio", "rooms", "rates", "guests", "companies", "housekeeping", "maintenance", "hr", "staff", "roles", "settings"];
 const PAGE = 100;
 
 function show(v: unknown) {
@@ -23,34 +26,32 @@ export default async function AuditPage({
   const p = await searchParams;
   const page = Math.max(0, Number(p.page) || 0);
   const supabase = await createClient();
+  const settings = await getSettings();
 
-  let query = supabase
-    .from("audit_log")
-    .select("*")
-    .order("occurred_at", { ascending: false })
-    .range(page * PAGE, page * PAGE + PAGE - 1);
-  if (p.module && MODULES.includes(p.module)) query = query.eq("module", p.module);
-  if (p.q) {
-    const term = `%${p.q.replace(/[%,()]/g, "")}%`;
-    query = query.or(`actor_name.ilike.${term},record_id.ilike.${term},summary.ilike.${term},action.ilike.${term}`);
-  }
-  if (p.from) query = query.gte("occurred_at", `${p.from}T00:00:00`);
-  if (p.to) query = query.lte("occurred_at", `${p.to}T23:59:59`);
-
-  const { data, error } = await query;
+  const { data, error } = await auditQuery(supabase, p, settings.timezone).range(page * PAGE, page * PAGE + PAGE - 1);
   const rows = (data ?? []) as AuditEntry[];
   const qs = (n: number) => {
     const u = new URLSearchParams(Object.entries({ ...p, page: String(n) }).filter(([, v]) => v) as [string, string][]);
     return `/audit?${u}`;
   };
+  const exportQs = new URLSearchParams(
+    Object.entries({ module: p.module, q: p.q, from: p.from, to: p.to }).filter(([, v]) => v) as [string, string][],
+  );
 
   return (
     <>
       <PageHeader icon={<ScrollText />} title="Audit log" description="Every change and important action: who, what, when, and the values before and after. Entries cannot be edited or deleted." />
+      <SectionTabs
+        tabs={[
+          { href: "/audit", label: "All changes" },
+          { href: "/audit/security", label: "Security events" },
+        ]}
+        label="Audit sections"
+      />
       <form className="flex flex-wrap gap-2 mb-5" action="/audit">
         <select name="module" defaultValue={p.module ?? ""} className={`${inputClass} max-w-[160px]`}>
           <option value="">All modules</option>
-          {MODULES.map((m) => (
+          {AUDIT_MODULES.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
@@ -60,6 +61,9 @@ export default async function AuditPage({
         <input type="date" name="from" defaultValue={p.from} className={`${inputClass} max-w-[160px]`} />
         <input type="date" name="to" defaultValue={p.to} className={`${inputClass} max-w-[160px]`} />
         <button className={buttonClass}>Filter</button>
+        <a href={`/audit/export?${exportQs}`} className={secondaryButtonClass}>
+          Download CSV
+        </a>
       </form>
 
       <Card>

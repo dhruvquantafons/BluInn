@@ -102,12 +102,16 @@ report builder, scheduled report emails and the notification log.</td>
 </tr>
 <tr>
 <td valign="top"><b>People</b><br /><sub>HR & attendance · Staff</sub></td>
-<td valign="top">Rosters, clock-in and attendance, leave, payroll export and staff accounts.</td>
+<td valign="top">Rosters, geofenced clock-in and attendance, leave, weekly timesheets with overtime and
+manager approval (which locks the week), a payroll export with approved hours, each person's own profile, and
+staff accounts.</td>
 </tr>
 <tr>
 <td valign="top"><b>Admin</b><br /><sub>Properties · Roles · Settings · Audit log</sub></td>
 <td valign="top">A group of hotels and the standards pushed to it, roles and permissions, property settings and
-message templates, and the audit log.</td>
+message templates, System status (integrations, database version, night audit and scheduled jobs, test email
+and SMS), a full data export as a ZIP of CSVs, and the audit log with CSV download and a security-events
+view.</td>
 </tr>
 </table>
 
@@ -160,8 +164,8 @@ How it works:
 | Role | Who it is for | What it can do | 2FA |
 |---|---|---|---|
 | System Administrator | The owner or IT | Everything | Yes |
-| General Manager | Runs the property | Reservations, front desk, night audit, folios and billing, rooms, housekeeping, maintenance (including assigning tickets and preventive schedules), outlets, events (including quotation approval), rates, revenue (including approvals), reports, HR and payroll export, inventory, audit log | |
-| Front Office Manager | Head of front office | Everything the desk does, plus overrides (overbooking, penalty waivers, complimentary stays, check-in before inspection), night audit, voids and allowances, cash-shift audit, housekeeping assignment | |
+| General Manager | Runs the property | Reservations, front desk, night audit, folios and billing, rooms, housekeeping, maintenance (including assigning tickets and preventive schedules), outlets, events (including quotation approval), rates, revenue (including approvals), reports, HR, timesheet approval and payroll export, inventory, audit log | |
+| Front Office Manager | Head of front office | Everything the desk does, plus overrides (overbooking, penalty waivers, complimentary stays, check-in before inspection), night audit, voids and allowances, cash-shift audit, housekeeping assignment, leave and timesheet approval | |
 | Front Desk Agent | Reception | Bookings, check-in and check-out, guest requests, payments and invoices, cash shift, outlet bills | |
 | Reservations Agent | Reservations office | Bookings and groups end to end, and deposits. No check-in | |
 | Night Auditor | Night shift | Front desk at night, night audit, no-shows, cash-shift audit | |
@@ -240,6 +244,7 @@ Manager covers them. A hotel that wants one can create it under **Admin → Role
 | HR | `hr.view` | View rosters, attendance and staff profiles |
 | | `hr.manage` | Edit profiles, rosters, attendance and shift setup |
 | | `hr.approve_leave` | Approve leave requests |
+| | `hr.approve_time` | Approve weekly timesheets and overtime (seeded to every role that approves leave) |
 | | `hr.export` | Export payroll data |
 | Rates | `rates.view` | View rates and plans |
 | | `rates.manage` | Change rates, plans, seasons, restrictions and packages |
@@ -254,7 +259,8 @@ Manager covers them. A hotel that wants one can create it under **Admin → Role
 | Administration | `staff.manage` | Manage staff accounts |
 | | `roles.manage` | Manage roles and permissions |
 | | `settings.manage` | Change property settings |
-| | `audit.view` | View the audit log |
+| | `audit.view` | View the audit log, download it as CSV, see security events |
+| | `data.export` | Download a property's data as a ZIP of CSVs (no built-in role has it; only the System Administrator) |
 
 **Adding a permission:** add the key to `app/lib/permissions.ts` (that list drives the Roles page). Grant it to
 the right roles in a new migration, using the `where exists (select 1 from roles …)` pattern. Check it with
@@ -399,10 +405,13 @@ Sign in as that administrator and work through:
 - [ ] **Rates:** replace the sample room types and rate plan with the hotel's own.
 - [ ] **Rooms:** add every room.
 - [ ] **Point of sale, Events, Housekeeping, HR:** close the outlets the hotel doesn't run, then set up
-      function spaces and packages, the cleaning checklist, departments and shifts.
-- [ ] **Roles and Staff:** adjust the twelve built-in roles if needed, then create a login for each
+      function spaces and packages, the cleaning checklist, departments and shifts, and the overtime limits
+      under **HR → Setup** (9 h a day and 48 h a week by default; check the state's rules).
+- [ ] **Roles and Staff:** adjust the 14 built-in roles if needed, then create a login for each
       colleague.
 - [ ] **Settings → Templates:** word the guest emails and SMS in the hotel's own voice and languages.
+- [ ] **Admin → System status:** every integration the hotel uses shows *Working*, a test email and SMS
+      arrive, and the scheduled jobs have run.
 - [ ] The [go-live checklist](docs/go-live-checklist.md), including real two-factor sign-in
       (`TWO_FACTOR_MODE=totp`) before real guest data goes in.
 

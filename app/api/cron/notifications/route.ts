@@ -1,4 +1,5 @@
 import { createServiceClient } from "../../../lib/supabase/server";
+import { withJobRun } from "../../../lib/job-runs";
 import { hasBearer } from "../../../lib/bearer";
 import { sendBookingMessage } from "../../../lib/notifications";
 import { alertVipArrival } from "../../../lib/staff-alerts";
@@ -51,7 +52,7 @@ const forMessage = (b: Row) => ({
   meal_plan: b.rate_plans?.meal_plan ?? null,
 }) as Parameters<typeof sendBookingMessage>[2];
 
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The notifications job is not configured." }, { status: 503 });
@@ -126,4 +127,8 @@ export async function GET(request: Request) {
   }
 
   return Response.json({ date: today, ...counts });
+}
+
+export async function GET(request: Request) {
+  return withJobRun("notifications", () => run(request));
 }

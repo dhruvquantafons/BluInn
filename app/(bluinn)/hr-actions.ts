@@ -6,8 +6,9 @@ import { requirePermission, requireSession, requireAnyPermission } from "../lib/
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
 import { addDays, dayOfWeek, eachNight, isIsoDate, todayIn, zonedTime } from "../lib/dates";
-import type { LeaveKind, ShiftColor } from "../lib/types";
-import { LEAVE_KIND_LABELS } from "../lib/types";
+import type { BloodGroup, LeaveKind, ShiftColor } from "../lib/types";
+import { BLOOD_GROUPS, LEAVE_KIND_LABELS } from "../lib/types";
+import { loadWeek, WEEK_PERSON_COLUMNS, type WeekPerson } from "../lib/timesheet-data";
 import { type ActionState, str, int, num, bool, oneOf, dateStr, uuidOrNull } from "./form-utils";
 
 /** Module 12 — HR & Staff Management. */
@@ -32,6 +33,53 @@ const coord = (fd: FormData, key: string, limit: number) => {
 };
 
 // ── Self-service ────────────────────────────────────────────────────────────
+
+/**
+ * My profile (0038): your own phone, address, emergency contact, date of
+ * birth and blood group. Job, department and shift stay with HR.
+ */
+export async function saveMyProfile(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireSession();
+  const supabase = await createClient();
+  const dob = dateStr(fd, "date_of_birth");
+  if (dob && dob > new Date().toISOString().slice(0, 10)) return { error: "Date of birth cannot be in the future." };
+  const { error } = await supabase.rpc("set_my_profile", {
+    p_phone: str(fd, "phone", 30),
+    p_address: str(fd, "address", 500),
+    p_emergency: str(fd, "emergency_contact", 200),
+    p_dob: dob || null,
+    p_blood_group: oneOf(fd, "blood_group", ["", ...BLOOD_GROUPS] as BloodGroup[], ""),
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateHr();
+  return { success: "Your details are saved." };
+}
+
+const isMonday = (d: string) => isIsoDate(d) && dayOfWeek(d) === 1;
+
+/** Submits your own timesheet for a finished week, with the figures as they stand. */
+export async function submitTimesheet(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await requireSession();
+  const supabase = await createClient();
+  const settings = await getSettings();
+  const week = str(fd, "week", 10);
+  if (!isMonday(week)) return { error: "Choose a week." };
+
+  const { data: me } = await supabase.from("staff").select(WEEK_PERSON_COLUMNS).eq("id", session.staff.id).single();
+  const { computed } = await loadWeek(supabase, settings, week, [me as WeekPerson]);
+  const t = computed.get(session.staff.id)!;
+  const { error } = await supabase.rpc("timesheet_submit", {
+    p_week: week,
+    p_note: str(fd, "note", 500),
+    p_regular: t.regular,
+    p_overtime: t.overtime,
+    p_off_day: t.offDay,
+    p_days: t.days,
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateHr();
+  return { success: "Timesheet submitted for approval." };
+}
 
 /** Clock in (mode "in") or out (mode "out") for the signed-in staff member. */
 export async function clock(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -127,6 +175,73 @@ export async function decideLeave(_prev: ActionState, fd: FormData): Promise<Act
   return { success: approve ? "Approved." : "Declined." };
 }
 
+// ── Timesheets (0038) ───────────────────────────────────────────────────────
+
+/**
+ * Approves or rejects someone's week. The figures are worked out again from
+ * attendance now, so what is approved is what the records say, whatever was
+ * submitted.
+ */
+export async function decideTimesheet(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("hr.approve_time");
+  const supabase = await createClient();
+  const settings = await getSettings();
+  const week = str(fd, "week", 10);
+  const staffId = uuidOrNull(fd, "staff_id");
+  const approve = str(fd, "decision") === "approve";
+  if (!isMonday(week) || !staffId) return { error: "Timesheet not found." };
+
+  const { data: person } = await supabase.from("staff").select(WEEK_PERSON_COLUMNS).eq("id", staffId).maybeSingle();
+  if (!person) return { error: "Staff member not found." };
+  const { computed } = await loadWeek(supabase, settings, week, [person as WeekPerson]);
+  const t = computed.get(staffId)!;
+  const { error } = await supabase.rpc("timesheet_decide", {
+    p_staff: staffId,
+    p_week: week,
+    p_approve: approve,
+    p_note: str(fd, "note", 500),
+    p_regular: t.regular,
+    p_overtime: t.overtime,
+    p_off_day: t.offDay,
+    p_days: t.days,
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateHr();
+  return { success: approve ? `Approved: ${t.regular} h regular, ${t.overtime} h overtime.` : "Sent back." };
+}
+
+/** Unlocks an approved week so its attendance can be corrected. */
+export async function reopenTimesheet(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("hr.manage");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  if (!id) return { error: "Timesheet not found." };
+  const { error } = await supabase.rpc("timesheet_reopen", { p_id: id });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateHr();
+  return { success: "Reopened. Correct the attendance, then approve the week again." };
+}
+
+export async function saveOvertimeRules(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("hr.manage");
+  const supabase = await createClient();
+  const daily = num(fd, "daily");
+  const weekly = num(fd, "weekly");
+  const rate = num(fd, "rate");
+  if (daily === null || daily < 1 || daily > 24) return { error: "Hours a day is between 1 and 24." };
+  if (weekly === null || weekly < daily || weekly > 168) return { error: "Hours a week is at least the daily limit, at most 168." };
+  if (rate === null || rate < 1 || rate > 5) return { error: "The overtime rate is between 1× and 5×." };
+  const { error } = await supabase.rpc("set_hr_overtime", {
+    p_daily: daily,
+    p_weekly: weekly,
+    p_min: int(fd, "min_minutes", 30, 0, 240),
+    p_rate: rate,
+  });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateHr();
+  return { success: "Overtime rules saved." };
+}
+
 // ── Staff HR profile ────────────────────────────────────────────────────────
 
 export async function saveHrProfile(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -146,6 +261,8 @@ export async function saveHrProfile(_prev: ActionState, fd: FormData): Promise<A
     p_phone: str(fd, "phone", 30),
     p_address: str(fd, "address", 500),
     p_emergency: str(fd, "emergency_contact", 200),
+    p_dob: dateStr(fd, "date_of_birth") || null,
+    p_blood_group: oneOf(fd, "blood_group", ["", ...BLOOD_GROUPS] as BloodGroup[], ""),
   });
   if (error) {
     return { error: error.code === "23505" ? "Another staff member already has that employee ID." : friendlyDbError(error.message) };
@@ -324,7 +441,10 @@ export async function saveDepartment(_prev: ActionState, fd: FormData): Promise<
   const id = uuidOrNull(fd, "id");
   const name = str(fd, "name", 80);
   if (!name) return { error: "Name the department." };
-  const payload = { name, sort_order: int(fd, "sort_order", 50, 0, 999) };
+  // The form may not send an order; an edit then keeps the one it had.
+  const payload: { name: string; sort_order?: number } = { name };
+  if (fd.has("sort_order")) payload.sort_order = int(fd, "sort_order", 50, 0, 999);
+  else if (!id) payload.sort_order = 50;
   const { error } = id
     ? await supabase.from("departments").update(payload).eq("id", id)
     : await supabase.from("departments").insert(payload);
@@ -364,8 +484,9 @@ export async function saveShiftType(_prev: ActionState, fd: FormData): Promise<A
     start_time_2: start2 || null,
     end_time_2: end2 || null,
     color: oneOf(fd, "color", COLORS, "slate"),
-    sort_order: int(fd, "sort_order", 50, 0, 999),
     is_active: id ? bool(fd, "is_active") : true,
+    // An edit without an order keeps the one it had.
+    ...(fd.has("sort_order") || !id ? { sort_order: int(fd, "sort_order", 50, 0, 999) } : {}),
   };
   const { error } = id
     ? await supabase.from("shift_types").update(payload).eq("id", id)

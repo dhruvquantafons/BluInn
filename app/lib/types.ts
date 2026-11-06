@@ -76,6 +76,9 @@ export interface Staff {
   weekly_off?: number | null;
   address?: string;
   emergency_contact?: string;
+  /** Self-service profile (0038). */
+  date_of_birth?: string | null;
+  blood_group?: BloodGroup;
   sessions_revoked_at?: string | null;
   /** The property this person belongs to (Module 14). */
   property_id?: string | null;
@@ -961,6 +964,11 @@ export interface PropertySettings {
   hr_geofence_radius_m: number;
   hr_require_geofence: boolean;
   hr_late_grace_minutes: number;
+  /** Overtime limits (0038). */
+  hr_ot_daily_hours: number;
+  hr_ot_weekly_hours: number;
+  hr_ot_min_minutes: number;
+  hr_ot_rate: number;
   default_language: string;
   languages: string[];
   invoice_prefix: string;
@@ -1416,6 +1424,42 @@ export interface AttendanceRecord {
 }
 
 export type LeaveKind = "casual" | "sick" | "earned" | "unpaid" | "other";
+
+export const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
+export type BloodGroup = "" | (typeof BLOOD_GROUPS)[number];
+
+/** One day of a weekly timesheet (0038). Hours are decimal. */
+export interface TimesheetDay {
+  date: string;
+  /** The rostered shift's name, "Off", or "" when nothing was rostered. */
+  shift: string;
+  scheduled: number;
+  worked: number;
+  regular: number;
+  overtime: number;
+  /** Hours worked on a rostered day off or the weekly day off. */
+  off_day: number;
+  leave: LeaveKind | null;
+  late: boolean;
+}
+
+export type TimesheetStatus = "submitted" | "approved" | "rejected";
+
+export interface Timesheet {
+  id: string;
+  staff_id: string;
+  week_start: string;
+  status: TimesheetStatus;
+  regular_hours: number;
+  overtime_hours: number;
+  off_day_hours: number;
+  days: TimesheetDay[];
+  note: string;
+  submitted_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string;
+}
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export interface LeaveRequest {

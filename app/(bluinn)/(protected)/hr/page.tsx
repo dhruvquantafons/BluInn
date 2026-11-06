@@ -5,7 +5,8 @@ import { addDays, eachNight, mondayOf, nowTimeIn, todayIn } from "../../../lib/d
 import { shiftLabel, workedHours } from "../../../lib/hr";
 import type { AttendanceRecord, LeaveRequest, ShiftType, StaffShift } from "../../../lib/types";
 import { LEAVE_KIND_LABELS, LEAVE_STATUS_LABELS } from "../../../lib/types";
-import { cancelLeave, requestLeave } from "../../hr-actions";
+import { cancelLeave, requestLeave, submitTimesheet } from "../../hr-actions";
+import { loadWeek, WEEK_PERSON_COLUMNS, type WeekPerson } from "../../../lib/timesheet-data";
 import { Card, EmptyState, Field, SectionTitle, Tag, inputClass, tableHeadClass, fmtDate } from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
 import ClockButton from "./ClockButton";
@@ -34,6 +35,18 @@ export default async function MyWorkPage() {
     supabase.from("shift_types").select("*"),
     supabase.from("leave_requests").select("*").eq("staff_id", session.staff.id).order("start_date", { ascending: false }).limit(20),
   ]);
+  // My timesheet (0038): this week's running figures, and last week's to submit.
+  const lastWeek = addDays(week, -7);
+  const { data: me } = await supabase.from("staff").select(WEEK_PERSON_COLUMNS).eq("id", session.staff.id).single();
+  const [thisWeekData, lastWeekData] = await Promise.all([
+    loadWeek(supabase, settings, week, [me as WeekPerson]),
+    loadWeek(supabase, settings, lastWeek, [me as WeekPerson]),
+  ]);
+  const current = thisWeekData.computed.get(session.staff.id)!;
+  const previous = lastWeekData.computed.get(session.staff.id)!;
+  const previousSheet = lastWeekData.sheets.get(session.staff.id) ?? null;
+  const SHEET_LABEL = { submitted: "Submitted", approved: "Approved", rejected: "Sent back" } as const;
+
   const openRecord = open as AttendanceRecord | null;
   const records = (recent ?? []) as AttendanceRecord[];
   const typeById = new Map(((types ?? []) as ShiftType[]).map((t) => [t.id, t]));
@@ -74,6 +87,44 @@ export default async function MyWorkPage() {
           </ul>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <SectionTitle>My timesheet</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="text-sm space-y-1">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">This week so far</p>
+            <p>
+              {current.worked} h worked of {current.scheduled} h rostered
+              {current.overtime > 0 && <span className="text-slate-600"> · {current.overtime} h overtime</span>}
+              {current.offDay > 0 && <span className="text-slate-600"> · {current.offDay} h on a day off</span>}
+            </p>
+          </div>
+          <div className="text-sm space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-slate-500">
+              Last week · {fmtDate(lastWeek)} – {fmtDate(addDays(lastWeek, 6))}
+            </p>
+            <p>
+              {previous.regular} h regular · {previous.overtime} h overtime
+              {previous.offDay > 0 && ` · ${previous.offDay} h on a day off`}
+              {previousSheet && (
+                <>
+                  {" "}
+                  <Tag tone={previousSheet.status === "approved" ? "green" : previousSheet.status === "rejected" ? "red" : "amber"}>
+                    {SHEET_LABEL[previousSheet.status]}
+                  </Tag>
+                </>
+              )}
+            </p>
+            {previousSheet?.decision_note && <p className="text-xs text-slate-500">{previousSheet.decision_note}</p>}
+            {previousSheet?.status !== "approved" && (
+              <ActionForm action={submitTimesheet} submitLabel={previousSheet ? "Submit again" : "Submit for approval"} className="space-y-2">
+                <input type="hidden" name="week" value={lastWeek} />
+                <input name="note" maxLength={500} placeholder="Anything your manager should know (optional)" className={inputClass} />
+              </ActionForm>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

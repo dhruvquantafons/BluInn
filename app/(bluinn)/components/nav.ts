@@ -28,6 +28,8 @@ import {
   MoonStar,
   Wallet,
   Boxes,
+  Activity,
+  DatabaseBackup,
 } from "lucide-react";
 import type { Permission } from "../../lib/permissions";
 
@@ -165,6 +167,8 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { href: "/roles", label: "Roles", icon: ShieldCheck, any: ["roles.manage"] },
       { href: "/settings", label: "Settings", icon: Settings, any: ["settings.manage"] },
+      { href: "/settings/status", label: "System status", icon: Activity, any: ["settings.manage"] },
+      { href: "/settings/export", label: "Data export", icon: DatabaseBackup, any: ["data.export"] },
       { href: "/audit", label: "Audit log", icon: ScrollText, any: ["audit.view"] },
     ],
   },

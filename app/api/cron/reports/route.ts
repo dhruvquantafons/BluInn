@@ -1,4 +1,5 @@
 import { createServiceClient } from "../../../lib/supabase/server";
+import { withJobRun } from "../../../lib/job-runs";
 import { hasBearer } from "../../../lib/bearer";
 import { buildScheduledReport, isDue, sendScheduledReport } from "../../../lib/report-email";
 import type { ReportSchedule } from "../../../lib/types";
@@ -17,7 +18,7 @@ import { hasServiceAccess } from "../../../lib/supabase/config";
  * days, and monthly on the 1st for the whole of last month — a report covers
  * a period that has finished, never a half-finished one.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The scheduled report job is not configured." }, { status: 503 });
@@ -63,4 +64,8 @@ export async function GET(request: Request) {
   }
 
   return Response.json({ date: today, active: schedules.length, due: due.length, results });
+}
+
+export async function GET(request: Request) {
+  return withJobRun("reports", () => run(request));
 }

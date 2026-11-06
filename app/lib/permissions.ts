@@ -120,6 +120,7 @@ export const PERMISSION_GROUPS = [
       { key: "hr.view", label: "View rosters, attendance and staff profiles" },
       { key: "hr.manage", label: "Edit profiles, rosters, attendance and shift setup" },
       { key: "hr.approve_leave", label: "Approve leave requests" },
+      { key: "hr.approve_time", label: "Approve weekly timesheets and overtime" },
       { key: "hr.export", label: "Export payroll data" },
     ],
   },
@@ -160,6 +161,7 @@ export const PERMISSION_GROUPS = [
       { key: "roles.manage", label: "Manage roles and permissions" },
       { key: "settings.manage", label: "Change property settings" },
       { key: "audit.view", label: "View the audit log" },
+      { key: "data.export", label: "Download a property's data (bookings, guests, billing, staff)" },
     ],
   },
 ] as const;

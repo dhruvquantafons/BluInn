@@ -3,7 +3,7 @@ import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { shiftHours, shiftLabel } from "../../../../lib/hr";
 import type { Department, ShiftColor, ShiftType } from "../../../../lib/types";
-import { deleteDepartment, saveDepartment, saveGeofence, saveShiftType } from "../../../hr-actions";
+import { deleteDepartment, saveDepartment, saveGeofence, saveOvertimeRules, saveShiftType } from "../../../hr-actions";
 import { Card, Check, Field, SectionTitle, inputClass, secondaryButtonClass } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import { SHIFT_COLOR_CLASS } from "../shared";
@@ -12,7 +12,7 @@ const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 function ShiftFields({ s }: { s?: ShiftType }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+    <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 items-end">
       <Field label="Name">
         <input name="name" required defaultValue={s?.name} className={inputClass} />
       </Field>
@@ -36,6 +36,9 @@ function ShiftFields({ s }: { s?: ShiftType }) {
             </option>
           ))}
         </select>
+      </Field>
+      <Field label="Order">
+        <input type="number" name="sort_order" min={0} max={999} defaultValue={s?.sort_order ?? 50} className={inputClass} />
       </Field>
     </div>
   );
@@ -98,6 +101,15 @@ export default async function HrSetupPage() {
                 <ActionForm action={saveDepartment} submitLabel="Save" submitClassName="text-xs text-brand-800 cursor-pointer" className="flex-1 flex items-center gap-2 [&>div]:shrink-0">
                   <input type="hidden" name="id" value={d.id} />
                   <input name="name" defaultValue={d.name} required className={inputClass} />
+                  <input
+                    type="number"
+                    name="sort_order"
+                    min={0}
+                    max={999}
+                    defaultValue={d.sort_order}
+                    aria-label={`Order of ${d.name}`}
+                    className={`${inputClass} w-20`}
+                  />
                 </ActionForm>
                 <form action={deleteDepartment}>
                   <input type="hidden" name="id" value={d.id} />
@@ -141,6 +153,31 @@ export default async function HrSetupPage() {
           </ActionForm>
         </Card>
       </div>
+
+      <Card className="p-5 space-y-3">
+        <SectionTitle>Overtime</SectionTitle>
+        <p className="text-sm text-slate-600">
+          Weekly timesheets count time past the longer of the shift and the daily limit as overtime, plus regular time past
+          the weekly limit. The defaults are the usual Factories Act and Shops &amp; Establishments limits; check your
+          state&rsquo;s rules.
+        </p>
+        <ActionForm action={saveOvertimeRules} submitLabel="Save" className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Field label="Hours a day">
+              <input type="number" name="daily" min={1} max={24} step="0.25" defaultValue={settings.hr_ot_daily_hours} className={inputClass} />
+            </Field>
+            <Field label="Hours a week">
+              <input type="number" name="weekly" min={1} max={168} step="0.5" defaultValue={settings.hr_ot_weekly_hours} className={inputClass} />
+            </Field>
+            <Field label="Count from (minutes)" hint="Shorter overtime on a day is ignored.">
+              <input type="number" name="min_minutes" min={0} max={240} defaultValue={settings.hr_ot_min_minutes} className={inputClass} />
+            </Field>
+            <Field label="Overtime rate (×)" hint="Printed in the payroll export.">
+              <input type="number" name="rate" min={1} max={5} step="0.25" defaultValue={settings.hr_ot_rate} className={inputClass} />
+            </Field>
+          </div>
+        </ActionForm>
+      </Card>
     </div>
   );
 }

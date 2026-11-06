@@ -10,6 +10,7 @@ import {
   loadGroupPerformance,
 } from "../../../lib/properties";
 import { CENTRAL_CONFIG_ITEMS, LANGUAGES, type CentralConfigItem } from "../../../lib/types";
+import { parseTaxSlabs } from "../../../lib/tax";
 import {
   createProperty,
   saveProperty,
@@ -308,9 +309,31 @@ export default async function PropertiesPage({
               <textarea name="invoice_terms" defaultValue={group.invoice_terms} rows={2} className={inputClass} />
             </Field>
 
+            <Field label="Event terms" hint="Printed on event quotations and contracts.">
+              <textarea name="event_terms" defaultValue={group.event_terms} rows={3} className={inputClass} />
+            </Field>
+
+            <Field label="Guest message languages">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1">
+                {Object.entries(LANGUAGES).map(([code, label]) => (
+                  <Check key={code} name="languages" value={code} label={label} defaultChecked={(group.languages ?? []).includes(code)} />
+                ))}
+              </div>
+            </Field>
+
             <div className="grid sm:grid-cols-3 gap-4">
               <Field label="Tax label">
                 <input name="tax_label" defaultValue={group.tax_label} className={inputClass} />
+              </Field>
+              <Field label="Room tax slabs" hint='One per line: "ceiling rate". Last line "* rate".'>
+                <textarea
+                  name="tax_slabs"
+                  rows={3}
+                  defaultValue={parseTaxSlabs(group.tax_slabs)
+                    .map((s) => `${s.up_to ?? "*"} ${s.rate}`)
+                    .join("\n")}
+                  className={`${inputClass} font-mono`}
+                />
               </Field>
               <Field label="Points expire after (months)">
                 <input

@@ -1,4 +1,5 @@
 import { createServiceClient } from "../../../lib/supabase/server";
+import { withJobRun } from "../../../lib/job-runs";
 import { hasBearer } from "../../../lib/bearer";
 import { escalateOverdueTickets } from "../../../lib/staff-alerts";
 import { todayIn } from "../../../lib/dates";
@@ -11,7 +12,7 @@ import { hasServiceAccess } from "../../../lib/supabase/config";
  * sends "Authorization: Bearer <CRON_SECRET>"). Disabled until CRON_SECRET
  * is set. The maintenance board also does this work.
  */
-export async function GET(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || !hasServiceAccess()) {
     return Response.json({ error: "The maintenance job is not configured." }, { status: 503 });
@@ -47,4 +48,8 @@ export async function GET(request: Request) {
     preventive_created: preventiveCreated,
     escalated,
   });
+}
+
+export async function GET(request: Request) {
+  return withJobRun("maintenance", () => run(request));
 }

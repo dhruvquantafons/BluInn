@@ -1775,3 +1775,63 @@ set role authenticated;
 \echo '--- housekeeping cannot read it: EXPECT not permitted'
 select report_flash(current_date);
 reset role;
+
+-- ── 0038: my profile, timesheets, system status, attendance report ──────────
+
+select (date_trunc('week', current_date)::date - 7) as last_monday \gset
+select '[{"date":"d1"},{"date":"d2"},{"date":"d3"},{"date":"d4"},{"date":"d5"},{"date":"d6"},{"date":"d7"}]' as seven_days \gset
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
+\echo '--- the desk edits their own profile: EXPECT 98000 B+ and HR fields untouched'
+select set_my_profile('98000', 'Flat 2', 'Mother 99999', '1990-05-01', 'B+');
+select phone, blood_group, date_of_birth, job_title is not null as kept from staff where id = '00000000-0000-0000-0000-000000000002';
+\echo '--- an unknown blood group: EXPECT check violation'
+select set_my_profile('98000', '', '', null, 'Z+');
+
+\echo '--- the current week cannot be submitted: EXPECT TIMESHEET_WEEK_OPEN'
+select timesheet_submit(date_trunc('week', current_date)::date, '', 40, 0, 0, :'seven_days'::jsonb);
+\echo '--- last week can: EXPECT submitted 40 2'
+select status, regular_hours, overtime_hours from timesheet_submit(:'last_monday', 'All good', 40, 2, 0, :'seven_days'::jsonb);
+\echo '--- the desk cannot approve: EXPECT not permitted'
+select timesheet_decide('00000000-0000-0000-0000-000000000002', :'last_monday', true, '', 40, 2, 0, :'seven_days'::jsonb);
+reset role;
+insert into attendance (staff_id, work_date, clock_in, clock_out, method)
+values ('00000000-0000-0000-0000-000000000002', :'last_monday', (:'last_monday'::date + time '09:00') at time zone 'Asia/Kolkata',
+        (:'last_monday'::date + time '18:00') at time zone 'Asia/Kolkata', 'manual');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000007', false);
+select set_active_property((select id from properties where code = 'H1'));
+\echo '--- the manager cannot approve their own week: EXPECT TIMESHEET_OWN'
+select timesheet_decide('00000000-0000-0000-0000-000000000007', :'last_monday', true, '', 0, 0, 0, :'seven_days'::jsonb);
+\echo '--- rejecting needs a reason: EXPECT TIMESHEET_REASON'
+select timesheet_decide('00000000-0000-0000-0000-000000000002', :'last_monday', false, '', 40, 2, 0, :'seven_days'::jsonb);
+\echo '--- the manager approves with the recomputed figures: EXPECT approved 39 1'
+select status, regular_hours, overtime_hours
+  from timesheet_decide('00000000-0000-0000-0000-000000000002', :'last_monday', true, 'ok', 39, 1, 0, :'seven_days'::jsonb);
+\echo '--- the approved week locks attendance: EXPECT TIMESHEET_LOCKED (twice)'
+update attendance set notes = 'late edit' where staff_id = '00000000-0000-0000-0000-000000000002' and work_date = :'last_monday';
+insert into attendance (staff_id, work_date, clock_in, method)
+values ('00000000-0000-0000-0000-000000000002', :'last_monday'::date + 2, now() - interval '200 hours', 'manual');
+\echo '--- reopened, it can be corrected: EXPECT submitted, UPDATE 1'
+select status from timesheet_reopen((select id from timesheets where staff_id = '00000000-0000-0000-0000-000000000002' and week_start = :'last_monday'));
+update attendance set notes = 'corrected' where staff_id = '00000000-0000-0000-0000-000000000002' and work_date = :'last_monday';
+
+\echo '--- the manager has no settings.manage: EXPECT not permitted'
+select system_status();
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+\echo '--- system status for the admin: EXPECT t (hotels listed) and a database version'
+select jsonb_array_length(system_status() -> 'hotels') > 0 as has_hotels,
+       system_status() -> 'database' ->> 'version' is not null as has_version;
+
+\echo '--- attendance report counts days once: EXPECT present 1, hours 9.0 for Dev Desk last week'
+select staff_name, present, hours from report_attendance(:'last_monday', :'last_monday'::date + 6) where staff_name = 'Dev Desk';
+reset role;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+\echo '--- housekeeping cannot read system status: EXPECT not permitted'
+select system_status();
+\echo '--- nor someone else''s timesheet: EXPECT 0'
+select count(*) from timesheets where staff_id = '00000000-0000-0000-0000-000000000002';
+reset role;

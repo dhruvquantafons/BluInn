@@ -28,6 +28,8 @@ export function friendlyDbError(message: string | undefined | null): string {
     "INVOICE_CANCEL_WINDOW:",
     "CREDIT_NOTE_",
     "ALLOWANCE_",
+    // Timesheets (0038).
+    "TIMESHEET_",
   ]) {
     if (message.startsWith(code)) {
       const detail = message.slice(message.indexOf(":") + 1).trim();

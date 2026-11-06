@@ -10,8 +10,10 @@ export default async function HrLayout({ children }: { children: React.ReactNode
   const view = canAny(session, ["hr.view", "hr.manage"]);
   const tabs = [
     { href: "/hr", label: "My work" },
+    { href: "/hr/profile", label: "My profile" },
     view && { href: "/hr/roster", label: "Roster" },
     canAny(session, ["hr.view", "hr.manage", "hr.export"]) && { href: "/hr/attendance", label: "Attendance" },
+    canAny(session, ["hr.view", "hr.approve_time"]) && { href: "/hr/timesheets", label: "Timesheets" },
     canAny(session, ["hr.approve_leave", "hr.view"]) && { href: "/hr/leave", label: "Leave" },
     view && { href: "/hr/staff", label: "Staff" },
     can(session, "hr.manage") && { href: "/hr/setup", label: "Setup" },

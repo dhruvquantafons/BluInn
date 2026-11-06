@@ -8,6 +8,7 @@ import { getSettings } from "../../../../../lib/settings";
 import { addDays, todayIn, zonedTime } from "../../../../../lib/dates";
 import { payrollSummary, shiftLabel } from "../../../../../lib/hr";
 import type { AttendanceRecord, Department, LeaveRequest, ShiftType, StaffFeedback, StaffShift } from "../../../../../lib/types";
+import { BLOOD_GROUPS } from "../../../../../lib/types";
 import { WEEKDAY_LABELS } from "../../../../../lib/types";
 import { addFeedback, saveHrProfile } from "../../../../hr-actions";
 import { Card, EmptyState, Field, SectionTitle, Stat, inputClass, fmtDateTime } from "../../../../components/ui";
@@ -113,6 +114,19 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
       </Field>
       <Field label="Email">
         <input value={person.email} disabled className={inputClass} />
+      </Field>
+      <Field label="Date of birth">
+        <input type="date" name="date_of_birth" defaultValue={person.date_of_birth ?? ""} className={inputClass} />
+      </Field>
+      <Field label="Blood group">
+        <select name="blood_group" defaultValue={person.blood_group ?? ""} className={inputClass}>
+          <option value="">Not given</option>
+          {BLOOD_GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
       </Field>
       <div className="sm:col-span-3">
         <Field label="Address">
