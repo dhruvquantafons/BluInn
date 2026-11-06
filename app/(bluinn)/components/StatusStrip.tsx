@@ -42,10 +42,15 @@ export default function StatusStrip({
         </span>
       )}
       <p className="min-w-0 flex items-center gap-3 truncate">
-        <span className="inline-flex items-center gap-1.5 truncate">
+        <span className="inline-flex items-center gap-1.5 min-w-0">
           <CalendarDays aria-hidden="true" className={`w-3.5 h-3.5 shrink-0 ${behind ? "text-amber-500" : "text-slate-400"}`} />
           {behind ? (
-            <>Night audit has not closed {fmtDate(businessDate)}</>
+            // On a phone the "Day open" pill and the Night audit button sit
+            // beside this line, so it only needs the day that is still open.
+            <span className="truncate">
+              <span className="hidden sm:inline">Night audit has not closed </span>
+              {fmtDate(businessDate)}
+            </span>
           ) : (
             <>
               Business date <strong className="font-semibold text-slate-900">{fmtDate(businessDate)}</strong>

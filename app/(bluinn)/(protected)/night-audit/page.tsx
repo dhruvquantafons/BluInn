@@ -1,4 +1,4 @@
-import { MoonStar } from "lucide-react";
+import { } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/server";
@@ -82,7 +82,6 @@ export default async function NightAuditPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader
-        icon={<MoonStar />}
         title="Night audit"
         description={`Closes the business day: posts room charges and tax, handles no-shows and expired holds, closes the day's payments and produces the daily revenue report.`}
       />

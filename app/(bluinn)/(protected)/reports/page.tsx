@@ -15,7 +15,7 @@ import {
   type RangePreset,
 } from "../../../lib/reports";
 import { runReport } from "../../../lib/report-data";
-import { Card, Notice, SectionTitle, StatCard, fmtMoney } from "../../components/ui";
+import { Card, Notice, SectionTitle, StatCard, fmtMoney, plural } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
 import { RangePicker, ReportTable, SourceNote } from "./shared";
 
@@ -90,13 +90,13 @@ export default async function ReportsOverviewPage({
           <StatCard
             label="Operating cost"
             value={kpis.operatingCost === null ? "—" : fmtMoney(kpis.operatingCost)}
-            hint={kpis.operatingCost === null ? "Not set" : `${kpis.days} day(s) prorated`}
+            hint={kpis.operatingCost === null ? "Not set" : `${plural(kpis.days, "day")} prorated`}
           />
         </div>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Bookings" value={booking.bookings} hint={`${booking.roomNights} room nights`} />
+        <StatCard label="Bookings" value={booking.bookings} hint={plural(booking.roomNights, "room night")} />
         <StatCard label="Cancellation rate" value={`${booking.cancellationRate}%`} hint={`${booking.cancelled} cancelled`} />
         <StatCard label="No-show rate" value={`${booking.noShowRate}%`} hint={`${booking.noShows} no-shows`} />
         <StatCard

@@ -11,7 +11,7 @@ import { timingFee, isEarly } from "../../../../../lib/policies";
 import { rateForNight } from "../../../../../lib/pricing";
 import { todayIn, nowTimeIn } from "../../../../../lib/dates";
 import type { Booking, Room } from "../../../../../lib/types";
-import { Card, Notice, fmtDate, fmtMoney } from "../../../../components/ui";
+import { Card, Notice, fmtDate, fmtMoney, plural } from "../../../../components/ui";
 import CheckInForm from "./CheckInForm";
 
 export default async function CheckInPage({ params }: { params: Promise<{ id: string }> }) {
@@ -95,8 +95,8 @@ export default async function CheckInPage({ params }: { params: Promise<{ id: st
 
       <h1 className="text-xl font-semibold tracking-tight text-slate-900">Check in {booking.contact_name}</h1>
       <p className="text-sm text-slate-600 mt-1 mb-6">
-        {booking.room_types?.name} · {fmtDate(booking.check_in)} → {fmtDate(booking.check_out)} · {booking.adults} adult(s)
-        {booking.children ? `, ${booking.children} child(ren)` : ""} · check-in time {hhmm(settings.check_in_time)}
+        {booking.room_types?.name} · {fmtDate(booking.check_in)} → {fmtDate(booking.check_out)} · {plural(booking.adults, "adult")}
+        {booking.children ? `, ${plural(booking.children, "child", "children")}` : ""} · check-in time {hhmm(settings.check_in_time)}
       </p>
 
       {booking.guests?.tags?.includes("Blacklisted") && (

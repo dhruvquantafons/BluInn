@@ -7,7 +7,7 @@ import { getSettings } from "../../../../../../lib/settings";
 import { amountPaid, orderBalance, taxBands } from "../../../../../../lib/pos";
 import type { Outlet, PosOrder, PosOrderLine, PosPayment } from "../../../../../../lib/types";
 import { POS_PAYMENT_KIND_LABELS } from "../../../../../../lib/types";
-import { fmtDateTime, fmtMoney } from "../../../../../components/ui";
+import { fmtDateTime, fmtMoney, plural } from "../../../../../components/ui";
 import PrintFooter from "../../../../../components/PrintFooter";
 import PrintButton from "../../../../../components/PrintButton";
 
@@ -77,7 +77,7 @@ export default async function PosBillPage({ params }: { params: Promise<{ id: st
             {(order.guest_name || order.bookings?.contact_name) && (
               <p>{order.guest_name || order.bookings?.contact_name}</p>
             )}
-            {order.covers > 0 && <p>{order.covers} cover(s)</p>}
+            {order.covers > 0 && <p>{plural(order.covers, "cover")}</p>}
           </div>
         </div>
 

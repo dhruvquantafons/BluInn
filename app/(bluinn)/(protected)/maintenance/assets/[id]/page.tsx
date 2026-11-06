@@ -57,7 +57,7 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
           <SectionTitle>Maintenance history</SectionTitle>
         </div>
         {history.length === 0 ? (
-          <EmptyState message="No tickets for this asset yet." />
+          <EmptyState message="No tickets for this asset yet" />
         ) : (
           <table className="w-full text-sm">
             <thead>

@@ -4,7 +4,7 @@ import { can } from "../../../../lib/permissions";
 import type { BookingSource, ChannelAllocation, RoomType } from "../../../../lib/types";
 import { BOOKING_SOURCE_LABELS } from "../../../../lib/types";
 import { saveAllocations } from "../../../rates-actions";
-import { Card, Field, Notice, inputClass } from "../../../components/ui";
+import { Card, Field, Notice, inputClass, plural } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 
 /** Channels that sell without a person at the desk deciding. */
@@ -35,7 +35,7 @@ export default async function AllocationsPage() {
       {((types ?? []) as Pick<RoomType, "id" | "name">[]).map((t) => (
         <Card key={t.id} className="p-5">
           <p className="text-base font-semibold mb-1">{t.name}</p>
-          <p className="text-xs text-slate-600 mb-4">{inventory(t.id)} room(s) in inventory</p>
+          <p className="text-xs text-slate-600 mb-4">{plural(inventory(t.id), "room")} in inventory</p>
           {manage ? (
             <ActionForm action={saveAllocations} submitLabel="Save allocation" className="space-y-4">
               <input type="hidden" name="room_type_id" value={t.id} />

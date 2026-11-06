@@ -6,7 +6,8 @@ workspace app:
 - a royal-blue **top bar** with the five nav sections as tabs
 - a **context rail** on the left listing only the current section's pages
 - a pale grey canvas, with a **hero banner** opening every page in the
-  section's own tint
+  section's own tint: flat, one tone shift inside the hue, no blooms,
+  rings or decorative icon
 - white cards with a hairline and a soft lift, KPI cards with a coloured
   **accent bar**, and borderless tinted status pills
 
@@ -57,7 +58,7 @@ current path:
 | Admin (`admin`) | slate-indigo |
 
 The tint is a set of CSS variables (`--g-50/100/200/500/600/700/800` and
-`--hero-from/via/to`) that the hero, the rail, `StatCard`, `CardHeader`,
+`--hero-from/via/to`; the hero uses `via` → `from`, the sign-in panel all three) that the hero, the rail, `StatCard`, `CardHeader`,
 `FilterChips`, `Pagination` and `SectionTabs` read with Tailwind's
 `bg-(--g-100)` syntax. A server page never has to say which section it is
 in. Use `--g-*` for decorative section colour; keep actions on `brand`
@@ -81,12 +82,27 @@ Inter carries everything. `fonts.ts` loads it and the root layout puts it on
 | Element | Style |
 |---|---|
 | `h1` (page title) | 26px, semibold, −0.025em tracking; 28px and white inside the hero |
-| `h2` (card title) | 16px, semibold |
+| `h2` (card title) | 16px, semibold, no letter spacing (only the `h1` is tightened) |
 | `h3` | 15px, semibold |
 | `.admin-display` (KPI figures, the wordmark) | semibold, −0.03em tracking |
-| `.admin-eyebrow` (small uppercase labels: floor names, filter labels, drawer groups) | 10.5px, 0.09em tracking, `slate-400` |
+| `.admin-eyebrow` (small labels: floor names, filter labels, drawer groups) | 12px, medium, sentence case, `slate-500` |
 | Body text | regular weight, `text-sm` |
 | Muted text | `text-slate-500` |
+
+On screen, labels are sentence case: no `uppercase` with wide tracking, and
+nothing under 11px. Printed documents (invoice, folio, credit note, BEO,
+quotation, contract, KOT) keep their small uppercase field labels, which is
+a document convention.
+
+Short strings (titles, labels, buttons, empty states, alert rows) end
+without a period; a message of two or more sentences keeps its periods.
+Pluralise counts properly ("1 booking has", "3 bookings have"), never
+"booking(s)": use `plural(n, "booking")` from `ui.tsx` (pass the
+irregular form as a third argument: `plural(n, "child", "children")`).
+Booking statuses are sentence case too ("Checked in", "No-show").
+
+Selects draw their own muted chevron (set globally on `.admin-theme select`),
+so don't add an icon or extra right padding to one.
 
 The global rules set heading sizes, so a page doesn't need size classes on
 `h1`, `h2` or `h3`. Tables and `.admin-display` get tabular figures
@@ -116,13 +132,14 @@ Keep motion small, and use CSS only (no animation library).
     sections. `groupFor(pathname)` picks the section holding the longest
     matching href.
 - **Top bar** (`TopBar.tsx`, every breakpoint)
-  - The wordmark, then the section tabs: pills in a recessed track, the
+  - The wordmark (no descriptor line; it is too small to read there), then the section tabs: pills in a recessed track, the
     active one white with brand-blue text, each with its section icon from
     1536px. A tab opens the first page of that section the person may see.
   - The search box: the Bookings search (or Guests for staff without
     booking access), a plain GET form focused with ⌘K / Ctrl+K. Hidden
     between 1024 and 1280px, where the tabs need the room.
-  - The property's local time, the bell (notification log, for roles that
+  - The property's local time in a glass chip like the search field (the
+    active tab is the only white element in the bar), the bell (notification log, for roles that
     can open it), the signed-in person (links to Password & 2FA) and Sign
     out. Name and the Sign out label show from 1536px.
   - Below 1024px the tabs give way to a menu button that opens the drawer.
@@ -143,8 +160,10 @@ Sign-in (`login/page.tsx`), two-step verification (`login/verify/page.tsx`),
 the setup notice (`components/SetupNotice.tsx`, shown until a database is
 configured), and the fallback screens (`app/not-found.tsx`, `app/error.tsx`,
 `app/global-error.tsx`) share `components/AuthShell.tsx`: the brand panel on the left from 1024px
-(the hero gradient with colour blooms, a masked grid, and four module
-highlights; copy only, never figures) and the form in a white card on the
+(the glass stripes over the hero gradient, the headline, and four module
+highlights; copy only, never figures. No badge pill above the headline,
+and the accent words "one desk." are solid ice blue `#a9c6ff`, never gradient
+text) and the form in a white card on the
 right. Below 1024px the panel collapses to a short gradient header the card
 overlaps. Pass `badge` for an icon tile above the title.
 
@@ -159,8 +178,8 @@ overlaps. Pass `badge` for an icon tile above the title.
 
 - **Inputs** carry a leading icon that turns brand blue on focus; the
   password has a show/hide toggle.
-- **The one big action** uses `buttonClass` plus `admin-btn-glow` (a
-  gradient fill with a soft blue glow) and shows a spinner while pending.
+- **The one big action** is a plain `buttonClass` (no gradient, no glow) and
+  shows a spinner while pending.
 - **The code field** (`login/verify/CodeInput.tsx`) is one real input named
   `code` laid transparently over six drawn slots, so autofill, paste and
   screen readers work on a plain field. It keeps digits only and submits the
@@ -170,7 +189,7 @@ overlaps. Pass `badge` for an icon tile above the title.
 
 | Primitive | Use |
 |---|---|
-| `PageHeader` | The hero banner that opens every page or section layout. Optional `eyebrow`, `chips` (glass pills, `tone: "warn"` for amber), `action`, `stats` (up to four glass tiles), `progress` (a bar along the foot) and `icon` (the decorative mark on the right; defaults to the BluInn mark). Prints as plain text |
+| `PageHeader` | The hero banner that opens every page or section layout. Optional `eyebrow`, `chips` (glass pills, `tone: "warn"` for amber), `action`, `stats` (up to four glass tiles), `progress` (a bar along the foot). No decorative icon: the section's icon already sits in the rail. Title the page by its context (the page name, or the date on the dashboard), never a greeting. Prints as plain text |
 | `Card` | Every boxed surface, including tables. Tables always sit inside a card |
 | `CardHeader` | The header row of a list card: tinted icon tile, title, optional description, count badge, `action` and an "All ›" link |
 | `SectionTitle` | An `h2` with an optional action, for cards with padded bodies |
@@ -183,7 +202,7 @@ overlaps. Pass `badge` for an icon tile above the title.
 | `EmptyState` | Centred muted line inside a card, with an optional `icon` |
 | `Field`, `Check` | A form label with hint, and a checkbox row |
 | `inputClass`, `buttonClass`, `secondaryButtonClass`, `dangerButtonClass` | Class strings for form controls and buttons |
-| `tableHeadClass`, `tableRowClass` | The table header row (faint grey band, small uppercase labels) and body rows |
+| `tableHeadClass`, `tableRowClass` | The table header row (faint grey band, 12px sentence-case labels) and body rows |
 | `SearchInput`, `FilterChips`, `Pagination` | List controls (see below) |
 
 ### Printed documents
@@ -343,7 +362,7 @@ list, slice it with `pageRange(clampPage(page, total))`, and pass
 ## Migrating a page
 
 1. Open it with `PageHeader`. Move a row of headline counters into its
-   `stats`, and give it an `icon` when the page is a module of its own.
+   `stats`.
 2. Wrap each table in a `<Card>`. Use `tableHeadClass` on the header row and
    `tableRowClass` on body rows; give list cards a `CardHeader`.
 3. Replace hand-rolled pills with `Tag` or `StatusPill`, or add `admin-pill`.

@@ -172,7 +172,7 @@ export default async function IdentityPage({ params }: { params: Promise<{ id: s
         <div className="px-4 pt-4">
           <SectionTitle action={<Tag>{thisStay.length}</Tag>}>This stay</SectionTitle>
         </div>
-        {thisStay.length ? gallery(thisStay) : <EmptyState message="No scans for this stay." />}
+        {thisStay.length ? gallery(thisStay) : <EmptyState message="No scans for this stay" />}
       </Card>
 
       {earlier.length > 0 && (

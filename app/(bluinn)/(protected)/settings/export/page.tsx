@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, DatabaseBackup } from "lucide-react";
+import { ArrowLeft, } from "lucide-react";
 import { requirePermission } from "../../../../lib/auth";
 import { getCurrentProperty } from "../../../../lib/properties";
 import { EXPORT_TABLES } from "../../../../lib/data-export";
@@ -24,7 +24,6 @@ export default async function DataExportPage() {
         <ArrowLeft className="w-3.5 h-3.5" /> Settings
       </Link>
       <PageHeader
-        icon={<DatabaseBackup />}
         title="Data export"
         description="Download this property's data as CSV files, for your own records or to move to another system."
       />
@@ -50,7 +49,7 @@ export default async function DataExportPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             {[...groups.entries()].map(([folder, labels]) => (
               <div key={folder}>
-                <p className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">{folder}</p>
+                <p className="text-[12px] text-slate-500 mb-1">{folder}</p>
                 <p className="text-slate-700">{labels.join(", ")}</p>
               </div>
             ))}

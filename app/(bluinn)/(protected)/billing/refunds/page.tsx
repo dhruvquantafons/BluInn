@@ -74,7 +74,7 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
       <Card className="p-5">
         <SectionTitle>Awaiting approval</SectionTitle>
         {pending.length === 0 ? (
-          <EmptyState message="No refunds are waiting for a decision." />
+          <EmptyState message="No refunds are waiting for a decision" />
         ) : (
           <div className="space-y-3">
             {pending.map((r) => (
@@ -143,7 +143,7 @@ export default async function RefundsPage({ searchParams }: { searchParams: Prom
       <Card className="p-5">
         <SectionTitle>Decided</SectionTitle>
         {decided.length === 0 ? (
-          <EmptyState message="Nothing decided yet." />
+          <EmptyState message="Nothing decided yet" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

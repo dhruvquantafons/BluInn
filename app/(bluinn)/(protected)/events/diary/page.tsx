@@ -149,7 +149,7 @@ export default async function EventsDiaryPage({
       </Card>
 
       {spaces.length === 0 ? (
-        <EmptyState message="No event space has been set up yet." />
+        <EmptyState message="No event space has been set up yet" />
       ) : (
         <Card className="p-3 sm:p-4">
           <div className="grid grid-cols-7 gap-1 sm:gap-2">

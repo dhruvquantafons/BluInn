@@ -143,7 +143,7 @@ export default async function MaintenanceBoard({
           ))}
         </div>
         {tickets.length === 0 ? (
-          <EmptyState message={view === "open" ? "No open tickets." : "Nothing here."} />
+          <EmptyState message={view === "open" ? "No open tickets" : "Nothing here"} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

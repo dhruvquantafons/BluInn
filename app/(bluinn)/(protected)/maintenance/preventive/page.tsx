@@ -121,7 +121,7 @@ export default async function PreventivePage() {
 
       <Card>
         {schedules.length === 0 ? (
-          <EmptyState message="No preventive schedules yet." />
+          <EmptyState message="No preventive schedules yet" />
         ) : (
           <ul className="divide-y divide-slate-100">
             {schedules.map((s) => (

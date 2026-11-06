@@ -135,13 +135,13 @@ export default async function GuestReportsPage({
           <SectionTitle>Feedback scores</SectionTitle>
         </div>
         {feedback.length === 0 ? (
-          <EmptyState message="No feedback submitted in this period." />
+          <EmptyState message="No feedback submitted in this period" />
         ) : (
           <>
             <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
               {(["overall", "room", "service", "cleanliness", "food"] as const).map((field) => (
                 <div key={field} className="border border-slate-200 rounded-lg px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500">{field}</p>
+                  <p className="text-[12px] text-slate-500">{field}</p>
                   <p className="text-sm font-medium text-slate-900">{average(field)}</p>
                 </div>
               ))}

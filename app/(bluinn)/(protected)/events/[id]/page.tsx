@@ -415,7 +415,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <SectionTitle>Equipment and extras</SectionTitle>
         </div>
         {lines.length === 0 ? (
-          <EmptyState message="Nothing beyond the hall and the catering package." />
+          <EmptyState message="Nothing beyond the hall and the catering package" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

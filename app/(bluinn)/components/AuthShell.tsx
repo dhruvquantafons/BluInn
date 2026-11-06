@@ -40,11 +40,7 @@ export default function AuthShell({
         <Wordmark />
 
         <div className="max-w-md">
-          <p className="admin-auth-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-medium">
-            <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-300 shadow-[0_0_0_3px_rgb(110_231_183/0.25)]" />
-            {PRODUCT.tagline}
-          </p>
-          <h1 className="admin-auth-title text-[2.6rem]! leading-[1.1]! tracking-[-0.035em]! font-bold! mt-5">
+          <h1 className="admin-auth-title text-[2.6rem]! leading-[1.1]! tracking-[-0.03em]! font-semibold!">
             Every room, every guest, <span className="admin-auth-accent">one desk.</span>
           </h1>
           <p className="admin-auth-lede text-[15px] mt-4 leading-relaxed">
@@ -108,7 +104,7 @@ function Wordmark() {
       </span>
       <span>
         <WordmarkText className="block text-[1.35rem] leading-none text-white" />
-        <span className="block text-[10px] uppercase tracking-[0.2em] text-white/85 mt-1.5">{PRODUCT.descriptor}</span>
+        <span className="block text-[12px] text-white/85 mt-1.5">{PRODUCT.descriptor}</span>
       </span>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Info, UserCog } from "lucide-react";
+import { Info, } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { PRODUCT } from "../../../lib/app-config";
 import Link from "next/link";
@@ -32,7 +32,6 @@ export default async function StaffPage() {
   return (
     <>
       <PageHeader
-        icon={<UserCog />}
         title="Staff"
         description="Details, roles and access for everyone who can sign in."
         action={
@@ -72,7 +71,7 @@ export default async function StaffPage() {
 
       {members.length === 0 ? (
         <Card>
-          <EmptyState message="No staff accounts yet." />
+          <EmptyState message="No staff accounts yet" />
         </Card>
       ) : (
         <div className="space-y-5">

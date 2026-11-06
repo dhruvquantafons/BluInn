@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Booking, BookingStatus, Room, RoomBlock, RoomType } from "../../lib/types";
 import { BOOKING_STATUS_LABELS, roomBoardLabel } from "../../lib/types";
 import { addDays, dayOfWeek, daysBetween } from "../../lib/dates";
+import { plural } from "./ui";
 
 /**
  * Stay bars are solid tints of the same hue as the booking's status pill,
@@ -106,7 +107,7 @@ export default function TapeChart({
                   d === today ? "bg-brand-100 shadow-[inset_0_-2px_0_var(--color-brand-600)]" : ""
                 }`}
               >
-                <p className={`text-[10px] uppercase tracking-wide leading-none ${d === today ? "text-brand-800 font-semibold" : "text-slate-500"}`}>
+                <p className={`text-[11px] leading-none ${d === today ? "text-brand-800 font-semibold" : "text-slate-500"}`}>
                   {date.toLocaleDateString("en-IN", { weekday: "short" })}
                 </p>
                 <p className="text-[13px] font-medium text-slate-900 tabular-nums leading-none mt-1.5">{date.getDate()}</p>
@@ -119,7 +120,7 @@ export default function TapeChart({
       {roomList.map(({ type, rooms: typeRooms, unassigned }) => (
         <div key={type.id}>
           <div className="admin-eyebrow px-4 py-2 bg-slate-50 border-b border-slate-100 sticky left-0">
-            {type.name} · {typeRooms.length} room(s)
+            {type.name} · {plural(typeRooms.length, "room")}
           </div>
 
           {typeRooms.map((room) => {

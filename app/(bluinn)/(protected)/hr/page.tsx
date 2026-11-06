@@ -92,7 +92,7 @@ export default async function MyWorkPage() {
         <SectionTitle>My timesheet</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="text-sm space-y-1">
-            <p className="text-[11px] uppercase tracking-wider text-slate-500">This week so far</p>
+            <p className="text-[12px] text-slate-500">This week so far</p>
             <p>
               {current.worked} h worked of {current.scheduled} h rostered
               {current.overtime > 0 && <span className="text-slate-600"> · {current.overtime} h overtime</span>}
@@ -100,7 +100,7 @@ export default async function MyWorkPage() {
             </p>
           </div>
           <div className="text-sm space-y-2">
-            <p className="text-[11px] uppercase tracking-wider text-slate-500">
+            <p className="text-[12px] text-slate-500">
               Last week · {fmtDate(lastWeek)} – {fmtDate(addDays(lastWeek, 6))}
             </p>
             <p>
@@ -132,7 +132,7 @@ export default async function MyWorkPage() {
             <SectionTitle>Last two weeks · {workedHours(records)} h</SectionTitle>
           </div>
           {records.length === 0 ? (
-            <EmptyState message="No attendance recorded." />
+            <EmptyState message="No attendance recorded" />
           ) : (
             <table className="w-full text-sm">
               <thead>

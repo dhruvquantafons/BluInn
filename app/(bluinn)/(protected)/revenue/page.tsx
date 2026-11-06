@@ -169,7 +169,7 @@ export default async function ForecastPage({
       )}
 
       {roomTypes.length === 0 ? (
-        <EmptyState message="No active room types to forecast." />
+        <EmptyState message="No active room types to forecast" />
       ) : (
         roomTypes.map((type) => (
           <Card key={type.id} className="p-0 overflow-x-auto">

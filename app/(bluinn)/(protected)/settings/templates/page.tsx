@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, MessagesSquare } from "lucide-react";
+import { ArrowLeft, } from "lucide-react";
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
@@ -33,7 +33,6 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
       </Link>
       <PageHeader
         title="Message templates"
-        icon={<MessagesSquare />}
         description="The words of every email and SMS sent to guests. The booking details table is added automatically between the opening and closing paragraphs."
       />
 

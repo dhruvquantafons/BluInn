@@ -1,4 +1,4 @@
-import { Wrench } from "lucide-react";
+import { } from "lucide-react";
 import { after } from "next/server";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
@@ -28,7 +28,7 @@ export default async function MaintenanceLayout({ children }: { children: React.
   return (
     <>
       <LiveRefresh tables={["maintenance_tickets", "room_blocks"]} />
-      <PageHeader icon={<Wrench />} title="Maintenance" description="Repairs and upkeep for rooms, equipment and common areas." />
+      <PageHeader title="Maintenance" description="Repairs and upkeep for rooms, equipment and common areas." />
       <SectionTabs tabs={tabs} label="Maintenance sections" />
       {children}
     </>

@@ -1,4 +1,4 @@
-import { Boxes } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -15,7 +15,6 @@ export default async function InventoryLayout({ children }: { children: React.Re
   return (
     <>
       <PageHeader
-        icon={<Boxes />}
         title="Inventory"
         description="Amenities, linen, minibar, cleaning and engineering stock: where it is, what is low, and every movement."
       />

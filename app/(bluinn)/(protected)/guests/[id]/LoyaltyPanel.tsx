@@ -167,7 +167,7 @@ export default function LoyaltyPanel({
 
       {tier?.perks && (
         <div className="mt-4 pt-4 border-t border-slate-100">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">{tier.name} perks — honour these</p>
+          <p className="text-[12px] text-slate-500">{tier.name} perks — honour these</p>
           <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">{tier.perks}</p>
         </div>
       )}

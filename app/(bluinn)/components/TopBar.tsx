@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { signOut } from "../actions";
 import BrandMark, { Wordmark } from "./BrandMark";
-import { PRODUCT } from "../../lib/app-config";
 import { Avatar } from "./ui";
 import { allowedGroups, groupFor, OPEN_MENU_EVENT, type Access } from "./nav";
 
@@ -70,10 +69,7 @@ export default function TopBar({
         <span className="w-9 h-9 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
           <BrandMark className="w-7 h-7" />
         </span>
-        <span className="hidden sm:block">
-          <Wordmark className="block text-[15px] leading-none" />
-          <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 leading-none mt-1.5">{PRODUCT.descriptor}</span>
-        </span>
+        <Wordmark className="hidden sm:block text-[15px] leading-none" />
       </Link>
 
       <nav aria-label="Sections" className="hidden lg:flex shrink-0 items-center gap-0.5 p-1 rounded-xl bg-black/10 ring-1 ring-white/10">
@@ -181,9 +177,9 @@ function PropertyClock({ timezone }: { timezone: string }) {
   return (
     <span
       title="Property time"
-      className="hidden xl:inline-flex shrink-0 whitespace-nowrap items-center gap-2 h-9 px-3 rounded-full bg-white text-[13px] font-semibold text-slate-900 tabular-nums shadow-sm"
+      className="hidden xl:inline-flex shrink-0 whitespace-nowrap items-center gap-2 h-9 px-3 rounded-lg bg-white/12 border border-white/20 text-[13px] font-medium text-white tabular-nums"
     >
-      <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-500 ring-3 ring-emerald-100" />
+      <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-400" />
       {time}
     </span>
   );

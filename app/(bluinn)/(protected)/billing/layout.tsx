@@ -1,4 +1,4 @@
-import { ReceiptIndianRupee } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -25,7 +25,6 @@ export default async function BillingLayout({ children }: { children: React.Reac
   return (
     <>
       <PageHeader
-        icon={<ReceiptIndianRupee />}
         title="Billing"
         description="Tax invoices and credit notes, the monthly GST register, refund approvals and exchange rates."
         action={

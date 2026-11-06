@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { } from "lucide-react";
 import { requireSession } from "../../../lib/auth";
 import { can, canAny } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -22,7 +22,7 @@ export default async function HrLayout({ children }: { children: React.ReactNode
   return (
     <>
       <LiveRefresh tables={["attendance", "leave_requests"]} />
-      <PageHeader icon={<Clock />} title="HR & attendance" description="Shifts, clock-in, leave and staff records." />
+      <PageHeader title="HR & attendance" description="Shifts, clock-in, leave and staff records." />
       <SectionTabs tabs={tabs} label="HR sections" />
       {children}
     </>

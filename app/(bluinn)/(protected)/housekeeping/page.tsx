@@ -196,7 +196,7 @@ export default async function HousekeepingBoard() {
             <SectionTitle>Awaiting inspection ({toInspect.length})</SectionTitle>
           </div>
           {toInspect.length === 0 ? (
-            <EmptyState message="Nothing to inspect." />
+            <EmptyState message="Nothing to inspect" />
           ) : (
             <ul className="divide-y divide-slate-100">
               {toInspect.map((t) => (
@@ -232,7 +232,7 @@ export default async function HousekeepingBoard() {
           <SectionTitle>Tasks · {fmtDate(today)}</SectionTitle>
         </div>
         {tasks.length === 0 ? (
-          <EmptyState message="No tasks yet today." />
+          <EmptyState message="No tasks yet today" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

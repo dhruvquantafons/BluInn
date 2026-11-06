@@ -54,7 +54,7 @@ export default async function DuplicatesPage() {
       </p>
       {groups.length === 0 ? (
         <Card>
-          <EmptyState message="No likely duplicates." />
+          <EmptyState message="No likely duplicates" />
         </Card>
       ) : (
         groups.map((group) => (

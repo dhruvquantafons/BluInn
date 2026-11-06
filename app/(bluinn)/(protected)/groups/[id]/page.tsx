@@ -17,6 +17,7 @@ import {
   secondaryButtonClass,
   dangerButtonClass,
   tableHeadClass,
+  plural
 } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 
@@ -50,7 +51,7 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
       <h1 className="text-xl font-semibold tracking-tight text-slate-900">{g.name}</h1>
       <p className="text-xs text-slate-500 mt-1 mb-6">
         <span className="font-mono">{g.reference}</span> · {fmtDate(g.check_in)} → {fmtDate(g.check_out)} ·{" "}
-        {g.rate_plans?.name ?? "No plan"} · {live.length} room(s) · {fmtMoney(total)}
+        {g.rate_plans?.name ?? "No plan"} · {plural(live.length, "room")} · {fmtMoney(total)}
         {g.organiser_name && ` · organiser ${g.organiser_name} ${g.organiser_phone}`}
       </p>
 

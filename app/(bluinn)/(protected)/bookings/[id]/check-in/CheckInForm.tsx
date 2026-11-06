@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { checkIn } from "../../../../frontdesk-actions";
 import type { ActionState } from "../../../../form-utils";
 import { ID_TYPE_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../../lib/types";
-import { Field, Check, Banner, inputClass, buttonClass } from "../../../../components/ui";
+import { Field, Check, Banner, inputClass, buttonClass, plural } from "../../../../components/ui";
 import { keepFormOnSubmit } from "../../../../components/useKeepForm";
 import SignaturePad from "../../../../components/SignaturePad";
 
@@ -89,7 +89,7 @@ export default function CheckInForm({
         )}
         {notReady.length > 0 && (
           <details>
-            <summary className="text-[11px] text-slate-500 cursor-pointer">{notReady.length} room(s) of this type not ready</summary>
+            <summary className="text-[11px] text-slate-500 cursor-pointer">{plural(notReady.length, "room")} of this type not ready</summary>
             <p className="text-xs text-slate-600 mt-1">{notReady.join(" · ")}</p>
           </details>
         )}

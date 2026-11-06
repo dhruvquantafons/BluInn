@@ -1,4 +1,4 @@
-import { BellRing } from "lucide-react";
+import { } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../lib/supabase/server";
@@ -85,7 +85,6 @@ export default async function NotificationsPage({
     <>
       <PageHeader
         title="Notification log"
-        icon={<BellRing />}
         description={`Every guest message and staff alert ${PRODUCT.name} has attempted, successful or not.`}
       />
 
@@ -172,7 +171,7 @@ export default async function NotificationsPage({
         <NotificationList
           items={items}
           showRecipientName
-          empty="Nothing matches those filters."
+          empty="Nothing matches those filters"
         />
         <Pagination
           page={page}

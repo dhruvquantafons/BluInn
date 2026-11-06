@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogIn, LogOut, BedDouble, Search, UserPlus, Bell, Star, ConciergeBell, Plane, Wallet } from "lucide-react";
+import { LogIn, LogOut, BedDouble, Search, UserPlus, Bell, Star, Plane, Wallet } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
@@ -169,7 +169,6 @@ export default async function FrontDeskPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title="Front desk"
         description={`Today, ${fmtDate(today)}. Check-in from ${hhmm(settings.check_in_time)}, check-out by ${hhmm(settings.check_out_time)}.`}
-        icon={<ConciergeBell />}
         stats={[
           { label: "To arrive", value: arrivals.length, icon: <LogIn /> },
           { label: "To depart", value: departures.length, icon: <LogOut /> },

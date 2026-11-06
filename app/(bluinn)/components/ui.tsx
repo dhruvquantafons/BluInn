@@ -18,7 +18,6 @@ import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { PAGE_SIZE, pageHref, pageList, type PageParams } from "./paging";
 import type { BookingStatus } from "../../lib/types";
 import { BOOKING_STATUS_LABELS } from "../../lib/types";
-import BrandMark from "./BrandMark";
 
 export type HeroChip = {
   label: React.ReactNode;
@@ -63,7 +62,6 @@ export function PageHeader({
   chips,
   stats,
   progress,
-  icon,
 }: {
   title: string;
   description?: React.ReactNode;
@@ -72,22 +70,23 @@ export function PageHeader({
   chips?: HeroChip[];
   stats?: HeroStat[];
   progress?: { value: number; label: React.ReactNode };
-  icon?: React.ReactNode;
 }) {
   return (
     <header className="admin-hero mb-6 px-6 sm:px-7 pt-6 pb-6">
-      <div className="flex items-start gap-6">
-        <div className="min-w-0 flex-1">
-          {eyebrow && <p className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-white/75 mb-1.5">{eyebrow}</p>}
+      <div>
+        <div className="min-w-0">
+          {eyebrow && <p className="text-[13px] font-medium text-white/75 mb-1.5">{eyebrow}</p>}
           <h1>{title}</h1>
           {description && <p className="text-[15px] text-white/85 mt-1.5 max-w-3xl leading-relaxed">{description}</p>}
           {chips && chips.length > 0 && (
             <ul className="flex flex-wrap gap-2 mt-4 print:hidden">
               {chips.map((c, i) => {
-                const cls = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12.5px] text-white transition-colors duration-150 [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:shrink-0 ${
+                // Warn chips are solid pale amber: a translucent amber over
+                // the blue, teal or violet heroes mixes to a muddy grey.
+                const cls = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12.5px] transition-colors duration-150 [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:shrink-0 ${
                   c.tone === "warn"
-                    ? "bg-amber-300/25 border border-amber-200/45 hover:bg-amber-300/35"
-                    : "admin-glass"
+                    ? "bg-amber-100 text-amber-900 font-medium shadow-[0_1px_2px_rgb(18_23_34/0.12)] hover:bg-amber-50 [&_svg]:text-amber-600"
+                    : "admin-glass text-white"
                 }`;
                 return (
                   <li key={i}>
@@ -109,12 +108,6 @@ export function PageHeader({
           )}
           {action && <div className="admin-hero-actions flex flex-wrap items-center gap-2 mt-5 print:hidden">{action}</div>}
         </div>
-        <span
-          aria-hidden="true"
-          className="hidden md:flex shrink-0 w-20 h-20 rounded-full admin-glass items-center justify-center text-white shadow-[0_0_0_10px_rgb(255_255_255/0.06)] [&_svg]:w-9 [&_svg]:h-9 print:hidden"
-        >
-          {icon ?? <BrandMark className="w-12 h-12" />}
-        </span>
       </div>
 
       {stats && stats.length > 0 && (
@@ -470,9 +463,9 @@ export function Tag({ children, tone = "neutral" }: { children: React.ReactNode;
   return <span className={`${pillClass} ${tones[tone]}`}>{children}</span>;
 }
 
-/** Header row of a table inside a Card: a faint grey band, small uppercase labels, one hairline. */
+/** Header row of a table inside a Card: a faint grey band, small sentence-case labels, one hairline. */
 export const tableHeadClass =
-  "text-left text-[11px] uppercase tracking-[0.06em] font-semibold text-slate-500 bg-slate-50 border-b border-slate-200";
+  "text-left text-[12px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200";
 
 /** Body row: a quick grey wash on hover. */
 export const tableRowClass = "hover:bg-slate-50 transition-colors duration-150";
@@ -610,6 +603,14 @@ export function FilterChips({
       })}
     </nav>
   );
+}
+
+/**
+ * "1 night", "3 nights". Pass `many` for irregular plurals
+ * (`plural(n, "child", "children")`). Never write "night(s)".
+ */
+export function plural(count: number, one: string, many = `${one}s`) {
+  return `${count.toLocaleString("en-IN")} ${count === 1 ? one : many}`;
 }
 
 export function nightsBetween(checkIn: string, checkOut: string) {

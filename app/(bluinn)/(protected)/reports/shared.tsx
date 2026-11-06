@@ -6,7 +6,7 @@ import {
   type RangePreset,
   type ReportDefinition,
 } from "../../../lib/reports";
-import { Card, EmptyState, Notice, SectionTitle, Tag, fmtDate, fmtMoney, tableHeadClass } from "../../components/ui";
+import { Card, EmptyState, Notice, SectionTitle, Tag, fmtDate, fmtMoney, tableHeadClass, plural } from "../../components/ui";
 
 /** A bare yyyy-mm-dd reads as "06 Oct 2026" on screen; the CSV keeps ISO. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -130,6 +130,11 @@ export function ReportTable({
   showExport?: boolean;
 }) {
   const grid = toGrid(definition, rows);
+  // Figures line up on the right: money columns, and any column whose
+  // every value is a number (rooms sold, bookings, nights).
+  const alignRight = definition.columns.map(
+    (c, j) => Boolean(c.money) || (grid.body.length > 0 && grid.body.every((row) => typeof row[j] === "number")),
+  );
 
   return (
     <Card>
@@ -147,14 +152,14 @@ export function ReportTable({
           <Notice tone="error">{error}</Notice>
         </div>
       ) : rows.length === 0 ? (
-        <EmptyState message="Nothing to report for this period." />
+        <EmptyState message="Nothing to report for this period" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className={tableHeadClass}>
-                {definition.columns.map((c) => (
-                  <th key={c.key} className={`py-2 px-3 font-semibold ${c.money ? "text-right" : ""}`}>
+                {definition.columns.map((c, j) => (
+                  <th key={c.key} className={`py-2 px-3 font-semibold ${alignRight[j] ? "text-right" : ""}`}>
                     {c.label}
                   </th>
                 ))}
@@ -167,7 +172,7 @@ export function ReportTable({
                     const column = definition.columns[j];
                     const isSource = column.key === "source" && definition.kind === "daily_revenue";
                     return (
-                      <td key={column.key} className={`py-2 px-3 ${column.money ? "text-right" : ""}`}>
+                      <td key={column.key} className={`py-2 px-3 ${alignRight[j] ? "text-right" : ""}`}>
                         {isSource ? (
                           <Tag tone={value === "audit" ? "green" : "neutral"}>
                             {value === "audit" ? "Closed" : "Live"}
@@ -206,7 +211,7 @@ export function SourceNote({ audited, days }: { audited: number; days: number })
   }
   return (
     <p className="text-[11px] text-slate-500">
-      {audited} of {days} day(s) are closed by a night audit and fixed. The rest are computed live and may still
+      {audited} of {plural(days, "day")} {audited === 1 ? "is" : "are"} closed by a night audit and fixed. The rest are computed live and may still
       change as charges are posted.
     </p>
   );

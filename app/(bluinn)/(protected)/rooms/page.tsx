@@ -161,7 +161,6 @@ export default async function RoomsPage({
       <PageHeader
         title="Rooms"
         description="Room status board, blocks, inventory and availability."
-        icon={<BedDouble />}
         stats={
           roomList.length > 0
             ? [
@@ -241,9 +240,9 @@ export default async function RoomsPage({
           </SectionTitle>
 
           {roomList.length === 0 ? (
-            <EmptyState message="No rooms added yet." />
+            <EmptyState message="No rooms added yet" />
           ) : pageRooms.length === 0 ? (
-            <EmptyState message="No rooms match this view." />
+            <EmptyState message="No rooms match this view" />
           ) : (
             <div className="space-y-4">
               {floors.map((floor) => (
@@ -451,9 +450,9 @@ export default async function RoomsPage({
             {filtered && <span className="text-xs text-slate-500">Showing rooms that match the filters above</span>}
           </div>
           {roomList.length === 0 ? (
-            <EmptyState message="No rooms yet." />
+            <EmptyState message="No rooms yet" />
           ) : pageRooms.length === 0 ? (
-            <EmptyState message="No rooms match this view." />
+            <EmptyState message="No rooms match this view" />
           ) : (
             <ul className="divide-y divide-slate-100">
               {pageRooms.map((room) => (

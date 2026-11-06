@@ -60,6 +60,7 @@ import {
   buttonClass,
   secondaryButtonClass,
   dangerButtonClass,
+  plural
 } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import LiveRefresh from "../../../components/LiveRefresh";
@@ -429,8 +430,8 @@ export default async function BookingDetailPage({
               <Stat label="Departure">{fmtDate(booking.check_out)}</Stat>
               <Stat label="Nights">{nightsBetween(booking.check_in, booking.check_out)}</Stat>
               <Stat label="Guests">
-                {booking.adults} adult(s)
-                {booking.children > 0 && `, ${booking.children} child(ren)`}
+                {plural(booking.adults, "adult")}
+                {booking.children > 0 && `, ${plural(booking.children, "child", "children")}`}
               </Stat>
               <Stat label="Room type">
                 {booking.rooms_count} × {booking.room_types?.name ?? "—"}
@@ -581,7 +582,7 @@ export default async function BookingDetailPage({
               {ineligible.length > 0 && (
                 <details className="mt-3">
                   <summary className="text-[11px] text-slate-500 cursor-pointer">
-                    {ineligible.length} room(s) of this type not offered
+                    {plural(ineligible.length, "room")} of this type not offered
                   </summary>
                   <ul className="mt-2 text-xs text-slate-600 space-y-0.5">
                     {ineligible.map(({ room, why }) => (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft, } from "lucide-react";
 import { createClient, createServiceClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
@@ -55,7 +55,7 @@ export default async function StaffActivityPage() {
       <Link href="/staff" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Staff
       </Link>
-      <PageHeader title="Activity & sessions" icon={<History />} description="Who is signed in, sign-in history, and ending someone's sessions." />
+      <PageHeader title="Activity & sessions" description="Who is signed in, sign-in history, and ending someone's sessions." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Active now" value={online.length} hint={`seen in the last ${settings.session_timeout_minutes} min`} />
@@ -135,7 +135,7 @@ export default async function StaffActivityPage() {
           <SectionTitle>Sign-in attempts · last 7 days</SectionTitle>
         </div>
         {attempts.length === 0 ? (
-          <EmptyState message={hasServiceAccess() ? "No sign-in attempts." : "Needs the service role key."} />
+          <EmptyState message={hasServiceAccess() ? "No sign-in attempts" : "Needs the service role key"} />
         ) : (
           <ul className="divide-y divide-slate-100 text-sm">
             {attempts.slice(0, 100).map((a, i) => (

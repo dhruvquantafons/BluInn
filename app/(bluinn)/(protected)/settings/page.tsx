@@ -1,4 +1,3 @@
-import { Settings } from "lucide-react";
 import Link from "next/link";
 import { requirePermission } from "../../../lib/auth";
 import { LANGUAGES } from "../../../lib/types";
@@ -27,7 +26,6 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader
-        icon={<Settings />}
         title="Settings"
         description="Property details, policies, tax and security. Business date is moved only by night audit."
         action={

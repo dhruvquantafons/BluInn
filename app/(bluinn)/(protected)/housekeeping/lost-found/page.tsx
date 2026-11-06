@@ -70,7 +70,7 @@ export default async function LostFoundPage({ searchParams }: { searchParams: Pr
 
       <Card>
         {items.length === 0 ? (
-          <EmptyState message="Nothing here." />
+          <EmptyState message="Nothing here" />
         ) : (
           <ul className="divide-y divide-slate-100">
             {items.map((i) => (

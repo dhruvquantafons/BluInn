@@ -70,7 +70,7 @@ export default async function MyTicketsPage() {
         <SectionTitle>Assigned to me ({mine.length})</SectionTitle>
         {mine.length === 0 ? (
           <Card>
-            <EmptyState message="Nothing assigned to you." />
+            <EmptyState message="Nothing assigned to you" />
           </Card>
         ) : (
           mine.map(card)

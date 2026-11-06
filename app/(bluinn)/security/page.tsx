@@ -48,7 +48,7 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
           </span>
           <span>
             <Wordmark className="block text-[15px] leading-none" />
-            <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 leading-none mt-1.5">
+            <span className="block text-[12px] text-white/70 leading-none mt-1.5">
               {PRODUCT.descriptor}
             </span>
           </span>

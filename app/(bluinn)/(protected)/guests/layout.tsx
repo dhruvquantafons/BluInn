@@ -1,4 +1,4 @@
-import { Contact } from "lucide-react";
+import { } from "lucide-react";
 import { requirePermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -15,7 +15,7 @@ export default async function GuestsLayout({ children }: { children: React.React
   ].filter(Boolean) as { href: string; label: string }[];
   return (
     <>
-      <PageHeader icon={<Contact />} title="Guests" description="Profiles, stay history, preferences and feedback." />
+      <PageHeader title="Guests" description="Profiles, stay history, preferences and feedback." />
       <SectionTabs tabs={tabs} label="Guest sections" />
       {children}
     </>

@@ -1,4 +1,4 @@
-import { ScrollText } from "lucide-react";
+import { } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
@@ -40,7 +40,7 @@ export default async function AuditPage({
 
   return (
     <>
-      <PageHeader icon={<ScrollText />} title="Audit log" description="Every change and important action: who, what, when, and the values before and after. Entries cannot be edited or deleted." />
+      <PageHeader title="Audit log" description="Every change and important action: who, what, when, and the values before and after. Entries cannot be edited or deleted." />
       <SectionTabs
         tabs={[
           { href: "/audit", label: "All changes" },
@@ -70,7 +70,7 @@ export default async function AuditPage({
         {error ? (
           <EmptyState message={error.message} />
         ) : rows.length === 0 ? (
-          <EmptyState message="Nothing matches." />
+          <EmptyState message="Nothing matches" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

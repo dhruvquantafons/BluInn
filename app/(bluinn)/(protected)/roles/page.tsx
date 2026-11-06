@@ -1,11 +1,11 @@
-import { ShieldCheck } from "lucide-react";
+import { } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { PRODUCT } from "../../../lib/app-config";
 import { requirePermission } from "../../../lib/auth";
 import { PERMISSION_GROUPS } from "../../../lib/permissions";
 import type { Role } from "../../../lib/types";
 import { saveRole, deleteRole } from "../../actions";
-import { PageHeader, Card, Field, Check, Tag, Notice, inputClass, dangerButtonClass } from "../../components/ui";
+import { PageHeader, Card, Field, Check, Tag, Notice, inputClass, dangerButtonClass, plural } from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
 
 function RoleFields({ role, granted }: { role?: Role; granted: Set<string> }) {
@@ -60,7 +60,6 @@ export default async function RolesPage() {
   return (
     <>
       <PageHeader
-        icon={<ShieldCheck />}
         title="Roles & permissions"
         description="What each role may see and do, module by module and action by action. Changes apply on each person's next page load."
       />
@@ -84,7 +83,7 @@ export default async function RolesPage() {
                 {role.is_system ? <Tag>Built-in</Tag> : <Tag tone="gold">Custom</Tag>}
                 {role.requires_2fa && <Tag tone="violet">2FA</Tag>}
                 <span className="text-xs text-slate-600">
-                  {headcount(role.key)} person(s) · {role.is_superuser ? "all permissions" : `${byRole(role.key).size} permission(s)`}
+                  {plural(headcount(role.key), "person", "people")} · {role.is_superuser ? "all permissions" : plural(byRole(role.key).size, "permission")}
                 </span>
                 <span className="ml-auto text-[11px] text-brand-700">Edit</span>
               </summary>

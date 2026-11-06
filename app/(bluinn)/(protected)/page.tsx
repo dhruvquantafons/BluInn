@@ -37,6 +37,7 @@ import {
   secondaryButtonClass,
   fmtDate,
   fmtMoney,
+  plural
 } from "../components/ui";
 import TapeChart, { TapeChartLegend } from "../components/TapeChart";
 import { OccupancyRevenueChart, OCCUPANCY_COLOR, REVENUE_COLOR, RoomStatusDonut } from "../components/charts";
@@ -173,16 +174,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const alerts: { text: string; href: string }[] = [];
   if (settings.business_date < today && can(session, "frontdesk.night_audit")) {
-    alerts.push({ text: `Night audit has not closed ${fmtDate(settings.business_date)}.`, href: "/night-audit" });
+    alerts.push({ text: `Night audit has not closed ${fmtDate(settings.business_date)}`, href: "/night-audit" });
   }
   if ((unassigned.count ?? 0) > 0) {
-    alerts.push({ text: `${unassigned.count} arriving or in-house booking(s) have no room assigned.`, href: "/front-desk" });
+    alerts.push({ text: `${unassigned.count} arriving or in-house ${unassigned.count === 1 ? "booking has" : "bookings have"} no room assigned`, href: "/front-desk" });
   }
   if ((tentative.count ?? 0) > 0) {
-    alerts.push({ text: `${tentative.count} tentative booking(s) waiting to be confirmed.`, href: "/bookings?status=tentative" });
+    alerts.push({ text: `${tentative.count} tentative ${tentative.count === 1 ? "booking" : "bookings"} waiting to be confirmed`, href: "/bookings?status=tentative" });
   }
   if ((waitlisted.count ?? 0) > 0) {
-    alerts.push({ text: `${waitlisted.count} guest(s) on the waitlist.`, href: "/bookings?status=waitlisted" });
+    alerts.push({ text: `${waitlisted.count} ${waitlisted.count === 1 ? "guest" : "guests"} on the waitlist`, href: "/bookings?status=waitlisted" });
   }
   const hkTasks = (hkOpen.data ?? []) as { status: string; started_at: string | null; target_minutes: number }[];
   const toInspect = hkTasks.filter((t) => t.status === "cleaned").length;
@@ -190,13 +191,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     (t) => t.status === "in_progress" && t.started_at && minutesSince(t.started_at) > t.target_minutes,
   ).length;
   if (overdue > 0 && can(session, "housekeeping.assign")) {
-    alerts.push({ text: `${overdue} room clean(s) over the turnaround target.`, href: "/housekeeping" });
+    alerts.push({ text: `${plural(overdue, "room clean")} over the turnaround target`, href: "/housekeeping" });
   }
   if (toInspect > 0 && can(session, "housekeeping.inspect")) {
-    alerts.push({ text: `${toInspect} room(s) waiting for inspection.`, href: "/housekeeping" });
+    alerts.push({ text: `${plural(toInspect, "room")} waiting for inspection`, href: "/housekeeping" });
   }
   if ((openRequests.count ?? 0) > 0) {
-    alerts.push({ text: `${openRequests.count} open guest request(s).`, href: "/front-desk" });
+    alerts.push({ text: `${plural(openRequests.count ?? 0, "open guest request")}`, href: "/front-desk" });
   }
   if (can(session, "guests.view")) {
     const { data: inHouseGuests } = await supabase
@@ -210,7 +211,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       return g?.date_of_birth?.slice(5) === md || g?.anniversary?.slice(5) === md;
     }).length;
     if (celebrating) {
-      alerts.push({ text: `${celebrating} in-house guest(s) celebrating a birthday or anniversary today.`, href: "/guests/occasions" });
+      alerts.push({ text: `${plural(celebrating, "in-house guest")} celebrating a birthday or anniversary today`, href: "/guests/occasions" });
     }
   }
   const tickets = (mtOpen.data ?? []) as { priority: string; due_at: string; assigned_to: string | null }[];
@@ -218,14 +219,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const urgent = tickets.filter((t) => t.priority === "urgent").length;
     const late = tickets.filter((t) => minutesSince(t.due_at) > 0).length;
     const mine = tickets.filter((t) => t.assigned_to === session.staff.id).length;
-    if (urgent) alerts.push({ text: `${urgent} urgent maintenance ticket(s) open.`, href: "/maintenance?priority=urgent" });
-    if (late) alerts.push({ text: `${late} maintenance ticket(s) past their resolution target.`, href: "/maintenance" });
+    if (urgent) alerts.push({ text: `${plural(urgent, "urgent maintenance ticket")} open`, href: "/maintenance?priority=urgent" });
+    if (late) alerts.push({ text: `${plural(late, "maintenance ticket")} past the resolution target`, href: "/maintenance" });
     if (mine && !can(session, "maintenance.manage")) {
-      alerts.push({ text: `${mine} maintenance ticket(s) assigned to you.`, href: "/maintenance/mine" });
+      alerts.push({ text: `${plural(mine, "maintenance ticket")} assigned to you`, href: "/maintenance/mine" });
     }
   }
   if (can(session, "hr.approve_leave") && leavePending.data?.length) {
-    alerts.push({ text: `${leavePending.data.length} leave request(s) waiting for approval.`, href: "/hr/leave" });
+    alerts.push({ text: `${leavePending.data.length} leave ${leavePending.data.length === 1 ? "request" : "requests"} waiting for approval`, href: "/hr/leave" });
   }
 
   const canFrontDesk = can(session, "frontdesk.view");
@@ -234,9 +235,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <LiveRefresh tables={["bookings", "rooms", "guest_requests", "maintenance_tickets"]} />
       <PageHeader
-        eyebrow={new Date(today + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
-        title={`Good day, ${session.staff.full_name.split(" ")[0] || "there"}`}
-        description={`${fmtDate(today)} · business date ${fmtDate(settings.business_date)}`}
+        title={new Date(today + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        description={`Business date ${fmtDate(settings.business_date)}`}
         // One summary chip: the items themselves are listed in "Needs
         // attention" right below, so repeating each one here said it twice.
         chips={
@@ -410,8 +410,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {seesBookings && (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <MovementList title="Arrivals" icon={<LogIn />} bookings={arrivalList} empty="No arrivals today." />
-            <MovementList title="Departures" icon={<LogOut />} bookings={departureList} empty="No departures today." />
+            <MovementList title="Arrivals" icon={<LogIn />} bookings={arrivalList} empty="No arrivals today" />
+            <MovementList title="Departures" icon={<LogOut />} bookings={departureList} empty="No departures today" />
           </div>
 
           {(tapeRooms.data?.length ?? 0) > 0 && (
@@ -467,7 +467,7 @@ function MovementList({
                     {b.guests?.full_name || b.contact_name || "Unnamed guest"}
                   </span>
                   <span className="block text-xs text-slate-500">
-                    {b.adults + b.children} guest(s) · {b.rooms_count} room(s)
+                    {plural(b.adults + b.children, "guest")} · {plural(b.rooms_count, "room")}
                   </span>
                 </span>
                 <span

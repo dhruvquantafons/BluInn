@@ -55,3 +55,11 @@ next-env.d.ts
 # ...except the desktop demo's licence PUBLIC key, which the app needs. The
 # private key lives outside the repo (~/.bluinn-license).
 !/desktop/license-public.pem
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

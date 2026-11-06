@@ -30,8 +30,8 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
       <div className="space-y-5">
         <p className="flex items-center gap-2.5 rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-[13px] text-slate-600">
           <Smartphone className="w-4 h-4 shrink-0 text-slate-400" />
-          <span className="min-w-0 truncate">
-            Signing in as <strong className="font-semibold text-slate-900">{session.staff.email}</strong>
+          <span className="min-w-0">
+            Signing in as <strong className="font-semibold text-slate-900 break-all">{session.staff.email}</strong>
           </span>
         </p>
 
@@ -53,7 +53,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
           submitLabel="Verify and continue"
           pendingLabel="Checking…"
           className="space-y-5"
-          submitClassName={`${buttonClass} admin-btn-glow w-full h-11 text-[15px]`}
+          submitClassName={`${buttonClass} w-full h-11 text-[15px]`}
         >
           <input type="hidden" name="next" value={next} />
           <CodeInput />

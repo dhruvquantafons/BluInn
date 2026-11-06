@@ -55,7 +55,6 @@ export default async function ShiftsPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader
-        icon={<Wallet />}
         title="Cash shifts"
         description={
           seesAll

@@ -77,7 +77,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className={`${buttonClass} admin-btn-glow group w-full h-11 gap-2 text-[15px]`}
+        className={`${buttonClass} group w-full h-11 gap-2 text-[15px]`}
       >
         {pending ? (
           <>

@@ -48,7 +48,7 @@ function FigureTable({ rows, report }: { rows: Row[]; report: FlashReport }) {
               </th>
             ))}
           </tr>
-          <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+          <tr className="text-[12px] text-slate-500">
             <th />
             {COLUMNS.map((c) => (
               <th key={c.key} colSpan={3} className="border-l border-slate-100">

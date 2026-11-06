@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
@@ -135,7 +135,7 @@ export default async function SystemStatusPage() {
       <Link href="/settings" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Settings
       </Link>
-      <PageHeader icon={<Activity />} title="System status" description="What is connected, what is running, and what still needs setting up." />
+      <PageHeader title="System status" description="What is connected, what is running, and what still needs setting up." />
 
       {isDemoTwoFactor() && (
         <div className="mb-6">

@@ -301,7 +301,7 @@
 .admin-theme :is(h1, h2, h3) {
   font-family: var(--font-admin-display), system-ui, sans-serif;
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--color-slate-900);
 }
 .admin-theme h1 {
@@ -325,13 +325,11 @@
   letter-spacing: -0.03em;
 }
 
-/* Small uppercase section labels, as in the sidebar groups. */
+/* Small section labels, as in the sidebar groups. Sentence case. */
 .admin-theme .admin-eyebrow {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--color-slate-400);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-slate-500);
 }
 
 /* Figures align in every table. Display text (headline figures, titles) keeps
@@ -339,6 +337,29 @@
    reads "two-factor" as "two - factor". */
 .admin-theme :is(table, .tabular-nums) {
   font-variant-numeric: lining-nums tabular-nums;
+}
+/* Column headings are words, not figures: keep them proportional so
+   "No-shows" doesn't read as "No - shows". */
+.admin-theme thead th {
+  font-variant-numeric: lining-nums;
+}
+
+/* Selects: one chevron drawn in the theme's muted grey, with room to breathe,
+   instead of the platform arrow jammed against the right edge. List boxes
+   (`multiple`, `size`) keep their native look. */
+.admin-theme select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23637083' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1rem 1rem;
+}
+@media print {
+  .admin-theme select {
+    background-image: none !important;
+  }
 }
 .admin-theme .admin-display {
   font-variant-numeric: lining-nums;
@@ -412,7 +433,7 @@
    to say which section it is in. Front Office (blue) is the default, which
    also covers the sign-in screens.
      --g-*        tint steps for icon tiles, accent bars and the active nav
-     --hero-*     the banner gradient and its shadow
+     --hero-*     the banner's tone shift (and the sign-in panel's gradient)
    --------------------------------------------------------------------------- */
 .admin-theme,
 .admin-theme [data-group="front"] {
@@ -426,7 +447,6 @@
   --hero-from: #1a43ad;
   --hero-via: #2659d8;
   --hero-to: #4a86ec;
-  --hero-shadow: rgb(31 71 180 / 0.55);
 }
 .admin-theme [data-group="ops"] {
   --g-50: #edfaf8;
@@ -439,7 +459,6 @@
   --hero-from: #0b5a62;
   --hero-via: #11807f;
   --hero-to: #20a198;
-  --hero-shadow: rgb(14 102 98 / 0.55);
 }
 .admin-theme [data-group="commercial"] {
   --g-50: #f5f3ff;
@@ -452,7 +471,6 @@
   --hero-from: #4730b8;
   --hero-via: #6247d8;
   --hero-to: #8b6ef0;
-  --hero-shadow: rgb(79 53 174 / 0.55);
 }
 .admin-theme [data-group="people"] {
   --g-50: #fff7ed;
@@ -465,7 +483,6 @@
   --hero-from: #a9501a;
   --hero-via: #cf6f24;
   --hero-to: #ea9a45;
-  --hero-shadow: rgb(163 85 26 / 0.5);
 }
 .admin-theme [data-group="admin"] {
   --g-50: #f2f4f9;
@@ -478,7 +495,14 @@
   --hero-from: #232d48;
   --hero-via: #36446b;
   --hero-to: #56669a;
-  --hero-shadow: rgb(35 45 72 / 0.55);
+}
+
+/* A soft drop shadow in the section's own colour, for tinted tiles (the
+   rail's section icon). Declared on every [data-group] so the var() resolves
+   against that section's tint, not the default. */
+.admin-theme,
+.admin-theme [data-group] {
+  --hero-shadow: color-mix(in srgb, var(--g-700) 55%, transparent);
 }
 
 /* The top bar: one brand gradient on every section. */
@@ -491,9 +515,9 @@
 
 /* ---------------------------------------------------------------------------
    Hero banner (PageHeader)
-   A gradient card in the section's tint with two faint rings in the corner.
-   Glass surfaces (`admin-glass`) carry the chips, stat tiles and secondary
-   buttons that sit on it.
+   A flat card in the section's tint: one tone shift inside the hue, no
+   blooms or rings. Glass surfaces (`admin-glass`) carry the chips, stat
+   tiles and secondary buttons that sit on it.
    --------------------------------------------------------------------------- */
 .admin-theme .admin-hero {
   position: relative;
@@ -501,48 +525,8 @@
   overflow: hidden;
   border-radius: 1rem;
   color: #fff;
-  /* A faint top sheen and a soft bloom of light at the top right, over the
-     section's gradient. */
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 40%),
-    radial-gradient(42rem 18rem at 92% -20%, rgb(255 255 255 / 0.16), transparent 70%),
-    linear-gradient(125deg, var(--hero-from) 0%, var(--hero-via) 55%, var(--hero-to) 100%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.14),
-    0 22px 40px -26px var(--hero-shadow),
-    0 2px 6px -2px rgb(18 23 34 / 0.12);
-}
-.admin-theme .admin-hero::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  right: -140px;
-  bottom: -260px;
-  width: 560px;
-  height: 560px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    transparent 52%,
-    rgb(255 255 255 / 0.07) 52.4%,
-    rgb(255 255 255 / 0.07) 60%,
-    transparent 60.4%,
-    transparent 72%,
-    rgb(255 255 255 / 0.05) 72.4%,
-    rgb(255 255 255 / 0.05) 80%,
-    transparent 80.4%
-  );
-}
-.admin-theme .admin-hero::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: -120px;
-  top: -160px;
-  width: 380px;
-  height: 380px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.13), transparent 65%);
+  background: linear-gradient(180deg, var(--hero-via), var(--hero-from));
+  box-shadow: 0 1px 2px rgb(18 23 34 / 0.06);
 }
 .admin-theme .admin-hero :is(h1, h2, h3) {
   color: #fff;
@@ -620,7 +604,10 @@
   position: relative;
 }
 .admin-theme .admin-auth-panel::after {
-  /* Replaces the hero's top-left glow with the grid, masked to a soft oval. */
+  /* The grid, masked to a soft oval. */
+  content: "";
+  position: absolute;
+  z-index: -1;
   left: 0;
   top: 0;
   width: 100%;
@@ -634,7 +621,7 @@
 }
 /* Glass stripes (GlassStripes.tsx): a WebGL canvas behind the panel's
    content. It fades in once it has drawn; until then, or without WebGL, the
-   gradient above shows. Once it is up, the grid and rings step aside. */
+   gradient above shows. Once it is up, the grid steps aside. */
 .admin-theme .admin-auth-panel > .admin-glass-stripes {
   position: absolute;
   inset: 0;
@@ -648,7 +635,6 @@
 .admin-theme .admin-auth-panel > .admin-glass-stripes[data-ready="true"] {
   opacity: 1;
 }
-.admin-theme .admin-auth-panel:has(> .admin-glass-stripes[data-ready="true"])::before,
 .admin-theme .admin-auth-panel:has(> .admin-glass-stripes[data-ready="true"])::after {
   display: none;
 }
@@ -664,24 +650,12 @@
   text-shadow: 0 2px 18px rgb(6 18 58 / 0.55), 0 1px 2px rgb(6 18 58 / 0.35);
 }
 .admin-theme .admin-auth-accent {
-  background: linear-gradient(90deg, #7fe3ff 0%, #a9c8ff 55%, #e9f1ff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 2px 10px rgb(6 18 58 / 0.45));
+  color: #a9c6ff;
 }
 .admin-theme .admin-auth-lede {
   color: #e4edff;
   font-weight: 500;
   text-shadow: 0 1px 2px rgb(6 18 58 / 0.55), 0 2px 14px rgb(6 18 58 / 0.75);
-}
-.admin-theme .admin-auth-chip {
-  color: #fff;
-  background: rgb(6 18 58 / 0.35);
-  border: 1px solid rgb(255 255 255 / 0.22);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
 }
 .admin-theme .admin-auth-card {
   background: linear-gradient(160deg, rgb(10 26 80 / 0.55), rgb(10 26 80 / 0.32));
@@ -774,16 +748,6 @@
 
 /* A primary button with a soft brand-coloured glow, for the one big action
    on a screen (Sign in, Verify). */
-.admin-theme .admin-btn-glow {
-  background: linear-gradient(180deg, var(--color-brand-500), var(--color-brand-600));
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 8px 20px -8px rgb(38 89 216 / 0.65);
-  transition: box-shadow 200ms ease-out, filter 150ms ease-out;
-}
-.admin-theme .admin-btn-glow:hover:not(:disabled) {
-  filter: brightness(1.05);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset, 0 12px 26px -8px rgb(38 89 216 / 0.75);
-}
-
 /* The blinking caret in an empty code slot. */
 @keyframes caretBlink {
   0%, 45% { opacity: 1; }
@@ -816,10 +780,6 @@
     box-shadow: none;
     border-radius: 0;
     padding: 0;
-  }
-  .admin-theme .admin-hero::before,
-  .admin-theme .admin-hero::after {
-    display: none;
   }
   .admin-theme .admin-hero :is(h1, h2, h3, p) {
     color: #000;

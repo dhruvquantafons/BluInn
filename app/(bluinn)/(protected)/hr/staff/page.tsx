@@ -54,7 +54,7 @@ export default async function HrStaffPage() {
   return (
     <Card>
       {staff.length === 0 ? (
-        <EmptyState message="No active staff." />
+        <EmptyState message="No active staff" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

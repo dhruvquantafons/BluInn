@@ -160,7 +160,7 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
           <SectionTitle>Bills</SectionTitle>
         </div>
         {orders.length === 0 ? (
-          <EmptyState message="No bills at this outlet today." />
+          <EmptyState message="No bills at this outlet today" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -219,7 +219,7 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
               if (own.length === 0) return null;
               return (
                 <div key={category?.id ?? "none"}>
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">
+                  <p className="text-[12px] text-slate-500 mb-1.5">
                     {category?.name ?? "Other"}
                     {category?.tax_rate !== null && category?.tax_rate !== undefined && (
                       <span className="normal-case tracking-normal"> · {category.tax_rate}% tax</span>

@@ -63,7 +63,7 @@ export default async function MyTasksPage() {
           untilIso={zonedTime(addDays(today, 1), "00:00", settings.timezone).toISOString()}
         />
         <Card>
-          <EmptyState message="No tasks assigned to you right now." />
+          <EmptyState message="No tasks assigned to you right now" />
         </Card>
       </div>
     );

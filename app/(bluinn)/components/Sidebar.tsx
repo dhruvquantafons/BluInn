@@ -88,7 +88,7 @@ export default function Sidebar({
                 <BrandMark className="w-8 h-8" />
                 <span>
                   <Wordmark className="block text-[15px] leading-none" />
-                  <span className="block text-[8.5px] uppercase tracking-[0.2em] text-white/65 mt-1.5">{PRODUCT.descriptor}</span>
+                  <span className="block text-[12px] text-white/70 mt-1">{PRODUCT.descriptor}</span>
                 </span>
               </span>
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="p-1 rounded-lg hover:bg-white/10 cursor-pointer">

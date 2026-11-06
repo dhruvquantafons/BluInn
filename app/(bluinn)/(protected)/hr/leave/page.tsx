@@ -44,7 +44,7 @@ export default async function LeavePage() {
           <SectionTitle>Waiting for approval ({waiting.length})</SectionTitle>
         </div>
         {waiting.length === 0 ? (
-          <EmptyState message="No leave requests waiting." />
+          <EmptyState message="No leave requests waiting" />
         ) : (
           <ul className="divide-y divide-slate-100">
             {waiting.map((r) => (
@@ -88,7 +88,7 @@ export default async function LeavePage() {
           <SectionTitle>Recent decisions</SectionTitle>
         </div>
         {recent.length === 0 ? (
-          <EmptyState message="Nothing in the last 30 days." />
+          <EmptyState message="Nothing in the last 30 days" />
         ) : (
           <ul className="divide-y divide-slate-100">
             {recent.map((r) => (

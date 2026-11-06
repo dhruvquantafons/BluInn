@@ -1114,10 +1114,10 @@ export const CHECKLIST_CATEGORY_LABELS = { linen: "Linen", amenities: "Amenities
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   tentative: "Tentative",
   confirmed: "Confirmed",
-  checked_in: "Checked In",
-  checked_out: "Checked Out",
+  checked_in: "Checked in",
+  checked_out: "Checked out",
   cancelled: "Cancelled",
-  no_show: "No Show",
+  no_show: "No-show",
   waitlisted: "Waitlisted",
 };
 

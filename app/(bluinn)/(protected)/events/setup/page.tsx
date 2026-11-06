@@ -138,7 +138,7 @@ export default async function EventSetupPage() {
             </p>
 
             {layouts.filter((l) => l.space_id === space.id).length === 0 ? (
-              <EmptyState message="No seating plans yet." />
+              <EmptyState message="No seating plans yet" />
             ) : (
               <div className="overflow-x-auto mb-4">
                 <table className="w-full text-xs">
@@ -253,7 +253,7 @@ export default async function EventSetupPage() {
         </div>
 
         {packages.length === 0 ? (
-          <EmptyState message="No catering packages yet." />
+          <EmptyState message="No catering packages yet" />
         ) : (
           <div className="divide-y divide-slate-100">
             {packages.map((p) => (
@@ -359,7 +359,7 @@ export default async function EventSetupPage() {
         </div>
 
         {equipment.length === 0 ? (
-          <EmptyState message="No equipment listed yet." />
+          <EmptyState message="No equipment listed yet" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

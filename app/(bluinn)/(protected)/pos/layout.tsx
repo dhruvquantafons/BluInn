@@ -1,4 +1,4 @@
-import { UtensilsCrossed } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -16,7 +16,6 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   return (
     <>
       <PageHeader
-        icon={<UtensilsCrossed />}
         title="Point of sale"
         description="Restaurant, bar, spa, shop, mini-bar, room service and laundry. Bills can be charged to a guest's room."
       />

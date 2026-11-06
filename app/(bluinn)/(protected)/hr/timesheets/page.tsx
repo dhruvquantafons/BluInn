@@ -80,7 +80,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
 
       <Card>
         {rows.length === 0 ? (
-          <EmptyState message="No active staff." />
+          <EmptyState message="No active staff" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

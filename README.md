@@ -101,13 +101,13 @@ flash report (day, month and year to date against last year), operational and fi
 report builder, scheduled report emails and the notification log.</td>
 </tr>
 <tr>
-<td valign="top"><b>People</b><br /><sub>HR & attendance · Staff</sub></td>
+<td valign="top"><b>People</b><br /><sub>HR & attendance (My work · My profile · Roster · Attendance · Timesheets · Leave) · Staff</sub></td>
 <td valign="top">Rosters, geofenced clock-in and attendance, leave, weekly timesheets with overtime and
 manager approval (which locks the week), a payroll export with approved hours, each person's own profile, and
 staff accounts.</td>
 </tr>
 <tr>
-<td valign="top"><b>Admin</b><br /><sub>Properties · Roles · Settings · Audit log</sub></td>
+<td valign="top"><b>Admin</b><br /><sub>Properties · Roles · Settings · System status · Data export · Audit log</sub></td>
 <td valign="top">A group of hotels and the standards pushed to it, roles and permissions, property settings and
 message templates, System status (integrations, database version, night audit and scheduled jobs, test email
 and SMS), a full data export as a ZIP of CSVs, and the audit log with CSV download and a security-events
@@ -170,15 +170,17 @@ How it works:
 | Reservations Agent | Reservations office | Bookings and groups end to end, and deposits. No check-in | |
 | Night Auditor | Night shift | Front desk at night, night audit, no-shows, cash-shift audit | |
 | Guest Relations | Guest experience | Guest profiles, requests, VIP arrivals, lost & found | |
-| Housekeeping Supervisor | Head of housekeeping | Assigns and inspects rooms, room blocks, minibar and laundry posting, inventory, team leave | |
+| Housekeeping Supervisor | Head of housekeeping | Assigns and inspects rooms, room blocks, minibar and laundry posting, inventory, team leave and timesheets | |
 | Housekeeping Staff | Room attendants | Their cleaning tasks, room reports, minibar and laundry posting, lost & found | |
 | Maintenance / Engineering | Technicians | Works tickets, blocks rooms for repair | |
 | POS Cashier | Outlet staff | Takes orders and settles bills, including charging them to a room; cash shift | |
-| F&B Manager | Head of food and beverage | Outlets, menus, prices and voids, outlet takings, inventory, team leave | |
-| Banquet Manager | Banquets and events | Enquiries, quotations, event orders and banquet billing (approval above the threshold stays with the GM) | |
+| F&B Manager | Head of food and beverage | Outlets, menus, prices and voids, outlet takings, inventory, team leave and timesheets | |
+| Banquet Manager | Banquets and events | Enquiries, quotations, event orders and banquet billing (approval above the threshold stays with the GM), team leave and timesheets | |
 | Finance / Accounts | Accounts | Folios, payments, invoices and credit notes, refund approval, voids, cash-shift audit, financial reports and the GST register, payroll export | Yes |
 
-Every role except System Administrator can also report maintenance problems (`maintenance.report`).
+Every role except System Administrator can also report maintenance problems (`maintenance.report`). Everyone,
+whatever their role, has **HR → My work** (clock in and out, their shifts, leave and their own timesheet) and
+**HR → My profile** (their own contact details).
 
 Sales & Marketing, HR Manager, Engineering Supervisor and Front Office Cashier no longer ship (`0035`); the General
 Manager covers them. A hotel that wants one can create it under **Admin → Roles**.
@@ -475,25 +477,28 @@ neon/migrations/           The database schema, security policies and triggers, 
 neon/tests/                Database behaviour tests
 scripts/                   db-migrate.mjs, db-create-admin.mjs, licence key tools
 tests/                     Unit tests and the Neon integration test
-docs/                      How it works, go-live checklist, README images
+docs/                      How it works, go-live checklist, PMS review, README images
 desktop/                   Windows desktop build, and the local stack behind `npm run dev:db`
 
 app/
 ├── layout.tsx             Root layout and metadata
 ├── not-found.tsx, error.tsx, global-error.tsx   Branded fallback screens
 ├── api/                   Integration endpoints, scheduled jobs, and storage/ (files on Neon)
-├── lib/                   Business logic: auth, permissions, pricing, tax, dates, folios, invoices,
-│                          loyalty, POS, events, reports, revenue, notifications, properties, …
+├── lib/                   Business logic: auth, permissions, pricing, tax and GST, dates, folios,
+│                          invoices, cashiering, loyalty, POS, events, inventory, reports, revenue,
+│                          HR and timesheets, audit, notifications, properties, ZIP export, …
 ├── lib/neon/              The Neon backend: query translator, auth, sessions, TOTP, storage
 └── (bluinn)/              The app. A route group, so it adds nothing to the URL
     ├── *-actions.ts       Server actions, one file per area
     ├── components/        App shell (top bar, sidebar, status strip), BrandMark, PrintFooter, ui.tsx
     ├── DESIGN.md          The design system: theme tokens, layout, components
     ├── login/, security/  Sign-in (/login), 2FA and password (/security)
-    └── (protected)/       Every signed-in page: dashboard (/), front-desk, bookings, guests,
-                           groups, tape-chart, rooms, housekeeping, maintenance, pos, events,
-                           rates, revenue, billing, reports, notifications, hr, staff,
-                           properties, roles, settings, audit
+    └── (protected)/       Every signed-in page: dashboard (/), front-desk (and cash shifts),
+                           bookings, guests, groups, tape-chart, night-audit, rooms,
+                           housekeeping, maintenance, inventory, pos, events, rates, revenue,
+                           billing (invoices, credit notes, GST register), reports (flash),
+                           notifications, hr (profile, timesheets), staff, properties, roles,
+                           settings (status, export), audit (security)
 ```
 
 </details>
@@ -524,12 +529,15 @@ Leave them alone unless you remove them on purpose in a new migration.
 <br />
 
 - **Unit tests** (`npm test`, `tests/`): pricing, tax and penalties, room assignment, password policy, HR,
-  message templates, invoices, currency conversion, loyalty points, POS lines and charge-to-room rules,
-  hotel KPIs, report periods, pricing rules and promo codes.
+  timesheets and overtime, message templates, invoices, GST (GSTIN check, CGST/SGST split, deadlines) and the
+  GSTR-1 register, currency conversion, loyalty points, POS lines and charge-to-room rules, cashier shifts,
+  front-desk lists, inventory, hotel KPIs and the flash report, report periods, pricing rules and promo codes,
+  the audit log's security view, and the ZIP writer behind the data export.
 - **Database behaviour tests** (`neon/tests/`): apply every migration to a throwaway Postgres and check
   what only a real database can, which is row-level security, `SECURITY DEFINER` functions and trigger
   order. They cover overbooking, permissions, staff-only access, invoice immutability, refund approval,
-  loyalty, the POS bill lifecycle, report access and property isolation. **These matter most**: they have
+  loyalty, the POS bill lifecycle, report access and property isolation, the night-audit lock, cashier
+  shifts, credit notes and the GST cancel window, timesheet approval and the attendance lock. **These matter most**: they have
   caught a privilege escalation, and scheduled jobs that would have acted on every hotel in a group at
   once.
 
@@ -595,7 +603,8 @@ Declared in `vercel.json`. They need `CRON_SECRET`, which Vercel sends as a bear
 | `/api/cron/maintenance` | 02:30 daily | Escalates overdue tickets, raises due preventive work |
 | `/api/cron/notifications` | 03:00 daily | Pre-arrival, check-in and post-stay messages, and VIP arrival alerts |
 
-They work through every active property in the deployment. Vercel Cron runs only on production; to test a
+They work through every active property in the deployment. Each run is recorded, and **Admin → System
+status** shows when each job last ran and whether it worked. Vercel Cron runs only on production; to test a
 job on a preview, call it with the bearer token. The Hobby plan limits the number of cron jobs; if it
 refuses three, merge them into one endpoint rather than dropping one.
 
@@ -643,7 +652,12 @@ Also built in:
 - **Password rules:** complexity, expiry, and lockout after repeated failures
 - **Sign-out after inactivity**, and administrators can end anyone's sessions
 - **Private ID scans:** only authorised roles can view them, and every view is logged
-- **An audit log** with before and after values, which nobody can edit or delete
+- **An audit log** with before and after values, which nobody can edit or delete. It downloads as CSV, and
+  its **Security events** view lists sign-ins and failures, role and permission changes, suspended accounts,
+  password and 2FA changes, and data downloads
+- **Data export** of a whole property is limited to `data.export` (System Administrator only by default),
+  leaves out ID documents and passwords, and is itself logged
+- **System status** warns while two-factor sign-in is still in demo mode
 - **Not indexed:** `robots.txt` disallows everything
 
 The full model, and the traps to know before changing database code, are in
@@ -678,15 +692,19 @@ The full model, and the traps to know before changing database code, are in
 5. **No recipe costing in the outlets.** Inventory consumes linked items as bills settle, but a dish is not
    broken down into its ingredients.
 6. **Guest profiles are per property.** A guest who stays at two hotels in a group has a profile at each;
-   loyalty rules are shared from head office, and points are earned per property.
+   loyalty rules are shared from head office, and points are earned per property. The data export is per
+   property too: download each hotel's separately.
 7. **The app is in English.** Other languages apply to guest messages.
-8. **Corporate accounts and the city ledger are switched off.** Invoices bill the guest; there is no
+8. **No payroll calculation.** The payroll export gives attendance, leave and approved regular and overtime
+   hours for a payroll system or accountant; BluInn holds no salaries and works out no PF, ESI, professional
+   tax or payslips. Leave has no balances or accruals, and there is no holiday calendar.
+9. **Corporate accounts and the city ledger are switched off.** Invoices bill the guest; there is no
    bill-to-company or receivables ledger (see [the PMS review](docs/pms-review.md)).
-9. **On Neon, nothing updates live.** The dashboard, front desk and housekeeping boards refresh every 15
+10. **On Neon, nothing updates live.** The dashboard, front desk and housekeeping boards refresh every 15
    seconds while on screen.
-10. **On Neon, files live in the database.** Room photos, ID scans and maintenance photos count towards the
+11. **On Neon, files live in the database.** Room photos, ID scans and maintenance photos count towards the
     Neon plan's storage (0.5 GB on the free plan).
-11. **Uploads over 4.5 MB fail on Vercel.** The app allows 5 MB images, but a Vercel function accepts at most
+12. **Uploads over 4.5 MB fail on Vercel.** The app allows 5 MB images, but a Vercel function accepts at most
     4.5 MB per request.
 
 </details>
@@ -699,7 +717,7 @@ The full model, and the traps to know before changing database code, are in
 |---|---|
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
-| [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations and Commercial review, with the fix and build-out plan |
+| [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

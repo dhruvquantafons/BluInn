@@ -313,7 +313,7 @@ export default async function GuestProfilePage({
           <SectionTitle>Stay history</SectionTitle>
         </div>
         {stays.length === 0 ? (
-          <EmptyState message="No bookings yet." />
+          <EmptyState message="No bookings yet" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -371,7 +371,7 @@ export default async function GuestProfilePage({
         <SectionTitle>Messages sent</SectionTitle>
         <NotificationList
           items={(messages ?? []) as unknown as GuestMessage[]}
-          empty="No messages have been sent to this guest yet."
+          empty="No messages have been sent to this guest yet"
         />
       </Card>
 

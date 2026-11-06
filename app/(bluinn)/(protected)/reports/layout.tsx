@@ -1,4 +1,4 @@
-import { ChartColumn } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -22,7 +22,6 @@ export default async function ReportsLayout({ children }: { children: React.Reac
   return (
     <>
       <PageHeader
-        icon={<ChartColumn />}
         title="Reports"
         description="Occupancy, revenue and performance. Figures from a closed night audit never change; live ones still can."
       />

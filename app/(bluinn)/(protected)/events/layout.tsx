@@ -1,4 +1,4 @@
-import { PartyPopper } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
@@ -24,7 +24,6 @@ export default async function EventsLayout({ children }: { children: React.React
   return (
     <>
       <PageHeader
-        icon={<PartyPopper />}
         title="Events & banquets"
         description="Conferences, banquets and functions. Catering is quoted per head; only a confirmed event holds the hall."
       />

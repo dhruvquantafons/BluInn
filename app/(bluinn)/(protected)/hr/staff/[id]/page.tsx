@@ -220,7 +220,7 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
           </ActionForm>
         )}
         {feedback.length === 0 ? (
-          <EmptyState message="No feedback recorded." />
+          <EmptyState message="No feedback recorded" />
         ) : (
           <ul className="divide-y divide-slate-100 border-t border-slate-100">
             {feedback.map((f) => (

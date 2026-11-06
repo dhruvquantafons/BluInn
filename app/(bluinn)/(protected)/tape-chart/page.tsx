@@ -51,7 +51,6 @@ export default async function TapeChartPage({
     <>
       <LiveRefresh />
       <PageHeader
-        icon={<GanttChart />}
         title="Tape chart"
         description="Every room and every stay. Click a stay to open it, or an empty day to book from that date."
         action={

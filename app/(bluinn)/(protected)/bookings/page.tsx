@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck, ListFilter, Plus } from "lucide-react";
+import { ListFilter, Plus } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
@@ -25,6 +25,7 @@ import {
   pageRange,
   pageHref,
   outOfRange,
+  plural
 } from "../../components/ui";
 
 /** Statuses where a room should already be assigned. */
@@ -90,7 +91,6 @@ export default async function BookingsPage({
       <PageHeader
         title="Bookings"
         description="Every reservation request and confirmed stay."
-        icon={<CalendarCheck />}
         chips={
           error
             ? undefined
@@ -126,7 +126,7 @@ export default async function BookingsPage({
         {error ? (
           <EmptyState message={`Could not load bookings: ${error.message}`} />
         ) : bookings.length === 0 ? (
-          <EmptyState message="No bookings match this view." />
+          <EmptyState message="No bookings match this view" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -135,7 +135,7 @@ export default async function BookingsPage({
                   <th className="px-5 py-3 font-medium">Guest</th>
                   <th className="px-5 py-3 font-medium">Stay</th>
                   <th className="px-5 py-3 font-medium">Room</th>
-                  <th className="px-5 py-3 font-medium">Room No.</th>
+                  <th className="px-5 py-3 font-medium">Room no.</th>
                   <th className="px-5 py-3 font-medium">Source</th>
                   <th className="px-5 py-3 font-medium">Total</th>
                   <th className="px-5 py-3 font-medium">Status</th>
@@ -160,7 +160,7 @@ export default async function BookingsPage({
                     <td className="px-5 py-3.5 whitespace-nowrap text-slate-700">
                       {fmtDate(b.check_in)} → {fmtDate(b.check_out)}
                       <span className="block text-[11px] text-slate-500">
-                        {nightsBetween(b.check_in, b.check_out)} night(s), {b.adults + b.children} guest(s)
+                        {plural(nightsBetween(b.check_in, b.check_out), "night")}, {plural(b.adults + b.children, "guest")}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-slate-700">

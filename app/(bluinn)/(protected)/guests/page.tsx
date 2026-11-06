@@ -81,7 +81,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
 
       <Card>
         {guests.length === 0 ? (
-          <EmptyState message={term || activeTag ? "No guests match." : "Guests appear here once they book."} />
+          <EmptyState message={term || activeTag ? "No guests match" : "Guests appear here once they book"} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

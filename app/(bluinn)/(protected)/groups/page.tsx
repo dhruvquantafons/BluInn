@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, UsersRound } from "lucide-react";
+import { Plus, } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
 import type { BookingGroup } from "../../../lib/types";
@@ -38,7 +38,6 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader
-        icon={<UsersRound />}
         title="Groups"
         description="Blocks of rooms under one master booking — weddings, tours, conferences. Guest names are added to the rooming list later."
         action={
@@ -51,7 +50,7 @@ export default async function GroupsPage({ searchParams }: { searchParams: Promi
       />
       <Card>
         {groups.length === 0 ? (
-          <EmptyState message="No group bookings yet." />
+          <EmptyState message="No group bookings yet" />
         ) : (
           <table className="w-full text-sm">
             <thead>

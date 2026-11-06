@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+import { } from "lucide-react";
 import { createClient, createServiceClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
@@ -66,7 +66,7 @@ export default async function SecurityEventsPage({
 
   return (
     <>
-      <PageHeader icon={<ShieldAlert />} title="Audit log" description="Sign-ins, and every change to who can do what." />
+      <PageHeader title="Audit log" description="Sign-ins, and every change to who can do what." />
       <SectionTabs
         tabs={[
           { href: "/audit", label: "All changes" },
@@ -97,7 +97,7 @@ export default async function SecurityEventsPage({
           <SectionTitle>Access changes and downloads</SectionTitle>
         </div>
         {events.length === 0 ? (
-          <EmptyState message="None in this period." />
+          <EmptyState message="None in this period" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -142,7 +142,7 @@ export default async function SecurityEventsPage({
             <Notice tone="warn">Sign-in attempts are kept where only the server can read them. Set the service key to see them here.</Notice>
           </div>
         ) : attempts.length === 0 ? (
-          <EmptyState message="None in this period." />
+          <EmptyState message="None in this period" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">

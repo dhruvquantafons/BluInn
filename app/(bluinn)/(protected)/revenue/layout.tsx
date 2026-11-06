@@ -1,4 +1,4 @@
-import { TrendingUp } from "lucide-react";
+import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -17,7 +17,6 @@ export default async function RevenueLayout({ children }: { children: React.Reac
   return (
     <>
       <PageHeader
-        icon={<TrendingUp />}
         title="Revenue & pricing"
         description="What the hotel is selling, at what price, and what the rules would change it to. A rule proposes a rate; small changes go live on their own and larger ones wait for approval."
       />

@@ -176,7 +176,7 @@ export default async function ApprovalsPage() {
 
         {live.length === 0 ? (
           <div className="px-5 pb-5">
-            <EmptyState message="No rule is setting a rate at the moment — every night sells at its seasonal rate." />
+            <EmptyState message="No rule is setting a rate at the moment — every night sells at its seasonal rate" />
           </div>
         ) : manage ? (
           <ActionForm

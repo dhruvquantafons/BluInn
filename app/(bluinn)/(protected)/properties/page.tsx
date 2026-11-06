@@ -74,7 +74,6 @@ export default async function PropertiesPage({
   return (
     <div className="space-y-8">
       <PageHeader
-        icon={<Building2 />}
         title="Properties"
         description={
           properties.length > 1
@@ -111,7 +110,7 @@ export default async function PropertiesPage({
         </div>
 
         {performance.length === 0 ? (
-          <EmptyState message="Nothing to compare yet." />
+          <EmptyState message="Nothing to compare yet" />
         ) : (
           <div>
           <div className="overflow-x-auto">

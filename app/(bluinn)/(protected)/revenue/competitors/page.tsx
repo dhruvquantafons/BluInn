@@ -232,7 +232,7 @@ export default async function CompetitorsPage({
 
             {readings.length === 0 ? (
               <div className="px-5 pb-5">
-                <EmptyState message="Nothing recorded for the nights ahead." />
+                <EmptyState message="Nothing recorded for the nights ahead" />
               </div>
             ) : (
               <table className="w-full text-sm">

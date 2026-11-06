@@ -177,7 +177,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
 
       <Card>
         {staff.length === 0 ? (
-          <EmptyState message="No staff in this department." />
+          <EmptyState message="No staff in this department" />
         ) : edit ? (
           <ActionForm action={saveRoster} submitLabel="Save roster" className="space-y-3 pb-4 [&>div:last-child]:px-4">
             {grid}

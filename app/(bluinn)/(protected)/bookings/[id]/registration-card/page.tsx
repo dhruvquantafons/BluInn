@@ -7,7 +7,7 @@ import { can } from "../../../../../lib/permissions";
 import { getSettings, hhmm } from "../../../../../lib/settings";
 import type { Booking } from "../../../../../lib/types";
 import { ID_TYPE_LABELS } from "../../../../../lib/types";
-import { fmtDate, fmtDateTime, Notice } from "../../../../components/ui";
+import { fmtDate, fmtDateTime, Notice, plural } from "../../../../components/ui";
 import PrintFooter from "../../../../components/PrintFooter";
 import PrintButton from "../../../../components/PrintButton";
 
@@ -95,7 +95,7 @@ export default async function RegistrationCardPage({ params }: { params: Promise
         )}
         {row("Contact", [card.phone, card.email].filter(Boolean).join(" · "))}
         {row("Room", `${booking.rooms?.room_number ?? "—"} · ${booking.room_types?.name ?? ""}`)}
-        {row("Stay", `${fmtDate(booking.check_in)} → ${fmtDate(booking.check_out)} · ${booking.adults} adult(s)${booking.children ? `, ${booking.children} child(ren)` : ""}`)}
+        {row("Stay", `${fmtDate(booking.check_in)} → ${fmtDate(booking.check_out)} · ${plural(booking.adults, "adult")}${booking.children ? `, ${plural(booking.children, "child", "children")}` : ""}`)}
         {row("Arriving from", card.arriving_from)}
         {row("Next destination", card.next_destination)}
         {card.purpose_of_visit && row("Purpose of visit", card.purpose_of_visit)}
