@@ -12,6 +12,7 @@ import { quoteStay, flatBreakdown } from "../lib/pricing";
 import { discountNights, nightsTotal } from "../lib/revenue";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../lib/policies";
 import { friendlyDbError, isOverbooked } from "../lib/db-errors";
+import { ancillaryCharge, insertFolioEntries } from "../lib/folio";
 import { sendBookingMessage, describeSend, type Template } from "../lib/notifications";
 import { alertNewBooking } from "../lib/staff-alerts";
 import { eachNight, hoursUntil, todayIn, zonedTime } from "../lib/dates";
@@ -346,9 +347,10 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
 
   // Deposit taken while on the phone.
   const depositPaid = num(fd, "deposit_amount");
+  let warn = "";
   if (depositPaid && depositPaid > 0) {
     const method = oneOfOrNull(fd, "deposit_method", PAYMENT_METHODS) ?? paymentMethod;
-    await supabase.from("folio_entries").insert({
+    const depositError = await insertFolioEntries(supabase, {
       booking_id: data.id,
       kind: "payment",
       description: "Advance deposit",
@@ -358,6 +360,8 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
       is_deposit: true,
       created_by: session.staff.id,
     });
+    // The booking stands; the desk is told the deposit is not on the folio.
+    if (depositError) warn = `Booking saved, but the deposit of ₹${depositPaid.toLocaleString("en-IN")} was not recorded: ${depositError}`;
   }
 
   if (status === "confirmed" && bool(fd, "send_confirmation")) {
@@ -388,7 +392,7 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
   // Walk-in fast path: the guest is standing at the desk, so give them the
   // best ready room and go straight to check-in. If no single room is free
   // for every night, the booking stands and the desk assigns one by hand.
-  if (bool(fd, "walk_in") && checkIn === todayIn(settings.timezone) && rooms === 1 && status !== "waitlisted") {
+  if (!warn && bool(fd, "walk_in") && checkIn === todayIn(settings.timezone) && rooms === 1 && status !== "waitlisted") {
     const roomId = await bestRoomFor(
       supabase,
       {
@@ -410,7 +414,7 @@ export async function createBooking(_prev: ActionState, fd: FormData): Promise<A
     }
   }
 
-  redirect(`/bookings/${data.id}`);
+  redirect(`/bookings/${data.id}${warn ? `?warn=${encodeURIComponent(warn)}` : ""}`);
 }
 
 // ── Status changes ─────────────────────────────────────────────────────────
@@ -511,13 +515,17 @@ export async function cancelBooking(_prev: ActionState, fd: FormData): Promise<A
   if (error) return { error: friendlyDbError(error.message) };
 
   if (charge > 0) {
-    await supabase.from("folio_entries").insert({
+    const penaltyError = await insertFolioEntries(supabase, {
       booking_id: booking.id,
       kind: "penalty",
       description: `Cancellation charge — ${penalty.explanation}`,
-      amount: charge,
+      ...ancillaryCharge(charge, booking, settings),
       created_by: session.staff.id,
     });
+    if (penaltyError) {
+      revalidateBooking(booking.id);
+      return { error: `Cancelled, but the penalty of ₹${charge.toLocaleString("en-IN")} was not posted: ${penaltyError} Post it from the folio.` };
+    }
   }
 
   let sent = "";
@@ -565,13 +573,17 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
   if (error) return { error: friendlyDbError(error.message) };
 
   if (charge > 0) {
-    await supabase.from("folio_entries").insert({
+    const penaltyError = await insertFolioEntries(supabase, {
       booking_id: booking.id,
       kind: "penalty",
       description: penalty.explanation,
-      amount: charge,
+      ...ancillaryCharge(charge, booking, settings),
       created_by: session.staff.id,
     });
+    if (penaltyError) {
+      revalidateBooking(booking.id);
+      return { error: `Marked as no-show, but the penalty of ₹${charge.toLocaleString("en-IN")} was not posted: ${penaltyError} Post it from the folio.` };
+    }
   }
 
   revalidateBooking(booking.id);
@@ -979,7 +991,9 @@ export async function recordPayment(_prev: ActionState, fd: FormData): Promise<A
   const bookingId = uuidOrNull(fd, "booking_id");
   const amount = num(fd, "amount");
   const method = oneOfOrNull(fd, "method", PAYMENT_METHODS);
-  const kind = oneOf(fd, "kind", ["payment", "refund"] as const, "payment");
+  // Payments only. Refunds go through requestRefund (billing-actions.ts) so
+  // the approval threshold and the separate approver always apply.
+  const kind = "payment" as const;
 
   if (!bookingId) return { error: "Booking not found." };
   if (amount === null || amount <= 0) return { error: "Enter an amount above zero." };
@@ -988,26 +1002,25 @@ export async function recordPayment(_prev: ActionState, fd: FormData): Promise<A
   const { error } = await supabase.from("folio_entries").insert({
     booking_id: bookingId,
     kind,
-    description: str(fd, "description", 200) || (kind === "refund" ? "Refund" : "Payment"),
+    description: str(fd, "description", 200) || "Payment",
     amount,
     method,
     reference: str(fd, "reference", 100),
-    is_deposit: kind === "payment" && bool(fd, "is_deposit"),
+    is_deposit: bool(fd, "is_deposit"),
     created_by: session.staff.id,
   });
   if (error) return { error: friendlyDbError(error.message) };
 
-  // Module 16, trigger event "payment received". A refund is not a
-  // receipt, so only a payment sends one, and only when asked: the desk
+  // Module 16, trigger event "payment received", only when asked: the desk
   // takes plenty of payments the guest is standing right there for.
   let sent = "";
-  if (kind === "payment" && bool(fd, "send_receipt")) {
+  if (bool(fd, "send_receipt")) {
     sent = " " + (await sendPaymentReceipt(supabase, bookingId, amount, session.staff.id));
   }
 
   revalidateBooking(bookingId);
   return {
-    success: `${kind === "refund" ? "Refund" : "Payment"} of ₹${amount.toLocaleString("en-IN")} recorded.${sent}`,
+    success: `Payment of ₹${amount.toLocaleString("en-IN")} recorded.${sent}`,
   };
 }
 

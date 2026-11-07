@@ -22,7 +22,7 @@ import { getSettings } from "../../lib/settings";
 import type { Booking, Room } from "../../lib/types";
 import { OCCUPYING_STATUSES, roomBoardLabel } from "../../lib/types";
 import { todayIn, minutesSince, addDays } from "../../lib/dates";
-import { kpisFrom, reportByKind, resolveRange, type DailyRow } from "../../lib/reports";
+import { kpisFrom, lastClosedDay, reportByKind, resolveRange, type DailyRow } from "../../lib/reports";
 import { runReport } from "../../lib/report-data";
 import LiveRefresh from "../components/LiveRefresh";
 import {
@@ -71,15 +71,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const tapeDays = 14;
   const tapeEnd = addDays(tapeStart, tapeDays);
 
-  // One daily_revenue run over the last 30 days feeds the revenue chart;
-  // today's KPIs are computed from today's row alone, exactly as before.
+  // One daily_revenue run over the last 30 days feeds the revenue chart. The
+  // KPI tiles read the last day night audit closed, as the flash report does:
+  // until tonight's audit posts the room charges, today's own row shows rooms
+  // sold with almost no room revenue, so ADR and RevPAR would read near zero.
+  const kpiDay = lastClosedDay(settings.business_date);
   const revenueRows = seesRevenue
     ? (((await runReport(supabase, reportByKind("daily_revenue")!, resolveRange("last30", today))).rows ??
         []) as unknown as DailyRow[])
     : [];
   const todayKpis = seesRevenue
     ? kpisFrom(
-        revenueRows.filter((r) => r.day === today),
+        revenueRows.filter((r) => r.day === kpiDay),
         Number(settings.monthly_operating_cost),
       )
     : null;
@@ -88,7 +91,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     .map((r) => ({
       day: r.day,
       occupancy: Number(r.rooms_available) > 0 ? Math.round((Number(r.rooms_sold) / Number(r.rooms_available)) * 1000) / 10 : null,
-      revenue: Number(r.total_revenue),
+      revenue: Math.round((Number(r.total_revenue) - Number(r.tax_total)) * 100) / 100,
     }))
     .sort((a, z) => a.day.localeCompare(z.day));
 
@@ -333,29 +336,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {seesBookings && todayKpis && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
-            label="ADR today"
+            label={`ADR · ${fmtDate(kpiDay)}`}
             value={fmtMoney(todayKpis.adr)}
-            hint="Room revenue ÷ rooms sold"
+            hint="Last closed day · room revenue ÷ rooms sold"
             href="/reports"
             icon={<IndianRupee />}
           />
           <StatCard
-            label="RevPAR today"
+            label={`RevPAR · ${fmtDate(kpiDay)}`}
             value={fmtMoney(todayKpis.revpar)}
-            hint="Room revenue ÷ rooms available"
+            hint="Last closed day · room revenue ÷ rooms available"
             href="/reports"
             icon={<BedDouble />}
           />
           <StatCard
-            label="Revenue today"
-            value={fmtMoney(todayKpis.totalRevenue)}
-            hint="Including tax"
+            label={`Revenue · ${fmtDate(kpiDay)}`}
+            value={fmtMoney(todayKpis.netRevenue)}
+            hint="Last closed day · excluding tax"
             href="/reports/financial"
             icon={<Wallet />}
             highlight
           />
           <StatCard
-            label="GOPPAR today"
+            label={`GOPPAR · ${fmtDate(kpiDay)}`}
             value={todayKpis.goppar === null ? "—" : fmtMoney(todayKpis.goppar)}
             hint={todayKpis.goppar === null ? "Set a monthly operating cost" : "After operating cost"}
             href="/reports"
@@ -371,7 +374,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <CardHeader
                 icon={<ChartColumn />}
                 title="Occupancy & revenue"
-                description="Last 30 days · revenue including tax"
+                description="Last 30 days · revenue excluding tax"
                 href="/reports/financial"
                 linkLabel="Financial report"
                 action={

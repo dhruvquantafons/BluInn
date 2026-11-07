@@ -180,3 +180,21 @@ export function financialYearOf(date: string): string {
 export function refundNeedsApproval(amount: number, threshold: number): boolean {
   return amount >= threshold;
 }
+
+/**
+ * The folios a check-out must invoice: each one holding a live, paid-for charge, in
+ * the order first charged, leaving out any that already has an issued invoice.
+ */
+export function foliosToInvoice(
+  entries: Pick<FolioEntry, "folio_id" | "kind" | "voided_at" | "amount" | "tax_amount">[],
+  invoiced: Set<string>,
+): string[] {
+  const out: string[] = [];
+  for (const e of entries) {
+    if (e.voided_at || !e.folio_id || invoiced.has(e.folio_id) || out.includes(e.folio_id)) continue;
+    // A complimentary night is posted at zero; it is not a supply to invoice.
+    const value = Number(e.amount) + Number(e.tax_amount ?? 0);
+    if (["room", "fee", "penalty", "extra"].includes(e.kind) && value > 0) out.push(e.folio_id);
+  }
+  return out;
+}

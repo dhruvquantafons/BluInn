@@ -5,7 +5,7 @@ import { createClient } from "../../../../../lib/supabase/server";
 import { requirePermission } from "../../../../../lib/auth";
 import { can } from "../../../../../lib/permissions";
 import { getSettings, hhmm, taxSlabsOf } from "../../../../../lib/settings";
-import { loadFolio } from "../../../../../lib/folio";
+import { ancillaryCharge, loadFolio } from "../../../../../lib/folio";
 import { timingFee, isLate } from "../../../../../lib/policies";
 import { rateForNight } from "../../../../../lib/pricing";
 import { splitRoomTax } from "../../../../../lib/tax";
@@ -15,6 +15,7 @@ import { PAYMENT_METHOD_CHOICES } from "../../../../../lib/types";
 import { checkOut } from "../../../../frontdesk-actions";
 import { Card, Field, Check, Notice, fmtDate, fmtMoney, inputClass } from "../../../../components/ui";
 import ActionForm from "../../../../components/ActionForm";
+import { BillToFields } from "../../../../components/InvoiceCorrections";
 
 export default async function CheckOutPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requirePermission("frontdesk.checkout");
@@ -55,6 +56,9 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
         rateForNight(booking.rate_breakdown, lastNight, booking.quoted_rate),
       )
     : 0;
+  // The fee carries the room's GST, as check-out posts it.
+  const lateFeeCharge = ancillaryCharge(lateFee, booking, settings, lastNight);
+  const lateFeeTotal = Math.round((lateFeeCharge.amount + lateFeeCharge.tax_amount) * 100) / 100;
 
   const projected = Math.round((folio.totals.balance + unpostedTotal) * 100) / 100;
 
@@ -99,7 +103,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
               <dt className="text-xs text-slate-500 font-semibold">Balance to settle</dt>
               <dd className={projected > 0 ? "text-rose-700 font-medium" : "text-emerald-700 font-medium"}>
                 {fmtMoney(projected)}
-                {late && lateFee > 0 ? ` + late fee ${fmtMoney(lateFee)}` : ""}
+                {late && lateFee > 0 ? ` + late fee ${fmtMoney(lateFeeTotal)}` : ""}
               </dd>
             </div>
           </dl>
@@ -118,7 +122,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
               <Check
                 name="apply_late_fee"
                 defaultChecked
-                label={`Charge late check-out (${now}, after ${hhmm(settings.check_out_time)}): ${fmtMoney(lateFee)}`}
+                label={`Charge late check-out (${now}, after ${hhmm(settings.check_out_time)}): ${fmtMoney(lateFeeTotal)} incl. tax`}
               />
             )}
 
@@ -154,6 +158,15 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
               <Field label="Allow departure with a balance — reason" hint="Only if the balance cannot be settled now. Recorded in the audit log.">
                 <input name="balance_reason" className={inputClass} />
               </Field>
+            )}
+
+            {can(session, "folio.invoice") && (
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                <p className="text-xs text-slate-600">
+                  A tax invoice is issued for each folio as the guest checks out. For a business guest, add the GSTIN and address.
+                </p>
+                <BillToFields defaults={{ name: booking.contact_name, gstin: "", address: "" }} taxRegime={settings.tax_regime ?? "gst"} />
+              </div>
             )}
 
             <Check

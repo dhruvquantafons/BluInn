@@ -78,7 +78,7 @@ export default async function BookingDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ checkedIn?: string; checkedOut?: string; keys?: string; sent?: string; tab?: string }>;
+  searchParams: Promise<{ checkedIn?: string; checkedOut?: string; keys?: string; sent?: string; tab?: string; warn?: string }>;
 }) {
   const session = await requireAnyPermission(["bookings.view", "frontdesk.view"]);
   const { id } = await params;
@@ -271,6 +271,11 @@ export default async function BookingDetailPage({
       {flags.checkedOut && (
         <div className="mb-5">
           <Notice tone="ok">Checked out. The room is marked dirty for housekeeping. {flags.sent}</Notice>
+        </div>
+      )}
+      {flags.warn && (
+        <div className="mb-5">
+          <Notice tone="warn">{flags.warn}</Notice>
         </div>
       )}
       {booking.status === "tentative" && booking.hold_until && (

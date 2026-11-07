@@ -163,19 +163,14 @@ export default function FolioPanel({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
         {canPay && (
           <ActionForm action={recordPayment} submitLabel="Record" submitClassName={secondaryButtonClass} className="space-y-3">
-            <p className="text-xs font-medium text-brand-700">Payment or refund</p>
+            <p className="text-xs font-medium text-brand-700">Payment</p>
+            <p className="text-xs text-slate-500">
+              Money going back to the guest goes through Request refund (Refund, below), so the approval limit applies.
+            </p>
             <input type="hidden" name="booking_id" value={bookingId} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Amount (₹)">
-                <input type="number" name="amount" min={0.01} step="0.01" required defaultValue={totals.balance > 0 ? totals.balance : undefined} className={inputClass} />
-              </Field>
-              <Field label="Type">
-                <select name="kind" defaultValue="payment" className={inputClass}>
-                  <option value="payment">Payment</option>
-                  <option value="refund">Refund</option>
-                </select>
-              </Field>
-            </div>
+            <Field label="Amount (₹)">
+              <input type="number" name="amount" min={0.01} step="0.01" required defaultValue={totals.balance > 0 ? totals.balance : undefined} className={inputClass} />
+            </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Method">
                 <select name="method" required defaultValue="" className={inputClass}>
@@ -196,7 +191,7 @@ export default function FolioPanel({
             <Check
               name="send_receipt"
               label="Email a receipt"
-              hint="For a payment taken remotely. Refunds never send one."
+              hint="For a payment taken remotely."
             />
             <Check name="is_deposit" label="This is a deposit" />
           </ActionForm>

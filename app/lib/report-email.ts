@@ -86,7 +86,8 @@ async function buildReportBody(db: SupabaseClient, schedule: ReportSchedule): Pr
       ["GOPPAR", k.goppar === null ? "not reported (no operating cost set)" : money(k.goppar)],
       ["Room revenue", money(k.roomRevenue)],
       ["Other revenue", money(k.otherRevenue)],
-      ["Total revenue", money(k.totalRevenue)],
+      ["Total revenue (excl. tax)", money(k.netRevenue)],
+      ["Tax charged", money(k.taxTotal)],
     ];
 
     const subject = `${hotel} — performance ${range.from === range.to ? range.from : `${range.from} to ${range.to}`}`;

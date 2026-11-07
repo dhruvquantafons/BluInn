@@ -5,16 +5,8 @@ import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
-import {
-  invoiceLines,
-  invoiceTotals,
-  taxBreakdown,
-  gstTotals,
-  formatInvoiceNumber,
-  financialYearOf,
-  refundNeedsApproval,
-} from "../lib/invoices";
-import { invoiceTaxFields } from "../lib/gst";
+import { refundNeedsApproval } from "../lib/invoices";
+import { issueFolioInvoice } from "../lib/invoice-issue";
 import {
   createPaymentLink,
   cancelPaymentLink,
@@ -22,8 +14,7 @@ import {
   razorpayConfigured,
 } from "../lib/razorpay";
 import { normalisePhone } from "../lib/integrations";
-import { todayIn } from "../lib/dates";
-import type { Booking, FolioEntry, PaymentMethod } from "../lib/types";
+import type { PaymentMethod } from "../lib/types";
 import { type ActionState, str, num, uuidOrNull, oneOf, oneOfOrNull } from "./form-utils";
 
 /**
@@ -120,112 +111,17 @@ export async function issueInvoice(_prev: ActionState, fd: FormData): Promise<Ac
   const folioId = uuidOrNull(fd, "folio_id");
   if (!folioId) return { error: "Choose a folio to invoice." };
 
-  const { data: folio } = await supabase
-    .from("folios")
-    .select("id, booking_id, label")
-    .eq("id", folioId)
-    .maybeSingle();
-  if (!folio) return { error: "Folio not found." };
-
-  const { data: existing } = await supabase
-    .from("invoices")
-    .select("number")
-    .eq("folio_id", folioId)
-    .eq("status", "issued")
-    .maybeSingle();
-  if (existing) return { error: `This folio already has invoice ${existing.number}. Cancel it before issuing another.` };
-
-  const { data: bookingRow } = await supabase
-    .from("bookings")
-    .select("*, guests(full_name)")
-    .eq("id", folio.booking_id)
-    .maybeSingle();
-  if (!bookingRow) return { error: "Booking not found." };
-  const booking = bookingRow as Booking;
-
-  const { data: entryRows } = await supabase
-    .from("folio_entries")
-    .select("*")
-    .eq("folio_id", folioId)
-    .order("created_at");
-  const entries = (entryRows ?? []) as FolioEntry[];
-
-  const regime = settings.tax_regime ?? "gst";
-  const draft = invoiceLines(entries, { regime });
-  if (draft.length === 0) return { error: "There is nothing to invoice on this folio yet." };
-  const draftTotals = invoiceTotals(draft);
-
-  // Who it is to, checked against what a tax invoice must carry. A business
-  // guest gives their GSTIN; place of supply is always the hotel's state.
-  const tax = invoiceTaxFields(
-    {
-      name: str(fd, "bill_to_name", 200) || booking.contact_name,
-      gstin: str(fd, "bill_to_gstin", 20),
-      address: str(fd, "bill_to_address", 500),
-    },
-    {
-      regime,
-      propertyGstin: settings.gstin,
-      propertyStateCode: settings.gst_state_code,
-      propertyState: settings.state,
-      invoicePrefix: settings.invoice_prefix,
-      grandTotal: draftTotals.grand,
-    },
+  const result = await issueFolioInvoice(
+    supabase,
+    settings,
+    folioId,
+    { name: str(fd, "bill_to_name", 200), gstin: str(fd, "bill_to_gstin", 20), address: str(fd, "bill_to_address", 500) },
+    session.staff.id,
   );
-  if ("error" in tax) return { error: tax.error };
+  if ("error" in result) return { error: result.error };
 
-  const lines = invoiceLines(entries, { regime, interstate: tax.fields.is_interstate });
-  const totals = invoiceTotals(lines);
-  if (totals.net < 0) return { error: "Allowances on this folio are larger than its charges." };
-  const bands = taxBreakdown(lines);
-  const split = gstTotals(lines);
-
-  // The number is claimed inside the database so two people issuing at the
-  // same moment cannot take the same sequence.
-  const fy = financialYearOf(todayIn(settings.timezone));
-  const { data: seq, error: seqError } = await supabase.rpc("next_invoice_number", {
-    p_series: settings.invoice_prefix || "INV",
-    p_fy: fy,
-  });
-  if (seqError || typeof seq !== "number") {
-    return { error: friendlyDbError(seqError?.message ?? "Could not allocate an invoice number.") };
-  }
-
-  // If the guest settled any part of this folio in another currency, note
-  // that currency and the rate used on the invoice, so a foreign-currency
-  // copy of the document always reprints with the same numbers. The invoice
-  // itself stays denominated in the property's own currency.
-  const settledIn = entries.find((e) => !e.voided_at && e.kind === "payment" && e.fx_currency);
-
-  const { data: invoice, error } = await supabase
-    .from("invoices")
-    .insert({
-      number: formatInvoiceNumber(settings.invoice_prefix || "INV", fy, seq),
-      series: settings.invoice_prefix || "INV",
-      financial_year: fy,
-      seq,
-      booking_id: folio.booking_id,
-      folio_id: folioId,
-      ...tax.fields,
-      currency: settings.currency,
-      net_total: totals.net,
-      tax_total: totals.tax,
-      grand_total: totals.grand,
-      cgst_total: split.cgst,
-      sgst_total: split.sgst,
-      igst_total: split.igst,
-      tax_breakdown: bands,
-      lines,
-      fx_currency: settledIn?.fx_currency ?? null,
-      fx_rate: settledIn?.fx_rate ?? null,
-      issued_by: session.staff.id,
-    })
-    .select("id, number")
-    .single();
-  if (error) return { error: friendlyDbError(error.message) };
-
-  revalidateBilling(folio.booking_id);
-  return { success: `Invoice ${invoice.number} issued.` };
+  revalidateBilling(result.bookingId);
+  return { success: `Invoice ${result.number} issued.` };
 }
 
 /**
@@ -516,6 +412,16 @@ async function payOutRefund(
   if (!request) return { error: "Refund request not found.", message: "" };
 
   const gatewayRef = (request.payment_transactions as { provider_ref: string | null } | null)?.provider_ref;
+
+  // Checked before any money moves: the folio refuses a refund above what was
+  // paid (0039), and by then a gateway refund would already have left.
+  const { data: left, error: leftError } = await supabase.rpc("refundable_amount", { p_booking: request.booking_id });
+  if (leftError) return { error: friendlyDbError(leftError.message), message: "" };
+  if (Number(request.amount) > Number(left ?? 0) + 0.005) {
+    const message = `Only ₹${Math.max(Number(left ?? 0), 0).toLocaleString("en-IN")} has been paid and not yet refunded on this stay.`;
+    await supabase.from("refund_requests").update({ status: "failed", error: message }).eq("id", refundId);
+    return { error: message, message: "" };
+  }
 
   if (request.method === "online_gateway") {
     if (!gatewayRef) {

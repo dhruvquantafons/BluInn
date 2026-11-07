@@ -11,7 +11,9 @@ import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
 import { timingFee, isEarly, isLate } from "../lib/policies";
 import { rateForNight } from "../lib/pricing";
-import { postRoomCharges, nightsBefore, loadFolio, billLines } from "../lib/folio";
+import { postRoomCharges, nightsBefore, loadFolio, billLines, ancillaryCharge, insertFolioEntries } from "../lib/folio";
+import { foliosToInvoice } from "../lib/invoices";
+import { issueFolioInvoice } from "../lib/invoice-issue";
 import { addDays, eachNight, nowTimeIn, todayIn, zonedTime } from "../lib/dates";
 import { sendKeyCardCommand } from "../lib/integrations";
 import { sendBookingMessage, describeSend } from "../lib/notifications";
@@ -276,8 +278,13 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
   if (cardError) return { error: friendlyDbError(cardError.message) };
 
   // ── Money ──
+  // The payment and any early check-in fee are written together, and before
+  // the stay begins: the deposit check above has already counted the payment,
+  // so a payment the folio refuses (no open cash shift, say) must stop the
+  // check-in rather than leave the guest in house with nothing received.
+  const moneyRows: Record<string, unknown>[] = [];
   if (payNow && payNow > 0 && payMethod) {
-    await supabase.from("folio_entries").insert({
+    moneyRows.push({
       booking_id: booking.id,
       kind: "payment",
       description: "Payment at check-in",
@@ -300,14 +307,18 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
     : 0;
   const applyEarly = early && earlyFee > 0 && bool(fd, "apply_early_fee");
   if (applyEarly) {
-    await supabase.from("folio_entries").insert({
+    moneyRows.push({
       booking_id: booking.id,
       kind: "fee",
       description: `Early check-in at ${nowLocal}`,
-      amount: earlyFee,
+      ...ancillaryCharge(earlyFee, booking, settings),
       stay_date: today,
       created_by: session.staff.id,
     });
+  }
+  if (moneyRows.length > 0) {
+    const moneyError = await insertFolioEntries(supabase, moneyRows);
+    if (moneyError) return { error: `Not checked in: ${moneyError}` };
   }
 
   // ── The stay begins ── (the trigger marks the room occupied)
@@ -391,14 +402,15 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
       )
     : 0;
   if (late && lateFee > 0 && bool(fd, "apply_late_fee")) {
-    await supabase.from("folio_entries").insert({
+    const feeError = await insertFolioEntries(supabase, {
       booking_id: booking.id,
       kind: "fee",
       description: `Late check-out at ${nowLocal}`,
-      amount: lateFee,
+      ...ancillaryCharge(lateFee, booking, settings, lastNight),
       stay_date: today,
       created_by: session.staff.id,
     });
+    if (feeError) return { error: `Not checked out: the late check-out fee was not posted. ${feeError}` };
   }
 
   const payNow = num(fd, "payment_amount");
@@ -406,7 +418,7 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
   if (payNow && payNow > 0) {
     if (!payMethod) return { error: "Choose how the payment was made." };
     if (!can(session, "folio.payment")) return { error: "Your role cannot take payments." };
-    await supabase.from("folio_entries").insert({
+    const payError = await insertFolioEntries(supabase, {
       booking_id: booking.id,
       kind: "payment",
       description: "Settlement at check-out",
@@ -415,6 +427,7 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
       reference: str(fd, "payment_reference", 100),
       created_by: session.staff.id,
     });
+    if (payError) return { error: `Not checked out: the payment was not recorded. ${payError}` };
   }
 
   const { entries, totals } = await loadFolio(supabase, booking.id);
@@ -434,6 +447,36 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
       p_record_id: booking.id,
       p_summary: `Checked out owing ₹${totals.balance}: ${str(fd, "balance_reason", 300)}`,
     });
+  }
+
+  // ── The tax invoice ──
+  // Every folio holding charges is invoiced as the guest leaves, so the
+  // stay's tax reaches the GST register (and the guest's loyalty points are
+  // earned). A folio already invoiced is left alone, so a retry after a
+  // refusal — say, a business guest's address missing — picks up where it
+  // stopped. From here, anything charged later goes to an "After invoice"
+  // folio (0039) and is invoiced separately.
+  let warn = "";
+  const { data: issuedRows } = await supabase
+    .from("invoices")
+    .select("folio_id")
+    .eq("booking_id", booking.id)
+    .eq("status", "issued");
+  const toInvoice = foliosToInvoice(entries, new Set((issuedRows ?? []).map((r) => r.folio_id as string)));
+  if (toInvoice.length > 0) {
+    if (can(session, "folio.invoice")) {
+      const billTo = {
+        name: str(fd, "bill_to_name", 200),
+        gstin: str(fd, "bill_to_gstin", 20),
+        address: str(fd, "bill_to_address", 500),
+      };
+      for (const folioId of toInvoice) {
+        const issued = await issueFolioInvoice(supabase, settings, folioId, billTo, session.staff.id);
+        if ("error" in issued) return { error: `Not checked out: the tax invoice could not be issued. ${issued.error}` };
+      }
+    } else {
+      warn = "No tax invoice was issued: your role cannot issue invoices. Ask someone who can to issue it from the folio.";
+    }
   }
 
   const { error } = await supabase
@@ -470,7 +513,9 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
   }
 
   revalidateDesk(booking.id);
-  redirect(`/bookings/${booking.id}?checkedOut=1${sent ? `&sent=${encodeURIComponent(sent)}` : ""}`);
+  redirect(
+    `/bookings/${booking.id}?checkedOut=1${sent ? `&sent=${encodeURIComponent(sent)}` : ""}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`,
+  );
 }
 
 /** Sends more key cards to the lock system for an in-house guest (lost or extra keys). */

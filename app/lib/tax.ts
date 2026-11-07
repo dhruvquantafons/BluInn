@@ -69,3 +69,18 @@ export function parseTaxSlabs(value: unknown): TaxSlab[] {
     )
     .map((s) => ({ up_to: s.up_to, rate: s.rate }));
 }
+
+/**
+ * Tax on a charge that goes with the room — an early check-in or late
+ * check-out fee, a cancellation or no-show penalty. GST treats each as part
+ * of the accommodation, so it takes the slab of the room's own nightly rate,
+ * not a slab of its own amount. `nightlyRate` and `amount` are both before
+ * tax or both after it, as `inclusive` says.
+ */
+export function ancillaryTax(amount: number, nightlyRate: number, slabs: TaxSlab[], inclusive: boolean): TaxSplit {
+  if (amount <= 0 || slabs.length === 0) return { net: round2(Math.max(amount, 0)), tax: 0, rate: 0 };
+  const { rate } = splitRoomTax(nightlyRate, slabs, inclusive);
+  if (!inclusive) return { net: round2(amount), tax: round2((amount * rate) / 100), rate };
+  const net = round2(amount / (1 + rate / 100));
+  return { net, tax: round2(amount - net), rate };
+}

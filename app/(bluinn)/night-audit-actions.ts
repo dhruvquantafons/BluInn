@@ -9,7 +9,7 @@ import { getSettings } from "../lib/settings";
 import { getCurrentProperty } from "../lib/properties";
 import { friendlyDbError } from "../lib/db-errors";
 import { noShowPenalty } from "../lib/policies";
-import { postRoomCharges } from "../lib/folio";
+import { ancillaryCharge, insertFolioEntries, postRoomCharges } from "../lib/folio";
 import { addDays, todayIn, zonedTime } from "../lib/dates";
 import { escalateOverdueTickets } from "../lib/staff-alerts";
 import type { Booking, FolioEntry, RatePlan } from "../lib/types";
@@ -111,7 +111,7 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   // ── 2. No-shows ──
   const { data: dueData } = await supabase
     .from("bookings")
-    .select("id, reference, contact_name, rooms_count, rate_breakdown, rate_plans(*)")
+    .select("id, reference, contact_name, rooms_count, check_in, quoted_rate, rate_breakdown, rate_plans(*)")
     .in("status", ["tentative", "confirmed"])
     .lte("check_in", day);
   const due = (dueData ?? []) as unknown as (Booking & { rate_plans: RatePlan | null })[];
@@ -134,14 +134,15 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
         .in("status", ["tentative", "confirmed"]);
       if (error) return fail(error.message);
       if (penalty.amount > 0) {
-        await supabase.from("folio_entries").insert({
+        const penaltyError = await insertFolioEntries(supabase, {
           booking_id: b.id,
           kind: "penalty",
           description: penalty.explanation,
-          amount: penalty.amount,
+          ...ancillaryCharge(penalty.amount, b, settings),
           night_audit_date: day,
           created_by: staffId,
         });
+        if (penaltyError) return fail(`No-show penalty for ${b.reference} was not posted: ${penaltyError}`);
       }
       noShows.push({ reference: b.reference, guest: b.contact_name, penalty: penalty.amount });
     }

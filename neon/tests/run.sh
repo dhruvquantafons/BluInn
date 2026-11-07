@@ -25,3 +25,5 @@ for f in "$MIGRATIONS"/*.sql; do
 done
 echo "All migrations applied."
 psql -d "$DB" -f "$HERE/behaviour.sql"
+# Assertions, not just output to read: stops at the first that fails.
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes.sql"

@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Booking, FolioEntry, PropertySettings } from "./types";
 import { rateForNight } from "./pricing";
-import { splitRoomTax } from "./tax";
+import { ancillaryTax, splitRoomTax } from "./tax";
 import { taxSlabsOf } from "./settings";
 import { eachNight } from "./dates";
 import { folioTotals } from "./policies";
+import { friendlyDbError } from "./db-errors";
 
 type ChargeableBooking = Pick<
   Booking,
@@ -110,4 +111,58 @@ export function billLines(entries: FolioEntry[], taxLabel: string) {
     { label: "Payments received", amount: -sum(["payment", "adjustment"]) },
   ];
   return lines.filter((l) => l.amount !== 0).map((l) => ({ ...l, amount: Math.round(l.amount * 100) / 100 }));
+}
+
+/**
+ * Writes folio lines and says, in the desk's words, why the database refused
+ * them — or null when they were written. Every payment, fee and penalty goes
+ * through here: one that fails silently leaves the stay showing money taken
+ * or owed that never reached the folio.
+ */
+export async function insertFolioEntries(
+  supabase: Pick<SupabaseClient, "from">,
+  rows: Record<string, unknown> | Record<string, unknown>[],
+): Promise<string | null> {
+  const { error } = await supabase.from("folio_entries").insert(Array.isArray(rows) ? sameColumns(rows) : rows);
+  return error ? friendlyDbError(error.message) : null;
+}
+
+/** folio_entries columns that are NOT NULL with a default (0007, 0036). */
+const FOLIO_DEFAULTS: Record<string, unknown> = {
+  description: "",
+  tax_amount: 0,
+  tax_rate: 0,
+  reference: "",
+  is_deposit: false,
+  void_reason: "",
+};
+
+/**
+ * A batch insert writes the same columns for every row, so a key one row
+ * leaves out is written as null — not the column default — and a payment
+ * beside a fee would break tax_amount's NOT NULL. Fill each gap explicitly.
+ */
+function sameColumns(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const keys = new Set(rows.flatMap((r) => Object.keys(r)));
+  return rows.map((r) => {
+    const out: Record<string, unknown> = { ...r };
+    for (const k of keys) if (!(k in out)) out[k] = k in FOLIO_DEFAULTS ? FOLIO_DEFAULTS[k] : null;
+    return out;
+  });
+}
+
+/**
+ * The amount and tax columns for a fee or penalty on a stay — early check-in,
+ * late check-out, cancellation, no-show. It is taxed at the GST slab of the
+ * room's nightly rate (`night`, or the first night by default).
+ */
+export function ancillaryCharge(
+  amount: number,
+  booking: Pick<Booking, "check_in" | "quoted_rate" | "rate_breakdown">,
+  settings: Pick<PropertySettings, "tax_inclusive" | "tax_slabs">,
+  night: string = booking.check_in,
+): { amount: number; tax_amount: number; tax_rate: number } {
+  const nightly = rateForNight(booking.rate_breakdown, night, booking.quoted_rate);
+  const split = ancillaryTax(amount, nightly, taxSlabsOf(settings as PropertySettings), settings.tax_inclusive);
+  return { amount: split.net, tax_amount: split.tax, tax_rate: split.rate };
 }

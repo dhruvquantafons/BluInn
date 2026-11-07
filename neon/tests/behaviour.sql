@@ -411,7 +411,7 @@ select number, status from invoices where number = 'TEST/2026-27/0001';
 
 \echo '--- EXPECT refusal: approving your own refund request'
 insert into refund_requests (booking_id, amount, reason, method, requested_by)
-select id, 2000, 'Overcharged', 'cash', '00000000-0000-0000-0000-000000000001' from bookings where reference='BK-OLD1';
+select id, 900, 'Overcharged', 'cash', '00000000-0000-0000-0000-000000000001' from bookings where reference='BK-OLD1';
 update refund_requests set status='approved', decided_by='00000000-0000-0000-0000-000000000001', decided_at=now()
  where reason='Overcharged';
 \echo '--- someone else may approve it'

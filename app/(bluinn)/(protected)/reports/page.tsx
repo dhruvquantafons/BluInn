@@ -84,7 +84,7 @@ export default async function ReportsOverviewPage({
 
       {financial && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total revenue" value={fmtMoney(kpis.totalRevenue)} hint="Including tax" />
+          <StatCard label="Total revenue" value={fmtMoney(kpis.netRevenue)} hint={`Excluding tax · ${fmtMoney(kpis.totalRevenue)} with tax`} />
           <StatCard label="Room revenue" value={fmtMoney(kpis.roomRevenue)} hint={`Other ${fmtMoney(kpis.otherRevenue)}`} />
           <StatCard label={settings.tax_label} value={fmtMoney(kpis.taxTotal)} hint="Charged in this period" />
           <StatCard

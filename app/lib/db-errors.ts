@@ -30,6 +30,11 @@ export function friendlyDbError(message: string | undefined | null): string {
     "ALLOWANCE_",
     // Timesheets (0038).
     "TIMESHEET_",
+    // Interconnection guards (0039).
+    "FOLIO_INVOICED:",
+    "REFUND_EXCEEDS_PAID:",
+    "EVENT_REFUND_EXCEEDS_PAID:",
+    "POS_DAY_CLOSED:",
   ]) {
     if (message.startsWith(code)) {
       const detail = message.slice(message.indexOf(":") + 1).trim();

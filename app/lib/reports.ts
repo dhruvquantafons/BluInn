@@ -50,7 +50,10 @@ export interface Kpis {
   roomRevenue: number;
   otherRevenue: number;
   taxTotal: number;
+  /** Including tax, as report_daily carries it. */
   totalRevenue: number;
+  /** Excluding tax: what the hotel earned. GOPPAR is worked from this. */
+  netRevenue: number;
   operatingCost: number | null;
   /** How many of the days in range are closed by a night audit. */
   auditedDays: number;
@@ -86,6 +89,7 @@ export function kpisFrom(rows: DailyRow[], monthlyOperatingCost = 0): Kpis {
   const otherRevenue = round2(sum(rows, "other_revenue"));
   const taxTotal = round2(sum(rows, "tax_total"));
   const totalRevenue = round2(sum(rows, "total_revenue"));
+  const netRevenue = round2(totalRevenue - taxTotal);
   const operatingCost = proratedOperatingCost(monthlyOperatingCost, rows.length);
 
   return {
@@ -96,12 +100,13 @@ export function kpisFrom(rows: DailyRow[], monthlyOperatingCost = 0): Kpis {
     revpar: availableRoomNights > 0 ? round2(roomRevenue / availableRoomNights) : 0,
     goppar:
       operatingCost !== null && availableRoomNights > 0
-        ? round2((totalRevenue - operatingCost) / availableRoomNights)
+        ? round2((netRevenue - operatingCost) / availableRoomNights)
         : null,
     roomRevenue,
     otherRevenue,
     taxTotal,
     totalRevenue,
+    netRevenue,
     operatingCost,
     auditedDays: rows.filter((r) => r.source === "audit").length,
     days: rows.length,
@@ -567,3 +572,14 @@ export function variancePct(current: number, previous: number): number | null {
 
 /** The departments in the order a flash report lists them. */
 export const FLASH_DEPARTMENTS = ["rooms", "fnb", "laundry", "spa", "events", "other"] as const;
+
+/**
+ * The last day night audit closed: the one before the open business date.
+ * Today's own figures are incomplete until tonight's room charges are posted,
+ * so the dashboard reports this day, as the flash report does.
+ */
+export function lastClosedDay(businessDate: string): string {
+  const d = new Date(`${businessDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
