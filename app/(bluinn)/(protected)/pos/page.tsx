@@ -11,12 +11,16 @@ import {
   Card,
   EmptyState,
   Notice,
+  Pagination,
   SectionTitle,
   StatCard,
   Tag,
   fmtDate,
   fmtDateTime,
   fmtMoney,
+  clampPage,
+  pageParam,
+  pageRange,
   tableHeadClass,
 } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
@@ -27,7 +31,8 @@ import CashierShiftCard, { loadMyShift } from "../../components/CashierShiftCard
  * every bill still to be settled. Busiest outlet first, because on a Saturday
  * night that is the one the cashier needs.
  */
-export default async function PosPage() {
+export default async function PosPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const requestedPage = pageParam((await searchParams).page);
   const session = await requireAnyPermission(["pos.view", "pos.order", "pos.pay", "pos.manage"]);
   const supabase = await createClient();
   const settings = await getSettings();
@@ -47,6 +52,10 @@ export default async function PosPage() {
   const outlets = (outletRows ?? []) as Outlet[];
   const orders = (orderRows ?? []) as unknown as PosOrder[];
   const open = orders.filter((o) => o.status === "open" || o.status === "billed");
+  // The outlet summary needs every order, so the open bills page in memory.
+  const page = clampPage(requestedPage, open.length);
+  const [from, to] = pageRange(page);
+  const openPage = open.slice(from, to + 1);
   const summary = outletSummary(outlets, orders);
   const takings = summary.reduce((s, r) => s + r.takings, 0);
   const openValue = summary.reduce((s, r) => s + r.openValue, 0);
@@ -135,7 +144,7 @@ export default async function PosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {open.map((o) => (
+                {openPage.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-50/60">
                     <td className="py-2 px-4">
                       <Link href={`/pos/orders/${o.id}`} className="font-mono text-brand-700 hover:underline">
@@ -165,6 +174,7 @@ export default async function PosPage() {
             </table>
           </div>
         )}
+        <Pagination page={page} total={open.length} path="/pos" />
       </Card>
     </div>
   );

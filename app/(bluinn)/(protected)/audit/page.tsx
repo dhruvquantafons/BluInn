@@ -1,15 +1,29 @@
 import { } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "../../../lib/supabase/server";
 import { requirePermission } from "../../../lib/auth";
 import { getSettings } from "../../../lib/settings";
 import { AUDIT_MODULES } from "../../../lib/audit";
 import { auditQuery } from "../../../lib/audit-query";
 import type { AuditEntry } from "../../../lib/types";
-import { PageHeader, Card, EmptyState, Tag, fmtDateTime, inputClass, buttonClass, secondaryButtonClass, tableHeadClass } from "../../components/ui";
+import {
+  PageHeader,
+  Card,
+  EmptyState,
+  Tag,
+  Pagination,
+  fmtDateTime,
+  inputClass,
+  buttonClass,
+  secondaryButtonClass,
+  tableHeadClass,
+  pageParam,
+  pageRange,
+  pageHref,
+  outOfRange,
+} from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
-
-const PAGE = 100;
 
 function show(v: unknown) {
   if (v === null || v === undefined || v === "") return "—";
@@ -24,19 +38,15 @@ export default async function AuditPage({
 }) {
   await requirePermission("audit.view");
   const p = await searchParams;
-  const page = Math.max(0, Number(p.page) || 0);
+  const page = pageParam(p.page);
   const supabase = await createClient();
   const settings = await getSettings();
 
-  const { data, error } = await auditQuery(supabase, p, settings.timezone).range(page * PAGE, page * PAGE + PAGE - 1);
+  const listParams = { module: p.module, q: p.q, from: p.from, to: p.to };
+  const { data, error, count } = await auditQuery(supabase, p, settings.timezone, { count: "exact" }).range(...pageRange(page));
+  if (outOfRange(error)) redirect(pageHref("/audit", listParams, 1));
   const rows = (data ?? []) as AuditEntry[];
-  const qs = (n: number) => {
-    const u = new URLSearchParams(Object.entries({ ...p, page: String(n) }).filter(([, v]) => v) as [string, string][]);
-    return `/audit?${u}`;
-  };
-  const exportQs = new URLSearchParams(
-    Object.entries({ module: p.module, q: p.q, from: p.from, to: p.to }).filter(([, v]) => v) as [string, string][],
-  );
+  const exportQs = new URLSearchParams(Object.entries(listParams).filter(([, v]) => v) as [string, string][]);
 
   return (
     <>
@@ -114,11 +124,8 @@ export default async function AuditPage({
             </table>
           </div>
         )}
+        {!error && <Pagination page={page} total={count ?? 0} path="/audit" params={listParams} />}
       </Card>
-      <div className="flex justify-between mt-4 text-sm">
-        {page > 0 ? <Link href={qs(page - 1)} className="text-brand-700">← Newer</Link> : <span />}
-        {rows.length === PAGE && <Link href={qs(page + 1)} className="text-brand-700">Older →</Link>}
-      </div>
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
@@ -6,7 +7,21 @@ import { todayIn } from "../../../../lib/dates";
 import type { Asset, MaintenanceSchedule, Room } from "../../../../lib/types";
 import { MT_PRIORITIES, MT_PRIORITY_LABELS } from "../../../../lib/types";
 import { deleteSchedule, generatePreventive, saveSchedule } from "../../../maintenance-actions";
-import { Card, Check, EmptyState, Field, Tag, inputClass, secondaryButtonClass, fmtDate } from "../../../components/ui";
+import {
+  Card,
+  Check,
+  EmptyState,
+  Field,
+  Pagination,
+  Tag,
+  inputClass,
+  outOfRange,
+  pageHref,
+  pageParam,
+  pageRange,
+  secondaryButtonClass,
+  fmtDate,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import { nameOf, staffWith, type StaffOption } from "../shared";
 
@@ -83,18 +98,25 @@ function ScheduleFields({
   );
 }
 
-export default async function PreventivePage() {
+export default async function PreventivePage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const page = pageParam((await searchParams).page);
   const session = await requireAnyPermission(["maintenance.work", "maintenance.manage"]);
   const manage = can(session, "maintenance.manage");
   const supabase = await createClient();
   const today = todayIn((await getSettings()).timezone);
 
-  const [{ data }, { data: rooms }, { data: assets }, engineers] = await Promise.all([
-    supabase.from("maintenance_schedules").select("*, rooms(room_number), assets(code, name)").order("next_due_on"),
+  const [{ data, error, count }, { data: rooms }, { data: assets }, engineers] = await Promise.all([
+    supabase
+      .from("maintenance_schedules")
+      .select("*, rooms(room_number), assets(code, name)", { count: "exact" })
+      .order("next_due_on")
+      .order("id")
+      .range(...pageRange(page)),
     supabase.from("rooms").select("id, room_number").order("room_number"),
     supabase.from("assets").select("id, code, name").eq("is_active", true).order("name"),
     staffWith(supabase, "maintenance.work"),
   ]);
+  if (outOfRange(error)) redirect(pageHref("/maintenance/preventive", {}, 1));
   const schedules = (data ?? []) as MaintenanceSchedule[];
   const roomList = (rooms ?? []) as Pick<Room, "id" | "room_number">[];
   const assetList = (assets ?? []) as Pick<Asset, "id" | "code" | "name">[];
@@ -166,6 +188,7 @@ export default async function PreventivePage() {
             ))}
           </ul>
         )}
+        <Pagination page={page} total={count ?? 0} path="/maintenance/preventive" />
       </Card>
     </div>
   );

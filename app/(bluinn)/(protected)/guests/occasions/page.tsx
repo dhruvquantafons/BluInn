@@ -4,7 +4,7 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { addDays, daysBetween, todayIn } from "../../../../lib/dates";
-import { Card, EmptyState, Tag, fmtDate } from "../../../components/ui";
+import { Card, EmptyState, Pagination, Tag, clampPage, fmtDate, pageParam, pageRange } from "../../../components/ui";
 
 type Row = {
   id: string;
@@ -27,8 +27,9 @@ function nextOccurrence(date: string, today: string): string {
 }
 
 /** Birthdays and anniversaries coming up (Module 8: special-occasion reminders). */
-export default async function OccasionsPage() {
+export default async function OccasionsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   await requirePermission("guests.view");
+  const requestedPage = pageParam((await searchParams).page);
   const supabase = await createClient();
   const settings = await getSettings();
   const today = todayIn(settings.timezone);
@@ -63,6 +64,9 @@ export default async function OccasionsPage() {
     )
     .filter((e) => e.on <= until)
     .sort((a, b) => a.on.localeCompare(b.on));
+  // Worked out from each profile's dates, so the list pages in memory.
+  const page = clampPage(requestedPage, events.length);
+  const [from, to] = pageRange(page);
 
   // The desk can act on occasions that fall during a stay.
   const stayFor = (guestId: string, on: string) =>
@@ -74,7 +78,7 @@ export default async function OccasionsPage() {
         <EmptyState message="No birthdays or anniversaries in the next 30 days. Add them on guest profiles." />
       ) : (
         <ul className="divide-y divide-slate-100">
-          {events.map((e) => {
+          {events.slice(from, to + 1).map((e) => {
             const stay = stayFor(e.guest.id, e.on);
             const days = daysBetween(today, e.on);
             return (
@@ -103,6 +107,7 @@ export default async function OccasionsPage() {
           })}
         </ul>
       )}
+      <Pagination page={page} total={events.length} path="/guests/occasions" />
     </Card>
   );
 }

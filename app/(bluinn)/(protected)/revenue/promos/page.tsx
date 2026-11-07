@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
@@ -10,10 +11,15 @@ import {
   Check,
   Field,
   Notice,
+  Pagination,
   Tag,
   dangerButtonClass,
   fmtMoney,
   inputClass,
+  outOfRange,
+  pageHref,
+  pageParam,
+  pageRange,
 } from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 
@@ -161,19 +167,30 @@ function Fields({
   );
 }
 
-export default async function PromoCodesPage() {
+export default async function PromoCodesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const page = pageParam((await searchParams).page);
   const session = await requireAnyPermission(["revenue.view", "revenue.manage", "revenue.approve"]);
   const supabase = await createClient();
   const settings = await getSettings();
   const manage = can(session, "revenue.manage");
   const today = todayIn(settings.timezone);
 
-  const [{ data: promos }, { data: types }, { data: plans }] = await Promise.all([
-    supabase.from("promo_codes").select("*").order("created_at", { ascending: false }),
+  const [{ data: promos, error: promoError, count }, { data: types }, { data: plans }] = await Promise.all([
+    supabase
+      .from("promo_codes")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(...pageRange(page)),
     supabase.from("room_types").select("id, name").eq("is_active", true).order("sort_order"),
     supabase.from("rate_plans").select("id, name").eq("is_active", true).order("sort_order"),
   ]);
 
+  if (outOfRange(promoError)) redirect(pageHref("/revenue/promos", {}, 1));
   const list = (promos ?? []) as PromoCode[];
   const typeList = (types ?? []) as Pick<RoomType, "id" | "name">[];
   const planList = (plans ?? []) as Pick<RatePlan, "id" | "name">[];
@@ -239,6 +256,12 @@ export default async function PromoCodesPage() {
           </Card>
         );
       })}
+
+      {(count ?? 0) > list.length && (
+        <Card>
+          <Pagination page={page} total={count ?? 0} path="/revenue/promos" className="px-5 py-3" />
+        </Card>
+      )}
     </div>
   );
 }

@@ -73,7 +73,8 @@ audit log nobody can edit.
 
 ## Features
 
-The app has five sections, matching its top navigation.
+The app has five sections, matching its top navigation. Long lists such as bookings, guests, invoices
+and the audit log show 20 rows per page.
 
 <table>
 <tr>
@@ -283,6 +284,39 @@ npm run dev                       # http://localhost:3000
 
 Sign in with that account. While `TWO_FACTOR_MODE=demo`, the second-step code is **`123456`**.
 
+<details>
+<summary><b id="demo-data">Demo data for sales demos</b></summary>
+
+<br />
+
+`neon/demo/seed_demo.sql` fills a freshly migrated database that already has its first administrator.
+The seed covers a month in the life of a mid-size hotel, with every date relative to today:
+
+- **Rooms and stays:** 30 rooms and about 430 bookings (in house, arrivals, departures, future, cancelled,
+  no-show, groups).
+- **Money:** issued GST invoices (B2C and B2B), a credit note, refunds, cash shifts, and 30 closed night-audit
+  days.
+- **Operations:** POS orders, stock movements, housekeeping, maintenance, assets and events.
+- **Commercial:** rates, promos, pricing rules and competitor rates.
+- **People:** 16 demo staff covering every role, with rosters, attendance, leave and timesheets.
+
+```bash
+psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -f neon/demo/seed_demo.sql    # load (one transaction)
+psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -f neon/demo/remove_demo.sql  # take it out again
+```
+
+Use `psql`, not the Neon SQL editor (the script uses `\set`). On macOS, add `PGSSLROOTCERT=system` if psql
+asks for a root certificate.
+
+- **Logins:** demo staff sign in with `Demo@12345` (emails `@example.com`). The administrator is not touched.
+- **Second run:** refused, because the seed records every row it adds in the `demo_seed` schema. The remove
+  script deletes exactly those rows.
+- **Never** load it into a customer's live database.
+
+See [neon/demo/README.md](neon/demo/README.md) for the login list and known gaps.
+
+</details>
+
 > [!TIP]
 > **No cloud account?** `npm run dev:db` runs the whole backend on your machine, with no Docker.
 > See [Running without a cloud account](#running-without-a-cloud-account) below.
@@ -465,6 +499,15 @@ npm run db:create-admin   # first administrator on an empty database (Neon)
 npm run dev:db            # local backend, no Docker
 ```
 
+**Lists page at 20 rows.** Every list that can grow past a screenful shows 20 rows per page, using
+`PAGE_SIZE` in `app/(bluinn)/components/paging.ts` and the `<Pagination>` bar in `components/ui.tsx`.
+Filters stay in the URL across pages, and a page number past the end goes back to page 1. Two lists on
+one page each get their own URL parameter, for example `?page=` and `?spage=` on the security page.
+
+Planning grids are not paged: the roster, tape chart, events diary and competitor rate grid. Nor are
+boards or forms. To add paging to a new list, follow "Adding search, filters and pagination to a list" in
+[DESIGN.md](app/%28bluinn%29/DESIGN.md).
+
 <details>
 <summary><b>Project structure</b></summary>
 
@@ -475,9 +518,10 @@ proxy.ts                   Session refresh and sign-in guard for every page
 db/platform.sql            Roles, auth and storage schemas for Neon (applied before the migrations)
 neon/migrations/           The database schema, security policies and triggers, in order
 neon/tests/                Database behaviour tests
+neon/demo/                 Demo data for sales demos: seed_demo.sql and remove_demo.sql
 scripts/                   db-migrate.mjs, db-create-admin.mjs, licence key tools
 tests/                     Unit tests and the Neon integration test
-docs/                      How it works, go-live checklist, PMS review, README images
+docs/                      How it works, go-live checklist, PMS review, interconnection audit, README images
 desktop/                   Windows desktop build, and the local stack behind `npm run dev:db`
 
 app/
@@ -718,6 +762,7 @@ The full model, and the traps to know before changing database code, are in
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
 | [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
+| [Interconnection audit (7 Nov 2026)](docs/interconnection-audit-2026-11-07.md) | Gaps between modules: broken links, data that doesn't flow, missing validations, dead buttons and inconsistent numbers, with a "fix these first" list. Migration `0039` fixed the first ten from the 6 Nov audit |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

@@ -3,7 +3,16 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import type { Guest } from "../../../../lib/types";
 import { mergeGuests } from "../../../guest-actions";
-import { Card, EmptyState, secondaryButtonClass, fmtDateTime } from "../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  Pagination,
+  clampPage,
+  pageParam,
+  pageRange,
+  secondaryButtonClass,
+  fmtDateTime,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import { phoneKey } from "../shared";
 
@@ -13,8 +22,9 @@ type Row = Pick<Guest, "id" | "full_name" | "email" | "phone" | "created_at">;
  * Profiles that share an email, a phone number (ignoring spaces and the
  * country code) or an identical name. Each group can be merged into one.
  */
-export default async function DuplicatesPage() {
+export default async function DuplicatesPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   await requirePermission("guests.privacy");
+  const requestedPage = pageParam((await searchParams).page);
   const supabase = await createClient();
   const { data } = await supabase
     .from("guests")
@@ -44,6 +54,9 @@ export default async function DuplicatesPage() {
   const byRoot = new Map<string, Row[]>();
   for (const g of guests) byRoot.set(find(g.id), [...(byRoot.get(find(g.id)) ?? []), g]);
   const groups = [...byRoot.values()].filter((g) => g.length > 1);
+  // Groups come from matching every profile, so they page in memory.
+  const page = clampPage(requestedPage, groups.length);
+  const [from, to] = pageRange(page);
 
   return (
     <div className="space-y-4">
@@ -57,7 +70,7 @@ export default async function DuplicatesPage() {
           <EmptyState message="No likely duplicates" />
         </Card>
       ) : (
-        groups.map((group) => (
+        groups.slice(from, to + 1).map((group) => (
           <Card key={group[0].id} className="p-4">
             <ul className="divide-y divide-slate-100 mb-3">
               {group.map((g) => (
@@ -88,6 +101,8 @@ export default async function DuplicatesPage() {
           </Card>
         ))
       )}
+      {/* Each group is its own card, so the bar sits under them without a card. */}
+      <Pagination page={page} total={groups.length} path="/guests/duplicates" className="px-1" />
     </div>
   );
 }

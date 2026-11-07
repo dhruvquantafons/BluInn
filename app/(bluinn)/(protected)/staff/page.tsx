@@ -2,23 +2,33 @@ import { Info, } from "lucide-react";
 import { createClient } from "../../../lib/supabase/server";
 import { PRODUCT } from "../../../lib/app-config";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requirePermission } from "../../../lib/auth";
 import type { Role, Staff } from "../../../lib/types";
-import { PageHeader, Card, EmptyState, fmtDateTime } from "../../components/ui";
+import { PageHeader, Card, EmptyState, fmtDateTime, Pagination, pageParam, pageRange, pageHref, outOfRange } from "../../components/ui";
 import { getProperties, getCurrentProperty } from "../../../lib/properties";
 import StaffMemberForm from "./StaffMemberForm";
 import AddStaffForm from "./AddStaffForm";
 import StaffAccountActions from "./StaffAccountActions";
 
-export default async function StaffPage() {
+export default async function StaffPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const session = await requirePermission("staff.manage");
   const me = session.staff;
+  const page = pageParam((await searchParams).page);
   const supabase = await createClient();
 
-  const [{ data }, { data: roleRows }] = await Promise.all([
-    supabase.from("staff").select("*").order("created_at", { ascending: true }),
+  const [{ data, error, count }, { data: names }, { data: roleRows }] = await Promise.all([
+    supabase
+      .from("staff")
+      .select("*", { count: "exact" })
+      .order("created_at", { ascending: true })
+      .order("id")
+      .range(...pageRange(page)),
+    // Every account's name, so the "no name" warning covers all pages.
+    supabase.from("staff").select("full_name"),
     supabase.from("roles").select("*").order("sort_order"),
   ]);
+  if (outOfRange(error)) redirect(pageHref("/staff", {}, 1));
 
   const members = (data ?? []) as Staff[];
   const roles = (roleRows ?? []) as Role[];
@@ -27,7 +37,7 @@ export default async function StaffPage() {
   // property is held to the same boundary as everything else (Module 14).
   const [properties, current] = await Promise.all([getProperties(), getCurrentProperty()]);
   const propertyOptions = properties.map((p) => ({ id: p.id, code: p.code, name: p.name }));
-  const incomplete = members.filter((m) => !m.full_name.trim()).length;
+  const incomplete = (names ?? []).filter((m) => !(m.full_name ?? "").trim()).length;
 
   return (
     <>
@@ -95,6 +105,7 @@ export default async function StaffPage() {
               </div>
             </Card>
           ))}
+          <Pagination page={page} total={count ?? members.length} path="/staff" className="px-1" />
         </div>
       )}
     </>

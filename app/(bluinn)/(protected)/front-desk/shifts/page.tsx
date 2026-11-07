@@ -22,7 +22,7 @@ import {
   outOfRange,
 } from "../../../components/ui";
 
-const PAGE = 25;
+const PAGE = 20;
 
 type Row = CashierShift & {
   staff: { full_name: string; email: string } | null;

@@ -5,7 +5,7 @@
  */
 
 /** Rows per page on every paginated admin list. */
-export const PAGE_SIZE = 25;
+export const PAGE_SIZE = 20;
 
 /** The 1-based page number from a `?page=` param; anything invalid is page 1. */
 export function pageParam(value?: string) {
@@ -33,11 +33,15 @@ export function clampPage(page: number, total: number, size = PAGE_SIZE) {
   return Math.min(page, Math.max(1, Math.ceil(total / size)));
 }
 
-/** A list URL with its filters kept and `page` set (omitted for page 1). */
-export function pageHref(path: string, params: PageParams, page: number) {
+/**
+ * A list URL with its filters kept and `page` set (omitted for page 1).
+ * `param` names the page param when a second list on the same page needs
+ * its own (e.g. "spage"); it defaults to "page".
+ */
+export function pageHref(path: string, params: PageParams, page: number, param = "page") {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v && k !== "page") q.set(k, v);
-  if (page > 1) q.set("page", String(page));
+  for (const [k, v] of Object.entries(params)) if (v && k !== param) q.set(k, v);
+  if (page > 1) q.set(param, String(page));
   return q.size ? `${path}?${q}` : path;
 }
 

@@ -25,8 +25,8 @@ import {
   outOfRange,
 } from "../../components/ui";
 
-/** A fortnight of closed days per page of history. */
-const HISTORY_PAGE = 14;
+/** Closed days per page of history, the same 20 as every other list. */
+const HISTORY_PAGE = 20;
 import ActionForm from "../../components/ActionForm";
 
 export default async function NightAuditPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {

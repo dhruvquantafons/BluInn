@@ -53,8 +53,8 @@ const BOARD = [
 type BoardValue = (typeof BOARD)[number]["value"];
 const TILE: Record<string, string> = Object.fromEntries(BOARD.map((b) => [b.label, b.tile]));
 
-/** Rooms per page: four full rows of the six-across board. */
-const ROOMS_PAGE = 24;
+/** Rooms per page, the same 20 as every other list. */
+const ROOMS_PAGE = 20;
 
 const HK_FLOW: HousekeepingStatus[] = ["dirty", "cleaning", "clean", "inspected"];
 

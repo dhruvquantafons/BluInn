@@ -320,6 +320,12 @@ if (outOfRange(error)) redirect(pageHref("/rooms", listParams, 1));
 - Each control carries the others' params (`params`, `keep`) and always
   drops `page`, so a new search or filter starts on page 1.
 - The `"all"` option clears its param.
+- Two paged lists on one page each need their own URL param. Pass
+  `param="spage"` to the second `<Pagination>`, and the same name as the
+  last argument of `pageHref`. Put the other list's page number in
+  `params` so it is kept. `audit/security/page.tsx` is the example.
+- Page size is `PAGE_SIZE` (20) from `components/paging.ts`. Don't pass a
+  custom `pageSize`.
 
 ### 5. When a list is sorted or filtered in JS
 

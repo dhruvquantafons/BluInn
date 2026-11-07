@@ -642,6 +642,7 @@ export function Pagination({
   path,
   params = {},
   pageSize = PAGE_SIZE,
+  param = "page",
   className = "px-5 py-3 border-t border-slate-100",
 }: {
   page: number;
@@ -651,6 +652,8 @@ export function Pagination({
   /** The current filters, carried onto every page link. */
   params?: PageParams;
   pageSize?: number;
+  /** The URL param holding the page number; give a second list on the same page its own. */
+  param?: string;
   className?: string;
 }) {
   const last = Math.max(1, Math.ceil(total / pageSize));
@@ -668,7 +671,7 @@ export function Pagination({
       </p>
       <div className="flex items-center gap-1">
         {page > 1 ? (
-          <Link href={pageHref(path, params, page - 1)} aria-label="Previous page" className={idle}>
+          <Link href={pageHref(path, params, page - 1, param)} aria-label="Previous page" className={idle}>
             <ChevronLeft className="w-4 h-4" />
           </Link>
         ) : (
@@ -686,13 +689,13 @@ export function Pagination({
               {n}
             </span>
           ) : (
-            <Link key={n} href={pageHref(path, params, n)} className={idle}>
+            <Link key={n} href={pageHref(path, params, n, param)} className={idle}>
               {n}
             </Link>
           ),
         )}
         {page < last ? (
-          <Link href={pageHref(path, params, page + 1)} aria-label="Next page" className={idle}>
+          <Link href={pageHref(path, params, page + 1, param)} aria-label="Next page" className={idle}>
             <ChevronRight className="w-4 h-4" />
           </Link>
         ) : (

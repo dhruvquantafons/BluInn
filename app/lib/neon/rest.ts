@@ -523,6 +523,11 @@ async function handleRead(client: PoolClient, schema: Schema, req: Request, tabl
       built.innerJoins.map((j) => ` ${j}`).join("") +
       (allWhere.length ? ` where ${allWhere.join(" and ")}` : "");
     total = (await client.query<{ n: number }>(countSql, params.values)).rows[0].n;
+    // As PostgREST does: a page that starts past the last row is refused, so a
+    // stale ?page= can be sent back to page 1 (outOfRange in components/paging).
+    if (offset > 0 && offset >= total) {
+      throw new RestError(416, "PGRST103", "Requested range not satisfiable");
+    }
   }
 
   if (req.method === "HEAD") {

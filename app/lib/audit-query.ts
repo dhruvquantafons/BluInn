@@ -13,10 +13,11 @@ export interface AuditFilters {
 
 /**
  * The audit log query with the page's filters. Dates are the hotel's days:
- * "from 6 Nov" starts at midnight hotel time, not midnight UTC.
+ * "from 6 Nov" starts at midnight hotel time, not midnight UTC. Pass
+ * `{ count: "exact" }` for the page's total; the CSV export leaves it off.
  */
-export function auditQuery(supabase: Client, f: AuditFilters, timeZone: string) {
-  let query = supabase.from("audit_log").select("*").order("occurred_at", { ascending: false });
+export function auditQuery(supabase: Client, f: AuditFilters, timeZone: string, opts: { count?: "exact" } = {}) {
+  let query = supabase.from("audit_log").select("*", { count: opts.count }).order("occurred_at", { ascending: false });
   if (isAuditModule(f.module)) query = query.eq("module", f.module);
   if (f.q) {
     const term = `%${f.q.replace(/[%,()]/g, "")}%`;

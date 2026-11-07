@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { addDays, todayIn, zonedTime } from "../../../../lib/dates";
 import type { Department, ShiftType } from "../../../../lib/types";
 import { WEEKDAY_LABELS } from "../../../../lib/types";
-import { Card, EmptyState, tableHeadClass, fmtDate } from "../../../components/ui";
+import { Card, EmptyState, tableHeadClass, fmtDate, Pagination, pageParam, pageRange, pageHref, outOfRange } from "../../../components/ui";
 
 type Person = {
   id: string;
@@ -19,27 +20,39 @@ type Person = {
   joining_date: string | null;
 };
 
-export default async function HrStaffPage() {
+export default async function HrStaffPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   await requireAnyPermission(["hr.view", "hr.manage"]);
+  const page = pageParam((await searchParams).page);
   const supabase = await createClient();
   const settings = await getSettings();
   const today = todayIn(settings.timezone);
   const from = addDays(today, -29);
   const since = zonedTime(from, "00:00", settings.timezone).toISOString();
 
-  const [{ data: people }, { data: depts }, { data: types }, { data: att }, { data: hk }, { data: mt }, { data: fb }] = await Promise.all([
+  const [{ data: people, error, count }, { data: depts }, { data: types }] = await Promise.all([
     supabase
       .from("staff")
-      .select("id, full_name, email, job_title, employee_code, department_id, default_shift_id, weekly_off, joining_date")
+      .select("id, full_name, email, job_title, employee_code, department_id, default_shift_id, weekly_off, joining_date", { count: "exact" })
       .eq("is_active", true)
-      .order("full_name"),
+      .order("full_name")
+      .order("id")
+      .range(...pageRange(page)),
     supabase.from("departments").select("*").order("sort_order"),
     supabase.from("shift_types").select("*"),
-    supabase.from("attendance").select("staff_id, work_date").gte("work_date", from),
-    supabase.from("housekeeping_tasks").select("completed_by").gte("completed_at", since).not("completed_by", "is", null),
-    supabase.from("maintenance_tickets").select("resolved_by").eq("status", "resolved").gte("resolved_at", since),
-    supabase.from("staff_feedback").select("staff_id, rating").gte("created_at", since),
   ]);
+  if (outOfRange(error)) redirect(pageHref("/hr/staff", {}, 1));
+
+  // The 30-day stats are loaded for the people on this page only.
+  const ids = ((people ?? []) as Person[]).map((p) => p.id);
+  const none = { data: [] as never[] };
+  const [{ data: att }, { data: hk }, { data: mt }, { data: fb }] = ids.length
+    ? await Promise.all([
+        supabase.from("attendance").select("staff_id, work_date").in("staff_id", ids).gte("work_date", from),
+        supabase.from("housekeeping_tasks").select("completed_by").in("completed_by", ids).gte("completed_at", since),
+        supabase.from("maintenance_tickets").select("resolved_by").in("resolved_by", ids).eq("status", "resolved").gte("resolved_at", since),
+        supabase.from("staff_feedback").select("staff_id, rating").in("staff_id", ids).gte("created_at", since),
+      ])
+    : [none, none, none, none];
   const staff = (people ?? []) as Person[];
   const deptName = new Map(((depts ?? []) as Department[]).map((d) => [d.id, d.name]));
   const shiftName = new Map(((types ?? []) as ShiftType[]).map((t) => [t.id, t.name]));
@@ -95,6 +108,7 @@ export default async function HrStaffPage() {
           </table>
         </div>
       )}
+      <Pagination page={page} total={count ?? staff.length} path="/hr/staff" />
     </Card>
   );
 }

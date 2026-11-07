@@ -8,7 +8,23 @@ import { addDays, isIsoDate, mondayOf, todayIn } from "../../../../lib/dates";
 import { loadWeek, WEEK_PERSON_COLUMNS, type WeekPerson } from "../../../../lib/timesheet-data";
 import { LEAVE_KIND_LABELS, type TimesheetStatus } from "../../../../lib/types";
 import { decideTimesheet, reopenTimesheet } from "../../../hr-actions";
-import { Card, EmptyState, Notice, SectionTitle, StatCard, Tag, fmtDate, inputClass, secondaryButtonClass, tableHeadClass } from "../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  Notice,
+  SectionTitle,
+  StatCard,
+  Tag,
+  fmtDate,
+  inputClass,
+  secondaryButtonClass,
+  tableHeadClass,
+  Pagination,
+  pageParam,
+  pageRange,
+  pageHref,
+  clampPage,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 
 const STATUS: Record<TimesheetStatus | "none", { label: string; tone: "neutral" | "amber" | "green" | "red" }> = {
@@ -25,7 +41,7 @@ const h = (n: number) => (n ? `${n} h` : "—");
  * the manager approves each person's week, which freezes the figures for
  * payroll and locks that week's attendance.
  */
-export default async function TimesheetsPage({ searchParams }: { searchParams: Promise<{ week?: string; staff?: string }> }) {
+export default async function TimesheetsPage({ searchParams }: { searchParams: Promise<{ week?: string; staff?: string; page?: string }> }) {
   const session = await requireAnyPermission(["hr.view", "hr.approve_time"]);
   const canDecide = can(session, "hr.approve_time");
   const canReopen = can(session, "hr.manage");
@@ -47,6 +63,11 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const totalOt = rows.reduce((s, r) => s + (r.sheet?.status === "approved" ? Number(r.sheet.overtime_hours) : r.t.overtime), 0);
   const selected = rows.find((r) => r.p.id === params.staff) ?? null;
   const nav = (w: string) => `/hr/timesheets?week=${w}`;
+  // Headline figures above use every row; the table shows one page of them.
+  const page = clampPage(pageParam(params.page), rows.length);
+  const [first, last] = pageRange(page);
+  const pageRows = rows.slice(first, last + 1);
+  const listParams = { week, staff: selected?.p.id ?? null };
 
   return (
     <div className="space-y-6">
@@ -98,7 +119,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {rows.map(({ p, t, sheet }) => {
+                {pageRows.map(({ p, t, sheet }) => {
                   const frozen = sheet?.status === "approved";
                   const shown = frozen
                     ? { regular: Number(sheet.regular_hours), overtime: Number(sheet.overtime_hours), offDay: Number(sheet.off_day_hours) }
@@ -107,7 +128,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                   return (
                     <tr key={p.id} className={selected?.p.id === p.id ? "bg-brand-50/60" : ""}>
                       <td className="py-2 px-4">
-                        <Link href={`/hr/timesheets?week=${week}&staff=${p.id}`} className="text-slate-900 hover:text-brand-700">
+                        <Link href={pageHref("/hr/timesheets", { week, staff: p.id }, page)} className="text-slate-900 hover:text-brand-700">
                           {p.full_name}
                         </Link>
                         {p.employee_code && <span className="block text-[11px] text-slate-500">{p.employee_code}</span>}
@@ -159,6 +180,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
             </table>
           </div>
         )}
+        <Pagination page={page} total={rows.length} path="/hr/timesheets" params={listParams} />
       </Card>
 
       {selected && (

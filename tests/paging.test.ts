@@ -49,6 +49,12 @@ describe("pageHref", () => {
     expect(pageHref("/guests", { page: "7" }, 2)).toBe("/guests?page=2");
     expect(pageHref("/guests", {}, 1)).toBe("/guests");
   });
+  it("can set a named page param for a second list, keeping the first list's page", () => {
+    expect(pageHref("/audit/security", { who: "asha", page: "3", spage: "9" }, 2, "spage")).toBe(
+      "/audit/security?who=asha&page=3&spage=2",
+    );
+    expect(pageHref("/audit/security", { page: "3", spage: "9" }, 1, "spage")).toBe("/audit/security?page=3");
+  });
 });
 
 describe("pageList", () => {

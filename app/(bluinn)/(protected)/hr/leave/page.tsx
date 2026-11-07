@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
@@ -6,7 +7,21 @@ import { addDays, eachNight, todayIn } from "../../../../lib/dates";
 import type { LeaveRequest } from "../../../../lib/types";
 import { LEAVE_KIND_LABELS, LEAVE_STATUS_LABELS } from "../../../../lib/types";
 import { decideLeave } from "../../../hr-actions";
-import { Card, EmptyState, SectionTitle, Tag, inputClass, dangerButtonClass, fmtDate, fmtDateTime } from "../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  SectionTitle,
+  Tag,
+  inputClass,
+  dangerButtonClass,
+  fmtDate,
+  fmtDateTime,
+  Pagination,
+  pageParam,
+  pageRange,
+  pageHref,
+  outOfRange,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 
 type Row = LeaveRequest & { staff: { full_name: string; email: string } | null; decider: { full_name: string } | null };
@@ -14,23 +29,27 @@ type Row = LeaveRequest & { staff: { full_name: string; email: string } | null; 
 const TONE = { pending: "amber", approved: "green", rejected: "red", cancelled: "neutral" } as const;
 const days = (l: LeaveRequest) => eachNight(l.start_date, addDays(l.end_date, 1)).length;
 
-export default async function LeavePage() {
+export default async function LeavePage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const session = await requireAnyPermission(["hr.approve_leave", "hr.view"]);
+  const page = pageParam((await searchParams).page);
   const approver = can(session, "hr.approve_leave");
   const supabase = await createClient();
   const today = todayIn((await getSettings()).timezone);
 
   const select = "*, staff:staff_id(full_name, email), decider:decided_by(full_name)";
-  const [{ data: pending }, { data: decided }] = await Promise.all([
+  // Pending requests are all shown; the decided history below them pages.
+  const [{ data: pending }, { data: decided, error, count }] = await Promise.all([
     supabase.from("leave_requests").select(select).eq("status", "pending").order("start_date"),
     supabase
       .from("leave_requests")
-      .select(select)
+      .select(select, { count: "exact" })
       .neq("status", "pending")
       .gte("end_date", addDays(today, -30))
       .order("start_date", { ascending: false })
-      .limit(100),
+      .order("id")
+      .range(...pageRange(page)),
   ]);
+  if (outOfRange(error)) redirect(pageHref("/hr/leave", {}, 1));
   const waiting = (pending ?? []) as Row[];
   const recent = (decided ?? []) as Row[];
   const who = (r: Row) => r.staff?.full_name || r.staff?.email || "Staff";
@@ -106,6 +125,7 @@ export default async function LeavePage() {
             ))}
           </ul>
         )}
+        <Pagination page={page} total={count ?? recent.length} path="/hr/leave" />
       </Card>
     </div>
   );

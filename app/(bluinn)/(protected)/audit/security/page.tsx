@@ -6,7 +6,23 @@ import { hasServiceAccess } from "../../../../lib/supabase/config";
 import { addDays, isIsoDate, todayIn, zonedTime } from "../../../../lib/dates";
 import { SECURITY_ACTIONS, isSecurityEvent, securityLabel } from "../../../../lib/audit";
 import type { AuditEntry } from "../../../../lib/types";
-import { Card, EmptyState, Notice, PageHeader, SectionTitle, StatCard, Tag, buttonClass, fmtDateTime, inputClass, tableHeadClass } from "../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  Notice,
+  PageHeader,
+  Pagination,
+  SectionTitle,
+  StatCard,
+  Tag,
+  buttonClass,
+  clampPage,
+  fmtDateTime,
+  inputClass,
+  pageParam,
+  pageRange,
+  tableHeadClass,
+} from "../../../components/ui";
 import SectionTabs from "../../../components/SectionTabs";
 
 type Attempt = { email: string; succeeded: boolean; ip: string; attempted_at: string };
@@ -19,7 +35,7 @@ type Attempt = { email: string; succeeded: boolean; ip: string; attempted_at: st
 export default async function SecurityEventsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; who?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; who?: string; page?: string; spage?: string }>;
 }) {
   await requirePermission("audit.view");
   const p = await searchParams;
@@ -63,6 +79,19 @@ export default async function SecurityEventsPage({
   const known = new Set((staffRows ?? []).map((s) => s.email.toLowerCase()));
   const nameOf = new Map((staffRows ?? []).map((s) => [s.id, s.full_name || s.email]));
   const failed = attempts.filter((a) => !a.succeeded);
+
+  // Both lists are filtered in JS (and the headline figures count all of
+  // them), so each is sliced here: ?page= for access changes, ?spage= for
+  // sign-in attempts.
+  const page = clampPage(pageParam(p.page), events.length);
+  const spage = clampPage(pageParam(p.spage), attempts.length);
+  const pageOf = <T,>(list: T[], n: number) => {
+    const [first, last] = pageRange(n);
+    return list.slice(first, last + 1);
+  };
+  const eventRows = pageOf(events, page);
+  const attemptRows = pageOf(attempts, spage);
+  const filterParams = { who: p.who, from: p.from, to: p.to };
 
   return (
     <>
@@ -110,7 +139,7 @@ export default async function SecurityEventsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 align-top">
-                {events.map((e) => (
+                {eventRows.map((e) => (
                   <tr key={e.id}>
                     <td className="px-4 py-2 whitespace-nowrap text-slate-700">{fmtDateTime(e.occurred_at)}</td>
                     <td className="px-4 py-2">{e.actor_name || "System"}</td>
@@ -131,6 +160,12 @@ export default async function SecurityEventsPage({
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          total={events.length}
+          path="/audit/security"
+          params={{ ...filterParams, spage: spage > 1 ? String(spage) : null }}
+        />
       </Card>
 
       <Card>
@@ -155,7 +190,7 @@ export default async function SecurityEventsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {attempts.slice(0, 300).map((a, i) => (
+                {attemptRows.map((a, i) => (
                   <tr key={i}>
                     <td className="px-4 py-2 whitespace-nowrap text-slate-700">{fmtDateTime(a.attempted_at)}</td>
                     <td className="px-4 py-2">
@@ -171,6 +206,15 @@ export default async function SecurityEventsPage({
               </tbody>
             </table>
           </div>
+        )}
+        {hasServiceAccess() && (
+          <Pagination
+            page={spage}
+            total={attempts.length}
+            path="/audit/security"
+            param="spage"
+            params={{ ...filterParams, page: page > 1 ? String(page) : null }}
+          />
         )}
       </Card>
     </>

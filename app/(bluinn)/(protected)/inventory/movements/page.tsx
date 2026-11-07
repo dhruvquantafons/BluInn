@@ -16,7 +16,7 @@ import {
   outOfRange,
 } from "../../../components/ui";
 
-const PAGE = 50;
+const PAGE = 20;
 
 type Row = InventoryMovement & {
   inventory_items: { name: string; unit: string } | null;

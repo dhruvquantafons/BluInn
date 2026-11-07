@@ -16,9 +16,13 @@ import {
   CardHeader,
   EmptyState,
   Field,
+  Pagination,
   StatCard,
   Tag,
+  clampPage,
   fmtMoney,
+  pageParam,
+  pageRange,
   inputClass,
   secondaryButtonClass,
   tableHeadClass,
@@ -36,7 +40,7 @@ const STATE_TAG = {
  * Stock on hand per item and location, what is low, and a form to receive,
  * issue, count or write off stock.
  */
-export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ category?: string; low?: string }> }) {
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ category?: string; low?: string; page?: string }> }) {
   const session = await requireAnyPermission(["inventory.view", "inventory.manage"]);
   const sp = await searchParams;
   const supabase = await createClient();
@@ -63,6 +67,10 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
     })
     .filter((r) => (!category || r.item.category === category) && (!onlyLow || r.state === "out" || r.state === "reorder"));
   const low = items.filter((i) => ["out", "reorder"].includes(stockState(totals.get(i.id) ?? 0, Number(i.reorder_level), Number(i.par_level))));
+  // Stock state is worked out per item here, so the table pages in memory.
+  const page = clampPage(pageParam(sp.page), rows.length);
+  const [from, to] = pageRange(page);
+  const listParams = { category: category ?? null, low: onlyLow ? "1" : null };
   const value = items.reduce((s, i) => s + Math.max(0, totals.get(i.id) ?? 0) * Number(i.unit_cost), 0);
 
   if (items.length === 0) {
@@ -197,7 +205,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map(({ item, onHand, state }) => (
+                {rows.slice(from, to + 1).map(({ item, onHand, state }) => (
                   <tr key={item.id} className="hover:bg-slate-50/60">
                     <td className="py-2.5 px-4">
                       <span className="text-slate-900">{item.name}</span>
@@ -223,6 +231,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             </table>
           </div>
         )}
+        <Pagination page={page} total={rows.length} path="/inventory" params={listParams} />
       </Card>
     </div>
   );

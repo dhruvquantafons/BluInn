@@ -9,11 +9,26 @@ import { lateMinutes, workedHours } from "../../../../lib/hr";
 import type { AttendanceRecord, LeaveRequest, ShiftType, StaffShift } from "../../../../lib/types";
 import { ATTENDANCE_METHOD_LABELS, LEAVE_KIND_LABELS } from "../../../../lib/types";
 import { deleteAttendance, saveAttendance } from "../../../hr-actions";
-import { Card, Field, SectionTitle, StatCard, Tag, inputClass, secondaryButtonClass, buttonClass, tableHeadClass, fmtDate } from "../../../components/ui";
+import {
+  Card,
+  Field,
+  SectionTitle,
+  StatCard,
+  Tag,
+  inputClass,
+  secondaryButtonClass,
+  buttonClass,
+  tableHeadClass,
+  fmtDate,
+  Pagination,
+  pageParam,
+  pageRange,
+  clampPage,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import { HR_STAFF_COLUMNS, type HrStaff } from "../shared";
 
-export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ date?: string; page?: string }> }) {
   const session = await requireAnyPermission(["hr.view", "hr.manage", "hr.export"]);
   const edit = can(session, "hr.manage");
   const settings = await getSettings();
@@ -57,6 +72,11 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const lateCount = rows.filter((r) => r.late !== null && r.late > settings.hr_late_grace_minutes).length;
 
   const nav = (d: string) => `/hr/attendance?date=${d}`;
+  // The figures above count everyone; the table shows one page of the day.
+  const listed = rows.filter((r) => r.status !== "none" || r.mine.length);
+  const page = clampPage(pageParam(params.page), listed.length);
+  const [first, last] = pageRange(page);
+  const pageRows = listed.slice(first, last + 1);
   const t = (iso: string | null) => (iso ? nowTimeIn(tz, new Date(iso)) : "");
 
   return (
@@ -101,9 +121,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {rows
-                    .filter((r) => r.status !== "none" || r.mine.length)
-                    .map(({ p, mine, type, late, onLeave, status }) => (
+                  {pageRows.map(({ p, mine, type, late, onLeave, status }) => (
                       <tr key={p.id} className="align-top">
                         <td className="px-4 py-2.5">
                           <span className="font-medium text-slate-900">{p.full_name || p.email}</span>
@@ -160,6 +178,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                 </tbody>
               </table>
             </div>
+            <Pagination page={page} total={listed.length} path="/hr/attendance" params={{ date: params.date ? date : null }} />
           </Card>
         </>
       )}

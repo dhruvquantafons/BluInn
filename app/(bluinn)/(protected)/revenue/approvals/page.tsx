@@ -9,11 +9,15 @@ import {
   Card,
   EmptyState,
   Notice,
+  Pagination,
   Tag,
   checkboxClass,
+  clampPage,
   dangerButtonClass,
   fmtMoney,
   inputClass,
+  pageParam,
+  pageRange,
   secondaryButtonClass,
   tableHeadClass,
 } from "../../../components/ui";
@@ -84,7 +88,12 @@ function Rows({
   );
 }
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; lpage?: string }>;
+}) {
+  const params = await searchParams;
   const session = await requireAnyPermission(["revenue.view", "revenue.manage", "revenue.approve"]);
   const supabase = await createClient();
   const settings = await getSettings();
@@ -109,6 +118,18 @@ export default async function ApprovalsPage() {
 
   const pending = list.filter((a) => a.status === "pending");
   const live = list.filter((a) => a.status === "applied");
+
+  // Split by status in JS, so both lists are sliced here: ?page= for those
+  // waiting, ?lpage= for live ones. The counts in the headings stay totals;
+  // "Approve selected" and "Clear selected" act on the rows shown.
+  const page = clampPage(pageParam(params.page), pending.length);
+  const lpage = clampPage(pageParam(params.lpage), live.length);
+  const pageOf = (rows: PricingAdjustment[], n: number) => {
+    const [first, last] = pageRange(n);
+    return rows.slice(first, last + 1);
+  };
+  const pendingRows = pageOf(pending, page);
+  const liveRows = pageOf(live, lpage);
 
   return (
     <div className="space-y-6">
@@ -155,17 +176,23 @@ export default async function ApprovalsPage() {
               </>
             }
           >
-            <Rows rows={pending} typeName={typeName} selectable />
+            <Rows rows={pendingRows} typeName={typeName} selectable />
             <div className="px-5 pt-4" />
           </ActionForm>
         ) : (
           <>
-            <Rows rows={pending} typeName={typeName} selectable={false} />
+            <Rows rows={pendingRows} typeName={typeName} selectable={false} />
             <p className="text-xs text-slate-500 px-5 py-4">
               Your role can see these but not decide on them. A manager has to approve a change this size.
             </p>
           </>
         )}
+        <Pagination
+          page={page}
+          total={pending.length}
+          path="/revenue/approvals"
+          params={{ lpage: lpage > 1 ? String(lpage) : null }}
+        />
       </Card>
 
       <Card className="p-0 overflow-x-auto">
@@ -187,12 +214,19 @@ export default async function ApprovalsPage() {
             confirmMessage="Clear these rates? Those nights go back to their seasonal rate."
             className="space-y-0"
           >
-            <Rows rows={live} typeName={typeName} selectable />
+            <Rows rows={liveRows} typeName={typeName} selectable />
             <div className="px-5 pt-4" />
           </ActionForm>
         ) : (
-          <Rows rows={live} typeName={typeName} selectable={false} />
+          <Rows rows={liveRows} typeName={typeName} selectable={false} />
         )}
+        <Pagination
+          page={lpage}
+          total={live.length}
+          path="/revenue/approvals"
+          param="lpage"
+          params={{ page: page > 1 ? String(page) : null }}
+        />
       </Card>
     </div>
   );

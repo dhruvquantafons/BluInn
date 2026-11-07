@@ -7,15 +7,34 @@ import { getSettings } from "../../../../lib/settings";
 import { addDays, minutesSince, todayIn, zonedTime } from "../../../../lib/dates";
 import type { Role, Staff } from "../../../../lib/types";
 import { endStaffSessions } from "../../../actions";
-import { Card, EmptyState, PageHeader, SectionTitle, StatCard, Tag, dangerButtonClass, tableHeadClass, fmtDateTime } from "../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  PageHeader,
+  Pagination,
+  SectionTitle,
+  StatCard,
+  Tag,
+  clampPage,
+  dangerButtonClass,
+  pageParam,
+  pageRange,
+  tableHeadClass,
+  fmtDateTime,
+} from "../../../components/ui";
 import ActionForm from "../../../components/ActionForm";
 import { hasServiceAccess } from "../../../../lib/supabase/config";
 
 type Attempt = { email: string; succeeded: boolean; ip: string; attempted_at: string };
 
 /** Who is signed in, recent sign-ins and failures, and ending sessions (Module 15). */
-export default async function StaffActivityPage() {
+export default async function StaffActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; apage?: string }>;
+}) {
   const session = await requirePermission("staff.manage");
+  const params = await searchParams;
   const supabase = await createClient();
   const settings = await getSettings();
   const today = todayIn(settings.timezone);
@@ -50,6 +69,15 @@ export default async function StaffActivityPage() {
   const actionsToday = (id: string) => (actions ?? []).filter((a) => a.actor_id === id).length;
   const unknownFailures = attempts.filter((a) => !a.succeeded && !staff.some((s) => s.email.toLowerCase() === a.email.toLowerCase()));
 
+  // The headline figures above count everything loaded; only the two lists
+  // are sliced: ?page= for staff, ?apage= for sign-in attempts.
+  const page = clampPage(pageParam(params.page), staff.length);
+  const apage = clampPage(pageParam(params.apage), attempts.length);
+  const pageOf = <T,>(list: T[], n: number) => {
+    const [first, last] = pageRange(n);
+    return list.slice(first, last + 1);
+  };
+
   return (
     <>
       <Link href="/staff" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
@@ -78,7 +106,7 @@ export default async function StaffActivityPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {staff.map((s) => {
+              {pageOf(staff, page).map((s) => {
                 const isOnline = online.includes(s);
                 const last = lastSignIn(s.email);
                 const failed = failures(s.email);
@@ -128,6 +156,12 @@ export default async function StaffActivityPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          total={staff.length}
+          path="/staff/activity"
+          params={{ apage: apage > 1 ? String(apage) : null }}
+        />
       </Card>
 
       <Card>
@@ -138,7 +172,7 @@ export default async function StaffActivityPage() {
           <EmptyState message={hasServiceAccess() ? "No sign-in attempts" : "Needs the service role key"} />
         ) : (
           <ul className="divide-y divide-slate-100 text-sm">
-            {attempts.slice(0, 100).map((a, i) => (
+            {pageOf(attempts, apage).map((a, i) => (
               <li key={`${a.attempted_at}-${i}`} className="px-4 py-2 flex flex-wrap gap-x-4 items-center">
                 <span className="w-36 text-xs text-slate-500">{fmtDateTime(a.attempted_at)}</span>
                 <span className="flex-1 min-w-[180px]">{a.email}</span>
@@ -148,6 +182,13 @@ export default async function StaffActivityPage() {
             ))}
           </ul>
         )}
+        <Pagination
+          page={apage}
+          total={attempts.length}
+          path="/staff/activity"
+          param="apage"
+          params={{ page: page > 1 ? String(page) : null }}
+        />
       </Card>
     </>
   );
