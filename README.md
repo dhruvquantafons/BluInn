@@ -131,7 +131,17 @@ at the foot.
 <td align="center"><sub>Sign-in</sub></td>
 <td align="center"><sub>Taking a booking</sub></td>
 </tr>
+<tr>
+<td width="50%"><img src="docs/images/front-desk.png" alt="The front desk: arrivals, departures, in-house guests, the cash shift and room discrepancies" /></td>
+<td width="50%"><img src="docs/images/tape-chart.png" alt="The tape chart: every room and stay over the next two weeks" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Front desk</sub></td>
+<td align="center"><sub>Tape chart</sub></td>
+</tr>
 </table>
+
+<sub>Screenshots use the demo data (<code>neon/demo/</code>), signed in as the demo General Manager.</sub>
 
 <br />
 

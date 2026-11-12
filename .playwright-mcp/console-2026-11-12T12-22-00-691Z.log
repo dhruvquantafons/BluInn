@@ -1,0 +1,10 @@
+[   60604ms] [ERROR] WebSocket connection to 'ws://localhost:3100/_next/hmr?id=v9EcwOy5M-_4aBFc12Bdo' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:16349
+[   61608ms] [ERROR] WebSocket connection to 'ws://localhost:3100/_next/hmr?id=v9EcwOy5M-_4aBFc12Bdo' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:16349
+[   66612ms] [ERROR] WebSocket connection to 'ws://localhost:3100/_next/hmr?id=v9EcwOy5M-_4aBFc12Bdo' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:16349
+[   67981ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/front-desk?_rsc=JyWDVCfwh0d8-a0F:1
+[   67983ms] [ERROR] Failed to fetch RSC payload for http://localhost:3100/front-desk. Falling back to browser navigation. TypeError: Failed to fetch
+    at fetchInternal (http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:10831:12)
+    at createFetch (http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:4909:38)
+    at async fetchServerResponse (http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:4601:21)
+    at async fetchMissingDynamicData (http://localhost:3100/_next/static/chunks/node_modules_next_dist_client_0_90u2t._.js:6190:24) @ http://localhost:3100/_next/static/chunks/node_modules_next_dist_1e8vcs8._.js:1053
+[   67992ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3100/__nextjs_original-stack-frames:1
