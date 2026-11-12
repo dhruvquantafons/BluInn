@@ -9,12 +9,21 @@ import { requirePermission, requireSession, type Session } from "../lib/auth";
 import { can } from "../lib/permissions";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
-import { timingFee, isEarly, isLate } from "../lib/policies";
+import { timingFee, isEarly, isLate, depositReceived } from "../lib/policies";
 import { rateForNight } from "../lib/pricing";
-import { postRoomCharges, nightsBefore, loadFolio, billLines, ancillaryCharge, insertFolioEntries } from "../lib/folio";
-import { foliosToInvoice } from "../lib/invoices";
-import { issueFolioInvoice } from "../lib/invoice-issue";
-import { addDays, eachNight, nowTimeIn, todayIn, zonedTime } from "../lib/dates";
+import { postRoomCharges, nightsBefore, loadFolio, loadGuestFolio, billLines, ancillaryCharge, insertFolioEntries } from "../lib/folio";
+import { foliosToInvoice, invoiceLines, invoiceTotals } from "../lib/invoices";
+import { billToProblem, issueOutstandingInvoices } from "../lib/invoice-issue";
+import { invoiceEvent } from "../lib/event-invoice";
+import {
+  checkoutDeparture,
+  earlyFeePosted,
+  EARLY_FEE_PREFIX,
+  lateFeePosted,
+  LATE_FEE_PREFIX,
+  propertyInvoiceProblem,
+} from "../lib/checkout";
+import { eachNight, nowTimeIn, todayIn, zonedTime } from "../lib/dates";
 import { sendKeyCardCommand } from "../lib/integrations";
 import { sendBookingMessage, describeSend } from "../lib/notifications";
 import type { Booking, PaymentMethod } from "../lib/types";
@@ -193,9 +202,11 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
     return { error: "Your role cannot take payments." };
   }
 
-  const { totals } = await loadFolio(supabase, booking.id);
+  const { entries: folioEntries } = await loadFolio(supabase, booking.id);
   const guaranteed = booking.payment_method === "ota_prepaid" || bool(fd, "guarantee_confirmed");
-  const paidAfter = totals.payments + (payNow ?? 0);
+  // Money actually received: payments less refunds. An allowance is not a
+  // deposit (0043).
+  const paidAfter = depositReceived(folioEntries) + (payNow ?? 0);
   if (!guaranteed && paidAfter < Number(booking.deposit_required)) {
     return {
       error: `Collect the deposit of ₹${Number(booking.deposit_required).toLocaleString("en-IN")} (₹${paidAfter.toLocaleString("en-IN")} received), or confirm a card guarantee.`,
@@ -216,10 +227,11 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
       .single();
     if (error) return { error: friendlyDbError(error.message) };
     guestId = g.id as string;
-    await supabase.from("bookings").update({ guest_id: guestId }).eq("id", booking.id);
+    const { error: linkError } = await supabase.from("bookings").update({ guest_id: guestId }).eq("id", booking.id);
+    if (linkError) return { error: `Not checked in: ${friendlyDbError(linkError.message)}` };
   }
 
-  await supabase
+  const { error: guestError } = await supabase
     .from("guests")
     .update({
       nationality,
@@ -228,6 +240,7 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
       ...(dob ? { date_of_birth: dob } : {}),
     })
     .eq("id", guestId);
+  if (guestError) return { error: `Not checked in: the guest's details were not saved. ${friendlyDbError(guestError.message)}` };
 
   const { error: idError } = await supabase.rpc("set_guest_identity", {
     p_guest: guestId,
@@ -255,7 +268,8 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
     if (err) return { error: `Could not store the ID scan: ${err}` };
     docRows.push({ guest_id: guestId, booking_id: booking.id, kind, storage_path: path, uploaded_by: session.staff.id });
   }
-  await supabase.from("guest_documents").insert(docRows);
+  const { error: docError } = await supabase.from("guest_documents").insert(docRows);
+  if (docError) return { error: `Not checked in: the signature and ID scans were not recorded. ${friendlyDbError(docError.message)}` };
 
   const { error: cardError } = await supabase.from("registration_cards").upsert(
     {
@@ -306,11 +320,12 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
       )
     : 0;
   const applyEarly = early && earlyFee > 0 && bool(fd, "apply_early_fee");
-  if (applyEarly) {
+  // A retried check-in finds the fee already there and does not charge it twice.
+  if (applyEarly && !earlyFeePosted(folioEntries, today)) {
     moneyRows.push({
       booking_id: booking.id,
       kind: "fee",
-      description: `Early check-in at ${nowLocal}`,
+      description: `${EARLY_FEE_PREFIX} at ${nowLocal}`,
       ...ancillaryCharge(earlyFee, booking, settings),
       stay_date: today,
       created_by: session.staff.id,
@@ -333,7 +348,15 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
       checked_in_by: session.staff.id,
     })
     .eq("id", booking.id);
-  if (error) return { error: friendlyDbError(error.message) };
+  if (error) {
+    // The payment is on the folio already and counts towards the deposit on
+    // a retry; the fee is not charged twice. Only a payment typed in again would be.
+    const paid =
+      payNow && payNow > 0 && payMethod
+        ? ` The payment of ₹${payNow.toLocaleString("en-IN")} is recorded: clear it from the form before trying again.`
+        : "";
+    return { error: `Not checked in: ${friendlyDbError(error.message)}${paid}` };
+  }
 
   if (overridden) {
     await supabase.rpc("log_event", {
@@ -366,7 +389,44 @@ export async function checkIn(_prev: ActionState, fd: FormData): Promise<ActionS
 
 // ── Check-out ──────────────────────────────────────────────────────────────
 
-export async function checkOut(_prev: ActionState, fd: FormData): Promise<ActionState> {
+/** How long a desk's claim on a check-out lasts if it never releases it (a crash, say). */
+const CHECKOUT_CLAIM_MS = 2 * 60 * 1000;
+
+/**
+ * Check-out, one desk at a time (0043). Two desks checking the same guest out
+ * at once both took the settlement and both posted the late fee. The first
+ * desk now claims the booking with a conditional update; a second gets
+ * "already being checked out". The claim is released however the check-out
+ * ends, and lapses on its own after two minutes.
+ */
+export async function checkOut(prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("frontdesk.checkout");
+  const supabase = await createClient();
+  const bookingId = uuidOrNull(fd, "booking_id");
+  if (!bookingId) return { error: "Booking not found." };
+
+  const stale = new Date(Date.now() - CHECKOUT_CLAIM_MS).toISOString();
+  const { data: claimed } = await supabase
+    .from("bookings")
+    .update({ checkout_started_at: new Date().toISOString() })
+    .eq("id", bookingId)
+    .eq("status", "checked_in")
+    .or(`checkout_started_at.is.null,checkout_started_at.lt.${stale}`)
+    .select("id");
+  if (!claimed || claimed.length === 0) {
+    const { data: b } = await supabase.from("bookings").select("status").eq("id", bookingId).maybeSingle();
+    if (!b) return { error: "Booking not found." };
+    if (b.status !== "checked_in") return { error: "Only an in-house guest can be checked out." };
+    return { error: "This guest is already being checked out at another desk. Wait a moment and refresh." };
+  }
+  try {
+    return await checkOutClaimed(prev, fd);
+  } finally {
+    await supabase.from("bookings").update({ checkout_started_at: null }).eq("id", bookingId);
+  }
+}
+
+async function checkOutClaimed(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("frontdesk.checkout");
   const supabase = await createClient();
   const settings = await getSettings();
@@ -377,11 +437,21 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
   const today = todayIn(settings.timezone);
   const nowLocal = nowTimeIn(settings.timezone);
 
-  // Leaving early: the stay ends today (a same-day departure still pays one night).
-  const departure =
-    booking.check_out > today ? (today > booking.check_in ? today : addDays(booking.check_in, 1)) : booking.check_out;
+  // A stay split by date carries on as its second part from the split date:
+  // this part ends there, and the room is handed over (0040), not vacated.
+  const { data: nextPart } = await supabase
+    .from("bookings")
+    .select("id, reference, check_in")
+    .eq("split_from_id", booking.id)
+    .in("status", ["tentative", "confirmed"])
+    .order("check_in")
+    .limit(1)
+    .maybeSingle();
+  let departure = checkoutDeparture(booking, today, settings.business_date);
+  if (nextPart && departure > nextPart.check_in) departure = nextPart.check_in;
+  const handedOver = Boolean(nextPart && departure === nextPart.check_in);
 
-  // Charge any night an audit did not.
+  // ── 1. Any night an audit did not charge (idempotent: one line per night) ──
   const chargeable = { ...booking, check_out: departure };
   const posted = await postRoomCharges(
     supabase,
@@ -392,7 +462,14 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
   );
   if (posted.error) return { error: friendlyDbError(posted.error) };
 
-  const late = booking.check_out <= today && isLate(nowLocal, settings.check_out_time);
+  // ── 2. Everything that could refuse, checked before anything else is posted ──
+  // A refused check-out used to leave the late fee and the payment on the
+  // folio, and every retry posted them again.
+  // The guest settles their own part; organiser-paid nights are the event's (0042).
+  const before = await loadGuestFolio(supabase, booking.id);
+  // Late only for a guest actually leaving: a split stay's guest stays put.
+  const late =
+    !handedOver && departure >= booking.check_out && departure <= today && isLate(nowLocal, settings.check_out_time);
   const lastNight = eachNight(booking.check_in, departure).at(-1) ?? booking.check_in;
   const lateFee = late
     ? timingFee(
@@ -401,23 +478,76 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
         rateForNight(booking.rate_breakdown, lastNight, booking.quoted_rate),
       )
     : 0;
-  if (late && lateFee > 0 && bool(fd, "apply_late_fee")) {
-    const feeError = await insertFolioEntries(supabase, {
-      booking_id: booking.id,
-      kind: "fee",
-      description: `Late check-out at ${nowLocal}`,
-      ...ancillaryCharge(lateFee, booking, settings, lastNight),
-      stay_date: today,
-      created_by: session.staff.id,
-    });
-    if (feeError) return { error: `Not checked out: the late check-out fee was not posted. ${feeError}` };
-  }
+  // A retried check-out finds the fee already there and does not charge it twice.
+  const fee =
+    late && lateFee > 0 && bool(fd, "apply_late_fee") && !lateFeePosted(before.entries, today)
+      ? ancillaryCharge(lateFee, booking, settings, lastNight)
+      : null;
+  const feeTotal = fee ? Math.round((fee.amount + fee.tax_amount) * 100) / 100 : 0;
 
   const payNow = num(fd, "payment_amount");
   const payMethod = oneOfOrNull(fd, "payment_method", PAYMENT_METHODS);
   if (payNow && payNow > 0) {
     if (!payMethod) return { error: "Choose how the payment was made." };
     if (!can(session, "folio.payment")) return { error: "Your role cannot take payments." };
+  }
+
+  // A balance may only be left by someone who can adjust folios, with a
+  // reason on record.
+  const balanceAfter = Math.round((before.totals.balance + feeTotal - (payNow && payNow > 0 ? payNow : 0)) * 100) / 100;
+  const balanceReason = str(fd, "balance_reason", 300);
+  if (balanceAfter > 0.5 && !(can(session, "folio.adjust") && balanceReason)) {
+    return {
+      error: `₹${balanceAfter.toLocaleString("en-IN")} would still be owed. Take payment before checking out.`,
+    };
+  }
+
+  // The tax invoice. A hotel that cannot issue GST invoices yet (no GSTIN)
+  // still lets its guests leave: check-out completes and says why there is
+  // no invoice. A problem with who the invoice is to is the desk's to fix
+  // now, so it refuses here, before the fee or the payment is posted.
+  // Whoever may check a guest out issues the invoice that goes with it (0041),
+  // so the stay's GST return and loyalty points never depend on who was at
+  // the desk.
+  const invoicing = can(session, "folio.invoice") || can(session, "frontdesk.checkout");
+  const propertyProblem = propertyInvoiceProblem(settings);
+  const billTo = {
+    name: str(fd, "bill_to_name", 200),
+    gstin: str(fd, "bill_to_gstin", 20),
+    address: str(fd, "bill_to_address", 500),
+  };
+  const { data: issuedRows } = await supabase
+    .from("invoices")
+    .select("folio_id")
+    .eq("booking_id", booking.id)
+    .eq("status", "issued");
+  const alreadyInvoiced = new Set((issuedRows ?? []).map((r) => r.folio_id as string));
+  if (invoicing && !propertyProblem) {
+    const largest = Math.max(
+      0,
+      ...foliosToInvoice(before.entries, alreadyInvoiced).map(
+        (folioId) =>
+          invoiceTotals(invoiceLines(before.entries.filter((e) => e.folio_id === folioId), { regime: settings.tax_regime ?? "gst" }))
+            .grand,
+      ),
+    );
+    const problem = billToProblem(settings, billTo, booking.contact_name, largest + feeTotal);
+    if (problem) return { error: `Not checked out: ${problem}` };
+  }
+
+  // ── 3. Post the fee and take the payment ──
+  if (fee) {
+    const feeError = await insertFolioEntries(supabase, {
+      booking_id: booking.id,
+      kind: "fee",
+      description: `${LATE_FEE_PREFIX} at ${nowLocal}`,
+      ...fee,
+      stay_date: today,
+      created_by: session.staff.id,
+    });
+    if (feeError) return { error: `Not checked out: the late check-out fee was not posted. ${feeError}` };
+  }
+  if (payNow && payNow > 0) {
     const payError = await insertFolioEntries(supabase, {
       booking_id: booking.id,
       kind: "payment",
@@ -430,69 +560,88 @@ export async function checkOut(_prev: ActionState, fd: FormData): Promise<Action
     if (payError) return { error: `Not checked out: the payment was not recorded. ${payError}` };
   }
 
-  const { entries, totals } = await loadFolio(supabase, booking.id);
-
-  // A balance may only be left by someone who can adjust folios, with a
-  // reason on record.
+  const { entries, totals } = await loadGuestFolio(supabase, booking.id);
   if (totals.balance > 0.5) {
-    const allowed = can(session, "folio.adjust") && str(fd, "balance_reason", 300);
-    if (!allowed) {
-      return {
-        error: `₹${totals.balance.toLocaleString("en-IN")} is still owed. Take payment before checking out.`,
-      };
-    }
     await supabase.rpc("log_event", {
       p_module: "folio",
       p_action: "checkout_with_balance",
       p_record_id: booking.id,
-      p_summary: `Checked out owing ₹${totals.balance}: ${str(fd, "balance_reason", 300)}`,
+      p_summary: `Checked out owing ₹${totals.balance}: ${balanceReason}`,
     });
   }
 
-  // ── The tax invoice ──
-  // Every folio holding charges is invoiced as the guest leaves, so the
-  // stay's tax reaches the GST register (and the guest's loyalty points are
-  // earned). A folio already invoiced is left alone, so a retry after a
-  // refusal — say, a business guest's address missing — picks up where it
-  // stopped. From here, anything charged later goes to an "After invoice"
-  // folio (0039) and is invoiced separately.
+  // ── 4. The tax invoice for every folio holding charges ──
+  // A folio already invoiced is left alone. From here, anything charged later
+  // goes to an "After invoice" folio (0039) and is invoiced from the folio.
   let warn = "";
-  const { data: issuedRows } = await supabase
-    .from("invoices")
-    .select("folio_id")
-    .eq("booking_id", booking.id)
-    .eq("status", "issued");
-  const toInvoice = foliosToInvoice(entries, new Set((issuedRows ?? []).map((r) => r.folio_id as string)));
-  if (toInvoice.length > 0) {
-    if (can(session, "folio.invoice")) {
-      const billTo = {
-        name: str(fd, "bill_to_name", 200),
-        gstin: str(fd, "bill_to_gstin", 20),
-        address: str(fd, "bill_to_address", 500),
-      };
-      for (const folioId of toInvoice) {
-        const issued = await issueFolioInvoice(supabase, settings, folioId, billTo, session.staff.id);
-        if ("error" in issued) return { error: `Not checked out: the tax invoice could not be issued. ${issued.error}` };
-      }
-    } else {
+  if (foliosToInvoice(entries, alreadyInvoiced).length > 0) {
+    if (!invoicing) {
       warn = "No tax invoice was issued: your role cannot issue invoices. Ask someone who can to issue it from the folio.";
+    } else if (propertyProblem) {
+      warn = `No tax invoice was issued: ${propertyProblem} Then issue it from the folio.`;
+    } else {
+      const issued = await issueOutstandingInvoices(supabase, settings, booking.id, billTo, session.staff.id);
+      if (issued.error) {
+        // Rare: everything about the bill-to was checked above. The fee is not
+        // charged twice on a retry, but a payment typed in again would be.
+        const paid = payNow && payNow > 0 ? ` The payment of ₹${payNow.toLocaleString("en-IN")} is recorded: clear it from the form before trying again.` : "";
+        return { error: `Not checked out: the tax invoice could not be issued. ${issued.error}${paid}` };
+      }
+      if (issued.skipped.length > 0) {
+        warn = `${issued.skipped.length === 1 ? "One folio was" : `${issued.skipped.length} folios were`} not invoiced: its allowances are larger than its charges. Correct the allowance on the folio, then issue the invoice there.`;
+      }
     }
   }
 
+  // An early departure releases the nights it did not stay, so the booking's
+  // total (and the bookings report) drops them too (0041).
+  const released = (booking.rate_breakdown ?? []).filter((n) => n.date >= departure);
+  const releasedTotal = released.reduce((s, n) => s + Number(n.rate), 0) * booking.rooms_count;
   const { error } = await supabase
     .from("bookings")
     .update({
       status: "checked_out",
       check_out: departure,
+      total_amount: Math.max(0, Math.round((Number(booking.total_amount) - releasedTotal) * 100) / 100),
       rate_breakdown: (booking.rate_breakdown ?? []).filter((n) => n.date < departure),
       checked_out_at: new Date().toISOString(),
       checked_out_by: session.staff.id,
     })
     .eq("id", booking.id);
-  if (error) return { error: friendlyDbError(error.message) };
+  if (error) {
+    // The invoice may be issued by now; a retry reuses it and finishes the job.
+    const invoiced = warn ? "" : " Any tax invoice is already issued, and trying again reuses it.";
+    return { error: `Not checked out: ${friendlyDbError(error.message)}${invoiced}` };
+  }
 
-  if (booking.room_id && booking.rooms) {
+  // The last organiser-paid room of a completed event to leave: the event's
+  // invoice, which carries these rooms' nights, can now be issued (0042).
+  if (booking.group_id) {
+    const { data: group } = await supabase
+      .from("booking_groups")
+      .select("event_id, room_billing, event_bookings(status)")
+      .eq("id", booking.group_id)
+      .maybeSingle();
+    const eventStatus = (group?.event_bookings as unknown as { status: string } | null)?.status;
+    if (group?.event_id && group.room_billing === "organiser" && eventStatus === "completed" && can(session, "folio.invoice")) {
+      const issued = await invoiceEvent(supabase, settings, session.staff.id, group.event_id as string, {
+        name: "",
+        gstin: "",
+        address: "",
+      });
+      if ("number" in issued) {
+        warn = [warn, `The event's invoice ${issued.number} is issued, with its rooms.`].filter(Boolean).join(" ");
+      }
+    }
+  }
+
+  if (booking.room_id && booking.rooms && !handedOver) {
     await issueKeys(supabase, session, booking, booking.rooms.room_number, booking.room_id, 1, "revoke");
+  }
+  if (handedOver) {
+    warn = [warn, `${nextPart!.reference} is now checked in to the same room; the guest's keys still work.`]
+      .filter(Boolean)
+      .join(" ");
   }
 
   // Express check-out: the final bill goes to the guest by email.

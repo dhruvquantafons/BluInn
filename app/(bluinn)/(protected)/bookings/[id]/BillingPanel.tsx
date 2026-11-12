@@ -117,7 +117,11 @@ export default function BillingPanel({
                 </span>
                 <span className="flex items-center gap-3 text-xs">
                   <span className={total > 0 ? "text-rose-700" : "text-slate-600"}>{fmtMoney(total)}</span>
-                  {invoice ? (
+                  {f.event_id ? (
+                    <Link href={`/events/${f.event_id}`} className="text-brand-700 hover:underline">
+                      Billed on the event&apos;s invoice
+                    </Link>
+                  ) : invoice ? (
                     <Link
                       href={`/bookings/${bookingId}/invoice/${invoice.id}`}
                       className="font-mono text-brand-700 hover:underline"

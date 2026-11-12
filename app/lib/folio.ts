@@ -39,6 +39,31 @@ export async function postRoomCharges(
 
   const done = new Set((existing ?? []).map((e) => `${e.booking_id}:${e.stay_date}`));
   const slabs = taxSlabsOf(settings);
+
+  // A room the event's organiser pays for (0042) posts its nights to the
+  // stay's "Organiser" folio, which belongs to the event and is billed on the
+  // event's invoice. They stay room lines, so every report counts them.
+  const organiserFolio = new Map<string, string>();
+  const { data: grouped } = await supabase
+    .from("bookings")
+    .select("id, group_id")
+    .in("id", bookings.map((b) => b.id))
+    .not("group_id", "is", null);
+  const groupIds = [...new Set((grouped ?? []).map((r) => r.group_id as string))];
+  if (groupIds.length > 0) {
+    const { data: organiserGroups } = await supabase
+      .from("booking_groups")
+      .select("id")
+      .in("id", groupIds)
+      .eq("room_billing", "organiser")
+      .not("event_id", "is", null);
+    const paidByOrganiser = new Set((organiserGroups ?? []).map((g) => g.id as string));
+    for (const row of grouped ?? []) {
+      if (!paidByOrganiser.has(row.group_id as string)) continue;
+      const { data: folioId } = await supabase.rpc("event_room_folio", { p_booking: row.id });
+      if (folioId) organiserFolio.set(row.id as string, folioId as string);
+    }
+  }
   const rows: Record<string, unknown>[] = [];
   let revenue = 0;
   let tax = 0;
@@ -58,6 +83,7 @@ export async function postRoomCharges(
       tax += t;
       rows.push({
         booking_id: b.id,
+        ...(organiserFolio.has(b.id) ? { folio_id: organiserFolio.get(b.id) } : {}),
         kind: "room",
         description: `${b.rooms?.room_number ? `Room ${b.rooms.room_number}` : "Room"} — night of ${night}${b.rooms_count > 1 ? ` × ${b.rooms_count}` : ""}${comp ? ` (${b.stay_type === "house_use" ? "house use" : "complimentary"})` : ""}`,
         stay_date: night,
@@ -93,6 +119,28 @@ export async function loadFolio(supabase: SupabaseClient, bookingId: string) {
     .order("created_at");
   const entries = (data ?? []) as FolioEntry[];
   return { entries, totals: folioTotals(entries) };
+}
+
+/**
+ * A stay's folio split by who pays (0042): the guest's own lines, and the
+ * lines on "Organiser" folios that an event's organiser pays for on the
+ * event's invoice. Check-out settles and invoices only the guest's part.
+ */
+export async function loadGuestFolio(supabase: SupabaseClient, bookingId: string) {
+  const [{ entries }, { data: organiserFolios }] = await Promise.all([
+    loadFolio(supabase, bookingId),
+    supabase.from("folios").select("id, label").eq("booking_id", bookingId).not("event_id", "is", null),
+  ]);
+  const organiserIds = new Set((organiserFolios ?? []).map((f) => f.id as string));
+  const guest = entries.filter((e) => !organiserIds.has(e.folio_id));
+  const organiser = entries.filter((e) => organiserIds.has(e.folio_id));
+  return {
+    entries: guest,
+    totals: folioTotals(guest),
+    organiser,
+    organiserTotals: folioTotals(organiser),
+    organiserLabel: (organiserFolios ?? [])[0]?.label as string | undefined,
+  };
 }
 
 /** Folio lines grouped for the guest's bill. */

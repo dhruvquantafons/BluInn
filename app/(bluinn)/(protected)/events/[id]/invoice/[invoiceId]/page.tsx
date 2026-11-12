@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "../../../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../../../lib/auth";
+import { canOpen } from "../../../../../../lib/page-access";
 import { getSettings } from "../../../../../../lib/settings";
 import { hhmm } from "../../../../../../lib/events";
 import type { CreditNote, EventBooking, Invoice } from "../../../../../../lib/types";
@@ -25,7 +26,7 @@ export default async function EventInvoicePage({
 }: {
   params: Promise<{ id: string; invoiceId: string }>;
 }) {
-  await requireAnyPermission(["folio.view", "events.view", "events.bill"]);
+  const session = await requireAnyPermission(["folio.view", "events.view", "events.bill"]);
   const { id, invoiceId } = await params;
   const supabase = await createClient();
   const settings = await getSettings();
@@ -125,9 +126,13 @@ export default async function EventInvoicePage({
                   <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">Credit notes against this invoice</p>
                   {creditNotes.map((c) => (
                     <p key={c.id} className="flex justify-between gap-4">
-                      <Link href={`/billing/credit-notes/${c.id}`} className="font-mono text-brand-700 hover:underline print:no-underline">
-                        {c.number}
-                      </Link>
+                      {canOpen(session, `/billing/credit-notes/${c.id}`) ? (
+                        <Link href={`/billing/credit-notes/${c.id}`} className="font-mono text-brand-700 hover:underline print:no-underline">
+                          {c.number}
+                        </Link>
+                      ) : (
+                        <span className="font-mono">{c.number}</span>
+                      )}
                       <span className="text-slate-600">{c.note}</span>
                       <span>−{fmtMoney(c.grand_total)}</span>
                     </p>

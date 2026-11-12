@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -33,7 +34,7 @@ export default async function BillingLayout({ children }: { children: React.Reac
           )
         }
       />
-      <SectionTabs tabs={tabs} label="Billing sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Billing sections" />
       {children}
     </>
   );

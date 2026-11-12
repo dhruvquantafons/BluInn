@@ -1,6 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail } from "./integrations";
-import { kpisFrom, reportByKind, resolveRange, toGrid, type DailyRow } from "./reports";
+import {
+  flashKpis,
+  FLASH_DEPARTMENTS,
+  kpisFrom,
+  reportByKind,
+  resolveRange,
+  scheduleNeedsFinancial,
+  toGrid,
+  type DailyRow,
+  type FlashReport,
+} from "./reports";
 import { runReport } from "./report-data";
 import type { PropertySettings, ReportSchedule } from "./types";
 import { APP_URL, PRODUCT } from "./app-config";
@@ -68,6 +78,56 @@ async function buildReportBody(db: SupabaseClient, schedule: ReportSchedule): Pr
   const today = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
   const range = rangeForFrequency(schedule.frequency, today);
   const hotel = settings.name ?? "Your Hotel";
+
+  // The flash report (0037): the last day night audit closed, with month and
+  // year to date, as the screen shows it. Frequency does not change it.
+  if (schedule.report === "flash") {
+    const day = settings.business_date
+      ? new Date(new Date(`${settings.business_date}T00:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10)
+      : today;
+    const { data, error } = await db.rpc("report_flash", { p_date: day });
+    if (error || !data) return { subject: "", html: "", text: "", error: error?.message ?? "The flash report could not be built." };
+    const report = data as FlashReport;
+    const money = (n: number) => `${settings.currency ?? "INR"} ${n.toFixed(2)}`;
+    const cols = [
+      ["Day", report.periods.day],
+      ["Month to date", report.periods.mtd],
+      ["Year to date", report.periods.ytd],
+    ] as const;
+    const rows: [string, string[]][] = [
+      ["Occupancy", cols.map(([, p]) => `${flashKpis(p).occupancy}%`)],
+      ["ADR", cols.map(([, p]) => money(flashKpis(p).adr))],
+      ["RevPAR", cols.map(([, p]) => money(flashKpis(p).revpar))],
+      ...FLASH_DEPARTMENTS.map(
+        (d) => [`Revenue: ${d === "fnb" ? "F&B" : d}`, cols.map(([, p]) => money(Number(p?.revenue?.[d] ?? 0)))] as [string, string[]],
+      ),
+      ["Total revenue", cols.map(([, p]) => money(flashKpis(p).totalRevenue))],
+    ];
+    const subject = `${hotel} — flash report, ${day}`;
+    return {
+      subject,
+      html:
+        `<p>${escape(hotel)}<br><strong>Flash report for ${escape(day)}</strong></p>` +
+        `<table cellpadding="6" style="border-collapse:collapse;font-size:13px">` +
+        `<tr><th></th>${cols.map(([l]) => `<th align="right" style="border-bottom:2px solid #333">${escape(l)}</th>`).join("")}</tr>` +
+        rows
+          .map(
+            ([label, values]) =>
+              `<tr><td style="border-bottom:1px solid #eee">${escape(label)}</td>` +
+              values.map((v) => `<td style="border-bottom:1px solid #eee;text-align:right">${escape(v)}</td>`).join("") +
+              `</tr>`,
+          )
+          .join("") +
+        `</table>` +
+        `<p style="color:#666;font-size:12px">In house: ${report.today.in_house_rooms} rooms, ${report.today.in_house_guests} guests. ` +
+        `Owed by guests in house: ${escape(money(Number(report.in_house_balance)))}.</p>`,
+      text:
+        `${hotel}\nFlash report for ${day}\n\n` +
+        `\t${cols.map(([l]) => l).join("\t")}\n` +
+        rows.map(([label, values]) => `${label}\t${values.join("\t")}`).join("\n"),
+      error: null,
+    };
+  }
 
   // The KPI summary is not one of the report functions: it is the headline
   // figures a GM wants in the body of an email, not a table to scroll.
@@ -221,4 +281,23 @@ export function isDue(schedule: Pick<ReportSchedule, "frequency" | "last_sent_at
     case "monthly":
       return today.endsWith("-01");
   }
+}
+
+/**
+ * Whether the person who set a schedule up may still see what it sends
+ * (0043). The cron runs as the hotel, not as anyone, so it asks: a revenue
+ * report stops going out once its creator loses financial reports or leaves.
+ * Returns null when it may be sent, or the reason it may not.
+ */
+export async function scheduleCreatorProblem(db: SupabaseClient, schedule: ReportSchedule): Promise<string | null> {
+  if (!scheduleNeedsFinancial(schedule.report)) return null;
+  if (!schedule.created_by) return "no one is recorded as setting it up; save it again";
+  const { data: staff } = await db.from("staff").select("role, is_active").eq("id", schedule.created_by).maybeSingle();
+  if (!staff || !staff.is_active) return "the person who set it up no longer works here; save it again";
+  const [{ data: role }, { data: grant }] = await Promise.all([
+    db.from("roles").select("is_superuser").eq("key", staff.role).maybeSingle(),
+    db.from("role_permissions").select("permission").eq("role_key", staff.role).eq("permission", "reports.financial").maybeSingle(),
+  ]);
+  if (role?.is_superuser || grant) return null;
+  return "the person who set it up can no longer see financial reports";
 }

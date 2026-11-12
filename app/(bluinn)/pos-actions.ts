@@ -7,7 +7,7 @@ import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
 import { sendKotTicket } from "../lib/integrations";
-import { checkChargeToRoom } from "../lib/pos";
+import { checkChargeToRoom, modifierFloorProblem } from "../lib/pos";
 import type { PosLineModifier, PosOrder, PosOrderLine } from "../lib/types";
 import { type ActionState, str, num, int, bool, uuidOrNull, oneOf, lines as formLines } from "./form-utils";
 
@@ -119,17 +119,35 @@ export async function updateOrder(_prev: ActionState, fd: FormData): Promise<Act
   const orderId = uuidOrNull(fd, "order_id");
   if (!orderId) return { error: "Bill not found." };
 
-  const tip = num(fd, "tip_amount");
+  const { data: order } = await supabase
+    .from("pos_orders")
+    .select("status, tip_amount, room_id, booking_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Bill not found." };
+  if (order.status === "void") return { error: "This bill is void." };
+
+  const tipIn = num(fd, "tip_amount");
+  const tip = tipIn !== null && tipIn >= 0 ? tipIn : 0;
+  const roomId = uuidOrNull(fd, "room_id");
+  const bookingId = uuidOrNull(fd, "booking_id");
+  // A settled bill's money is fixed: its tip and room cannot change after
+  // the guest has paid (0043). Table, covers and notes still can.
+  const settled = order.status === "settled";
+  if (
+    settled &&
+    (Number(order.tip_amount) !== tip || (order.room_id ?? null) !== roomId || (order.booking_id ?? null) !== bookingId)
+  ) {
+    return { error: "This bill is settled, so its tip and room can no longer change. Reverse the payment first." };
+  }
   const { error } = await supabase
     .from("pos_orders")
     .update({
       table_no: str(fd, "table_no", 20),
-      room_id: uuidOrNull(fd, "room_id"),
-      booking_id: uuidOrNull(fd, "booking_id"),
       guest_name: str(fd, "guest_name", 120),
       covers: int(fd, "covers", 1, 0, 200),
       notes: str(fd, "notes", 500),
-      tip_amount: tip !== null && tip >= 0 ? tip : 0,
+      ...(settled ? {} : { room_id: roomId, booking_id: bookingId, tip_amount: tip }),
     })
     .eq("id", orderId)
     .neq("status", "void");
@@ -336,7 +354,7 @@ export async function chargeToRoom(_prev: ActionState, fd: FormData): Promise<Ac
   if (!bookingId) return { error: "Choose the room the guest is staying in." };
 
   // Pre-flight, purely for a better message than the database would give.
-  const [{ data: balance }, { data: booking }, { data: charged }] = await Promise.all([
+  const [{ data: balance }, { data: booking }, { data: charged }, { data: stayBalance }] = await Promise.all([
     supabase.rpc("pos_order_balance", { p_order: orderId }),
     supabase.from("bookings").select("status").eq("id", bookingId).maybeSingle(),
     supabase
@@ -345,12 +363,16 @@ export async function chargeToRoom(_prev: ActionState, fd: FormData): Promise<Ac
       .eq("kind", "room_charge")
       .eq("booking_id", bookingId)
       .is("voided_at", null),
+    supabase.rpc("stay_balance", { p_booking: bookingId }),
   ]);
 
+  // Only what is still unpaid on the stay counts against the limit, as in
+  // pos_charge_to_room (0043): a guest who settled earlier bills starts again.
+  const roomCharges = (charged ?? []).reduce((s, p) => s + Number(p.amount), 0);
   const check = checkChargeToRoom({
     owed: Number(balance ?? 0),
     bookingStatus: booking?.status ?? null,
-    alreadyCharged: (charged ?? []).reduce((s, p) => s + Number(p.amount), 0),
+    alreadyCharged: Math.min(roomCharges, Math.max(Number(stayBalance ?? 0), 0)),
     limit: Number(settings.pos_room_charge_limit),
   });
   if (!check.allowed) return { error: check.reason };
@@ -363,7 +385,7 @@ export async function chargeToRoom(_prev: ActionState, fd: FormData): Promise<Ac
   if (error) return { error: friendlyDbError(error.message) };
 
   revalidateOrder(orderId);
-  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath(`/bookings/${bookingId}`, "layout");
   return { success: "Charged to the room. It is on the guest's folio now." };
 }
 
@@ -422,7 +444,14 @@ export async function voidPayment(_prev: ActionState, fd: FormData): Promise<Act
     .is("voided_at", null);
   if (error) return { error: friendlyDbError(error.message) };
 
-  await supabase.from("pos_orders").update({ status: "open", closed_at: null }).eq("id", payment.order_id);
+  const { error: reopenError } = await supabase
+    .from("pos_orders")
+    .update({ status: "open", closed_at: null })
+    .eq("id", payment.order_id);
+  if (reopenError) {
+    revalidateOrder(payment.order_id);
+    return { error: `Payment reversed, but the bill could not be reopened: ${friendlyDbError(reopenError.message)}` };
+  }
 
   revalidateOrder(payment.order_id);
   return { success: "Payment reversed. The bill is open again." };
@@ -553,6 +582,15 @@ export async function saveModifier(_prev: ActionState, fd: FormData): Promise<Ac
     is_active: bool(fd, "is_active"),
     sort_order: int(fd, "sort_order", 0, 0, 1000),
   };
+  const itemIds = fd
+    .getAll("item_id")
+    .map((v) => String(v))
+    .filter((v) => /^[0-9a-f-]{36}$/i.test(v));
+  if (row.price_delta < 0 && itemIds.length > 0) {
+    const { data: items } = await supabase.from("pos_items").select("name, price").in("id", itemIds);
+    const problem = modifierFloorProblem(row.price_delta, (items ?? []) as { name: string; price: number }[]);
+    if (problem) return { error: problem };
+  }
 
   const saved = id
     ? await supabase.from("pos_modifiers").update(row).eq("id", id).select("id").maybeSingle()
@@ -561,11 +599,8 @@ export async function saveModifier(_prev: ActionState, fd: FormData): Promise<Ac
 
   const modifierId = saved.data?.id ?? id;
   if (modifierId) {
-    const itemIds = fd
-      .getAll("item_id")
-      .map((v) => String(v))
-      .filter((v) => /^[0-9a-f-]{36}$/i.test(v));
-    await supabase.from("pos_item_modifiers").delete().eq("modifier_id", modifierId);
+    const { error: unlinkError } = await supabase.from("pos_item_modifiers").delete().eq("modifier_id", modifierId);
+    if (unlinkError) return { error: friendlyDbError(unlinkError.message) };
     if (itemIds.length > 0) {
       const { error } = await supabase
         .from("pos_item_modifiers")

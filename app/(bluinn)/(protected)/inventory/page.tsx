@@ -30,6 +30,7 @@ import {
 import ActionForm from "../../components/ActionForm";
 
 const STATE_TAG = {
+  short: { text: "Short: count it", tone: "red" },
   out: { text: "Out", tone: "red" },
   reorder: { text: "Re-order", tone: "amber" },
   below_par: { text: "Below par", tone: "neutral" },
@@ -65,8 +66,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       const onHand = totals.get(i.id) ?? 0;
       return { item: i, onHand, state: stockState(onHand, Number(i.reorder_level), Number(i.par_level)) };
     })
-    .filter((r) => (!category || r.item.category === category) && (!onlyLow || r.state === "out" || r.state === "reorder"));
-  const low = items.filter((i) => ["out", "reorder"].includes(stockState(totals.get(i.id) ?? 0, Number(i.reorder_level), Number(i.par_level))));
+    .filter((r) => (!category || r.item.category === category) && (!onlyLow || r.state === "short" || r.state === "out" || r.state === "reorder"));
+  const low = items.filter((i) => ["short", "out", "reorder"].includes(stockState(totals.get(i.id) ?? 0, Number(i.reorder_level), Number(i.par_level))));
   // Stock state is worked out per item here, so the table pages in memory.
   const page = clampPage(pageParam(sp.page), rows.length);
   const [from, to] = pageRange(page);

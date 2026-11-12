@@ -32,6 +32,7 @@ import {
   DatabaseBackup,
 } from "lucide-react";
 import type { Permission } from "../../lib/permissions";
+import { BILLING_TABS, REPORT_TABS, firstOpenable } from "../../lib/page-access";
 
 export type NavItem = {
   href: string;
@@ -40,6 +41,13 @@ export type NavItem = {
   exact?: boolean;
   /** Shown when the person holds any of these; empty means everyone. */
   any: Permission[];
+  /**
+   * Other pages of the section, tried in order when the person cannot open
+   * href itself; the link then goes to the first one they can (0043).
+   */
+  tabs?: string[];
+  /** The section root this item stays highlighted under, when href may change. */
+  match?: string;
 };
 
 /** Keys match the `[data-group]` tints in globals.css. */
@@ -85,12 +93,16 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/rooms", label: "Rooms", icon: BedDouble, any: ["rooms.view"] },
       {
         href: "/housekeeping",
+        tabs: ["/housekeeping/my-tasks", "/housekeeping/lost-found"],
+        match: "/housekeeping",
         label: "Housekeeping",
         icon: SprayCan,
         any: ["housekeeping.tasks", "housekeeping.inspect", "housekeeping.assign", "housekeeping.lost_found"],
       },
       {
         href: "/maintenance",
+        tabs: ["/maintenance/mine"],
+        match: "/maintenance",
         label: "Maintenance",
         icon: Wrench,
         any: ["maintenance.report", "maintenance.work", "maintenance.manage"],
@@ -104,6 +116,8 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/events",
+        tabs: ["/events/diary", "/events/setup"],
+        match: "/events",
         label: "Events & banquets",
         icon: PartyPopper,
         any: ["events.view", "events.book", "events.quote", "events.approve", "events.bill", "events.manage"],
@@ -125,12 +139,16 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         href: "/billing/invoices",
+        tabs: BILLING_TABS.slice(1),
+        match: "/billing",
         label: "Billing",
         icon: ReceiptIndianRupee,
         any: ["folio.view", "folio.invoice", "folio.refund_approve", "folio.credit_note", "reports.financial"],
       },
       {
         href: "/reports",
+        tabs: REPORT_TABS.slice(1),
+        match: "/reports",
         label: "Reports",
         icon: ChartColumn,
         any: ["reports.view", "reports.financial", "reports.schedule"],
@@ -179,15 +197,28 @@ export const OPEN_MENU_EVENT = "bluinn:open-menu";
 
 export type Access = { isSuperuser: boolean; permissions: string[] };
 
-/** The groups this person can see, each trimmed to the items they may open. */
+/**
+ * The groups this person can see, each trimmed to the items they may open.
+ * An item is shown only if its page (or one of its section's tabs) admits the
+ * person, and it links to the first of those they can open (0043): it used to
+ * show on its own permission list and then bounce people with "access denied".
+ */
 export function allowedGroups(access: Access): NavGroup[] {
-  const allowed = (item: NavItem) =>
-    item.any.length === 0 || access.isSuperuser || item.any.some((p) => access.permissions.includes(p));
-  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
+  const usable = (item: NavItem): NavItem | null => {
+    if (!item.any.length || access.isSuperuser || item.any.some((p) => access.permissions.includes(p))) {
+      const target = firstOpenable(access, [item.href, ...(item.tabs ?? [])]);
+      return target ? { ...item, href: target } : null;
+    }
+    return null;
+  };
+  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.map(usable).filter((i): i is NavItem => i !== null) })).filter(
+    (g) => g.items.length > 0,
+  );
 }
 
 export function isActive(item: NavItem, pathname: string) {
-  return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const root = item.match ?? item.href;
+  return item.exact ? pathname === item.href : pathname === root || pathname.startsWith(`${root}/`);
 }
 
 /**

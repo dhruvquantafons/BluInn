@@ -215,9 +215,16 @@ export async function resolveTicket(_prev: ActionState, fd: FormData): Promise<A
   if (error) return { error: friendlyDbError(error.message) };
 
   const photoError = await storePhotos(supabase, t.id, photos.files, "resolution", session.staff.id);
-  const { data: released } = await supabase.rpc("mt_release_room", { p_ticket: t.id });
+  const { data: released, error: releaseError } = await supabase.rpc("mt_release_room", { p_ticket: t.id });
 
   revalidateMt(t.id);
+  // A room that could not be released stays out of order (0043): say so,
+  // rather than closing the ticket as if it were back in inventory.
+  if (releaseError) {
+    return {
+      error: `${t.reference} is resolved, but room ${t.rooms?.room_number ?? ""} is still out of order: ${friendlyDbError(releaseError.message)} Release it from the room's page.`,
+    };
+  }
   return {
     success: [
       `${t.reference} resolved.`,
@@ -229,17 +236,21 @@ export async function resolveTicket(_prev: ActionState, fd: FormData): Promise<A
   };
 }
 
-export async function reopenTicket(fd: FormData) {
+export async function reopenTicket(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("maintenance.manage");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (!id) return;
-  await supabase
+  if (!id) return { error: "Ticket not found." };
+  const { data, error } = await supabase
     .from("maintenance_tickets")
     .update({ status: "open", resolved_at: null, resolved_by: null, hold_reason: "" })
     .eq("id", id)
-    .in("status", ["resolved", "cancelled"]);
+    .in("status", ["resolved", "cancelled"])
+    .select("id");
+  if (error) return { error: friendlyDbError(error.message) };
+  if (!data || data.length === 0) return { error: "This ticket is already open." };
   revalidateMt(id);
+  return { success: "Reopened." };
 }
 
 export async function cancelTicket(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -254,24 +265,29 @@ export async function cancelTicket(_prev: ActionState, fd: FormData): Promise<Ac
     .update({ status: "cancelled", resolution_note: `Cancelled: ${reason}`, resolved_by: session.staff.id, resolved_at: new Date().toISOString() })
     .eq("id", t.id);
   if (error) return { error: friendlyDbError(error.message) };
-  await supabase.rpc("mt_release_room", { p_ticket: t.id });
+  const { error: releaseError } = await supabase.rpc("mt_release_room", { p_ticket: t.id });
   revalidateMt(t.id);
+  if (releaseError) {
+    return { error: `Cancelled, but the room is still out of order: ${friendlyDbError(releaseError.message)} Release it from the room's page.` };
+  }
   return { success: "Cancelled." };
 }
 
-export async function assignTicket(fd: FormData) {
+export async function assignTicket(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("maintenance.manage");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (!id) return;
+  if (!id) return { error: "Ticket not found." };
   const staffId = uuidOrNull(fd, "assigned_to");
 
-  const { data: ticket } = await supabase
+  const { data: ticket, error } = await supabase
     .from("maintenance_tickets")
     .update({ assigned_to: staffId, assigned_at: staffId ? new Date().toISOString() : null })
     .eq("id", id)
     .select("id, reference, title, priority, due_at, location, assigned_to, rooms(room_number)")
     .maybeSingle();
+  if (error) return { error: friendlyDbError(error.message) };
+  if (!ticket) return { error: "Ticket not found." };
 
   // Module 16, trigger event "ticket assigned": the person who now owns
   // the job hears about it. Unassigning tells nobody.
@@ -286,23 +302,26 @@ export async function assignTicket(fd: FormData) {
   }
 
   revalidateMt(id);
+  return { success: staffId ? "Assigned." : "Unassigned." };
 }
 
-export async function setTicketPriority(fd: FormData) {
+export async function setTicketPriority(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("maintenance.manage");
   const supabase = await createClient();
   const t = await loadTicket(supabase, uuidOrNull(fd, "id"));
-  if (!t) return;
+  if (!t) return { error: "Ticket not found." };
   const priority = oneOf(fd, "priority", MT_PRIORITIES, t.priority);
-  if (priority === t.priority) return;
-  const { data } = await supabase
+  if (priority === t.priority) return { success: "Priority unchanged." };
+  const { data, error } = await supabase
     .from("maintenance_tickets")
     .update({ priority })
     .eq("id", t.id)
     .select("*, rooms(room_number)")
     .single();
+  if (error) return { error: friendlyDbError(error.message) };
   if (data && priority === "urgent") await alertSupervisors(supabase, data as MaintenanceTicket, "urgent", session.staff.id);
   revalidateMt(t.id);
+  return { success: "Priority changed." };
 }
 
 export async function blockRoomForTicket(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -310,10 +329,26 @@ export async function blockRoomForTicket(_prev: ActionState, fd: FormData): Prom
   const supabase = await createClient();
   const t = await loadTicket(supabase, uuidOrNull(fd, "id"));
   if (!t) return { error: "Ticket not found." };
+  // Stays assigned to the room that have not arrived lose it (0041): listed
+  // here so the desk gives them another room.
+  const { data: assigned } = t.room_id
+    ? await supabase
+        .from("bookings")
+        .select("reference")
+        .eq("room_id", t.room_id)
+        .in("status", ["tentative", "confirmed"])
+        .gte("check_out", new Date().toISOString().slice(0, 10))
+    : { data: [] };
   const { error } = await supabase.rpc("mt_block_room", { p_ticket: t.id });
   if (error) return { error: blockError(error.message) };
   revalidateMt(t.id);
-  return { success: `Room ${t.rooms?.room_number} is out of order until this ticket is resolved.` };
+  revalidatePath("/front-desk");
+  const moved = (assigned ?? []).map((b) => b.reference as string);
+  return {
+    success:
+      `Room ${t.rooms?.room_number} is out of order until this ticket is resolved.` +
+      (moved.length ? ` ${moved.join(", ")} no longer ${moved.length === 1 ? "has" : "have"} a room: assign another from the front desk.` : ""),
+  };
 }
 
 export async function addTicketPhotos(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -398,12 +433,15 @@ export async function saveSchedule(_prev: ActionState, fd: FormData): Promise<Ac
   return { success: "Schedule saved." };
 }
 
-export async function deleteSchedule(fd: FormData) {
+export async function deleteSchedule(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("maintenance.manage");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (id) await supabase.from("maintenance_schedules").delete().eq("id", id);
+  if (!id) return { error: "Schedule not found." };
+  const { error } = await supabase.from("maintenance_schedules").delete().eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateMt();
+  return { success: "Schedule deleted." };
 }
 
 export async function generatePreventive(): Promise<ActionState> {

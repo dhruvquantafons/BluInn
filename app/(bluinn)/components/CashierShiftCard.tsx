@@ -24,15 +24,17 @@ export async function loadMyShift(
 }
 
 export async function loadBreakdown(supabase: SupabaseClient, shift: CashierShift): Promise<ShiftBreakdown> {
-  const [{ data: folio }, { data: pos }, { data: movements }] = await Promise.all([
-    supabase.from("folio_entries").select("kind, method, amount, voided_at").eq("shift_id", shift.id),
+  const [{ data: folio }, { data: pos }, { data: movements }, { data: events }] = await Promise.all([
+    supabase.from("folio_entries").select("kind, method, amount, voided_at, fx_currency, fx_amount").eq("shift_id", shift.id),
     supabase.from("pos_payments").select("kind, amount, voided_at").eq("shift_id", shift.id),
     supabase.from("cash_movements").select("kind, amount").eq("shift_id", shift.id),
+    supabase.from("event_payments").select("kind, method, amount, voided_at").eq("shift_id", shift.id),
   ]);
   return shiftBreakdown({
     openingFloat: Number(shift.opening_float),
     folio: folio ?? [],
     pos: pos ?? [],
+    events: events ?? [],
     movements: (movements ?? []) as Pick<CashMovement, "kind" | "amount">[],
   });
 }

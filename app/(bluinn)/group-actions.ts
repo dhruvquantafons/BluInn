@@ -38,6 +38,7 @@ export async function createGroup(_prev: ActionState, fd: FormData): Promise<Act
 
   if (!name) return { error: "Name the group." };
   if (!checkIn || !checkOut || checkOut <= checkIn) return { error: "Check the dates." };
+  if (checkIn < settings.business_date) return { error: "A group cannot arrive before today's business date." };
   if (!ratePlanId) return { error: "Choose a rate plan." };
 
   const pricing = await loadPricingData(supabase);
@@ -160,6 +161,13 @@ export async function addRoomsToGroup(_prev: ActionState, fd: FormData): Promise
 
   const { data: group } = await supabase.from("booking_groups").select("*").eq("id", groupId).single();
   if (!group) return { error: "Group not found." };
+  const settings = await getSettings();
+  if (group.check_out <= settings.business_date) return { error: "This group's stay is over." };
+  const status = oneOf(fd, "status", ["tentative", "confirmed"] as const, "confirmed");
+  // A tentative room is held only for the usual hours, as createGroup does
+  // (0043); an event's block is released at the event's cut-off instead (0042).
+  const holdUntil =
+    status === "tentative" && !group.event_id ? new Date(Date.now() + settings.hold_hours * 3600000).toISOString() : null;
 
   const pricing = await loadPricingData(supabase);
   const type = pricing.roomTypes.find((t) => t.id === roomTypeId);
@@ -194,7 +202,8 @@ export async function addRoomsToGroup(_prev: ActionState, fd: FormData): Promise
       check_in: group.check_in,
       check_out: group.check_out,
       adults: 2,
-      status: oneOf(fd, "status", ["tentative", "confirmed"] as const, "confirmed"),
+      status,
+      hold_until: holdUntil,
       source: "phone",
       quoted_rate: quote.averageNightly,
       total_amount: quote.total,

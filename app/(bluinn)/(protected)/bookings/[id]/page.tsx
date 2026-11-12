@@ -5,7 +5,9 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { loadFolio } from "../../../../lib/folio";
+import { loadGuestFolio } from "../../../../lib/folio";
+import { lastBillTo } from "../../../../lib/invoice-issue";
+import { foliosToInvoice } from "../../../../lib/invoices";
 import { razorpayConfigured, isTestMode } from "../../../../lib/razorpay";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../../../../lib/policies";
 import { rankRooms } from "../../../../lib/room-assignment";
@@ -153,7 +155,8 @@ export default async function BookingDetailPage({
       : Promise.resolve({ data: [] }),
     supabase.from("registration_cards").select("id, signed_at").eq("booking_id", id).maybeSingle(),
     supabase.from("bookings").select("id, reference, check_in, check_out").eq("split_from_id", id),
-    loadFolio(supabase, id),
+    // Totals are the guest's own; nights an event's organiser pays are the event's (0042).
+    loadGuestFolio(supabase, id).then((f) => ({ ...f, entries: [...f.entries, ...f.organiser] })),
     supabase.from("folios").select("*").eq("booking_id", id).order("created_at"),
     supabase.from("invoices").select("*").eq("booking_id", id).order("issued_at", { ascending: false }),
     supabase.from("credit_notes").select("*").eq("booking_id", id).order("issued_at"),
@@ -169,6 +172,10 @@ export default async function BookingDetailPage({
       ? supabase.rpc("loyalty_balance", { p_guest: booking.guest_id })
       : Promise.resolve({ data: 0 }),
   ]);
+
+  const issuedFolioIds = ((invoices ?? []) as Invoice[])
+    .filter((i) => i.status === "issued" && i.folio_id)
+    .map((i) => i.folio_id as string);
 
   const plan = booking.rate_plans;
   const open = ["tentative", "confirmed", "waitlisted"].includes(booking.status);
@@ -198,23 +205,34 @@ export default async function BookingDetailPage({
     blocks ?? [],
   );
 
+  // An in-house guest can move to a room of any type (an upgrade or a
+  // downgrade). The booking then takes the new room's type, and the database
+  // refuses the move if that type is full (0040). Same type first.
+  const typeName = new Map(((roomTypes ?? []) as RoomType[]).map((t) => [t.id, t.name]));
+  const moveTargets = inHouse
+    ? rankRooms(
+        {
+          roomTypeId: null,
+          checkIn: booking.check_in,
+          checkOut: booking.check_out,
+          adults: Math.ceil(booking.adults / booking.rooms_count),
+          preferredFloor: booking.preferred_floor,
+          preferredView: booking.preferred_view,
+          isVip: booking.is_vip,
+          forImmediateCheckIn: true,
+        },
+        (rooms ?? []) as Room[],
+        stays ?? [],
+        blocks ?? [],
+      ).ranked.sort(
+        (a, b) =>
+          Number(a.room.room_type_id !== booking.room_type_id) - Number(b.room.room_type_id !== booking.room_type_id),
+      )
+    : [];
+
   // A returning business guest is billed the way they were last time.
-  const billTo = { name: booking.contact_name, gstin: "", address: "" };
-  if (booking.guest_id && tab === "folio") {
-    const { data: guestStays } = await supabase.from("bookings").select("id").eq("guest_id", booking.guest_id);
-    const ids = (guestStays ?? []).map((b) => b.id as string);
-    if (ids.length > 0) {
-      const { data: last } = await supabase
-        .from("invoices")
-        .select("bill_to_name, bill_to_gstin, bill_to_address")
-        .in("booking_id", ids)
-        .neq("bill_to_gstin", "")
-        .order("issued_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (last) Object.assign(billTo, { name: last.bill_to_name, gstin: last.bill_to_gstin, address: last.bill_to_address });
-    }
-  }
+  const billTo =
+    tab === "folio" ? await lastBillTo(supabase, booking) : { name: booking.contact_name, gstin: "", address: "" };
 
   const idOnFile = (identity as { id_type: string; id_last4: string }[] | null)?.[0];
   const guestName = booking.guests?.full_name || booking.contact_name || "Unnamed guest";
@@ -520,14 +538,18 @@ export default async function BookingDetailPage({
                 <ActionForm action={moveRoom} submitLabel="Move guest" className="space-y-3">
                   <input type="hidden" name="id" value={id} />
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Field label="To room" hint="Vacant, inspected rooms of this type, best match first.">
+                    <Field
+                      label="To room"
+                      hint="Vacant, inspected rooms, this type first. A room of another type changes the booking's type; the rate stays as booked."
+                    >
                       <select name="room_id" required className={inputClass} defaultValue="">
                         <option value="" disabled>
                           Choose…
                         </option>
-                        {ranked.map(({ room, reasons }) => (
+                        {moveTargets.map(({ room, reasons }) => (
                           <option key={room.id} value={room.id}>
                             {room.room_number}
+                            {room.room_type_id !== booking.room_type_id ? ` · ${typeName.get(room.room_type_id) ?? "other type"}` : ""}
                             {reasons.length ? ` — ${reasons.join(", ")}` : ""}
                           </option>
                         ))}
@@ -697,8 +719,19 @@ export default async function BookingDetailPage({
                 depositRequired={Number(booking.deposit_required)}
                 canPay={can(session, "folio.payment")}
                 canPost={can(session, "folio.post")}
+                canPenalty={can(session, "bookings.cancel")}
+                bookingClosed={["cancelled", "no_show", "waitlisted"].includes(booking.status)}
                 canAdjust={can(session, "folio.adjust")}
                 today={today}
+                invoicedFolios={issuedFolioIds}
+                masterFolioId={((folios ?? []) as Folio[]).find((f) => f.kind === "master")?.id ?? null}
+                uninvoicedAfterStay={
+                  closed &&
+                  foliosToInvoice(
+                    folio.entries,
+                    new Set([...issuedFolioIds, ...((folios ?? []) as Folio[]).filter((f) => f.event_id).map((f) => f.id)]),
+                  ).length > 0
+                }
               />
               <BillingPanel
                 bookingId={id}

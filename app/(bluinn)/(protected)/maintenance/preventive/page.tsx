@@ -177,10 +177,15 @@ export default async function PreventivePage({ searchParams }: { searchParams: P
                         <ScheduleFields s={s} rooms={roomList} assets={assetList} engineers={engineers} today={today} />
                         <Check name="is_active" label="Active" defaultChecked={s.is_active} />
                       </ActionForm>
-                      <form action={deleteSchedule}>
+                      <ActionForm
+                        action={deleteSchedule}
+                        submitLabel="Delete schedule"
+                        pendingLabel="Deleting…"
+                        submitClassName="text-xs text-rose-700 cursor-pointer"
+                        className="space-y-1"
+                      >
                         <input type="hidden" name="id" value={s.id} />
-                        <button className="text-xs text-rose-700 cursor-pointer">Delete schedule</button>
-                      </form>
+                      </ActionForm>
                     </div>
                   </details>
                 )}

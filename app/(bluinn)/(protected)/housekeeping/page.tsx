@@ -7,7 +7,7 @@ import { getSettings } from "../../../lib/settings";
 import { addDays, todayIn, minutesSince, zonedTime } from "../../../lib/dates";
 import type { HousekeepingTask, Room, Staff } from "../../../lib/types";
 import { HK_KIND_LABELS, HK_STATUS_LABELS } from "../../../lib/types";
-import { generateTasks, createTask, reassignTask, inspectTask, setDnd, setLaundryStatus } from "../../housekeeping-actions";
+import { generateTasks, createTask, reassignTask, inspectTask, setDnd, setLaundryStatus, cancelTask } from "../../housekeeping-actions";
 import {
   Card,
   Field,
@@ -106,13 +106,15 @@ export default async function HousekeepingBoard() {
                 <Tag tone={l.laundry_status === "collected" ? "neutral" : "blue"}>
                   {l.laundry_status === "collected" ? "Collected" : "Processing"}
                 </Tag>
-                <form action={setLaundryStatus} className="ml-auto">
+                <ActionForm
+                  action={setLaundryStatus}
+                  submitLabel={l.laundry_status === "collected" ? "Sent to laundry" : "Delivered to room"}
+                  submitClassName={`${secondaryButtonClass} !py-1.5`}
+                  className="ml-auto space-y-1"
+                >
                   <input type="hidden" name="order_id" value={l.id} />
                   <input type="hidden" name="laundry_status" value={l.laundry_status === "collected" ? "processing" : "delivered"} />
-                  <button type="submit" className={`${secondaryButtonClass} !py-1.5`}>
-                    {l.laundry_status === "collected" ? "Sent to laundry" : "Delivered to room"}
-                  </button>
-                </form>
+                </ActionForm>
               </li>
             ))}
           </ul>
@@ -262,7 +264,13 @@ export default async function HousekeepingBoard() {
                     </td>
                     <td className="px-4 py-2.5">
                       {assign && ["pending", "in_progress"].includes(t.status) ? (
-                        <form action={reassignTask} className="flex gap-1">
+                        <ActionForm
+                          action={reassignTask}
+                          submitLabel="Save"
+                          pendingLabel="…"
+                          submitClassName="text-xs text-brand-800 cursor-pointer"
+                          className="flex flex-wrap items-center gap-1"
+                        >
                           <input type="hidden" name="id" value={t.id} />
                           <select name="assigned_to" defaultValue={t.assigned_to ?? ""} className={`${inputClass} !py-1 !text-xs max-w-[150px]`}>
                             <option value="">Unassigned</option>
@@ -273,14 +281,24 @@ export default async function HousekeepingBoard() {
                               </option>
                             ))}
                           </select>
-                          <button className="text-xs text-brand-800 cursor-pointer">Save</button>
-                        </form>
+                        </ActionForm>
                       ) : (
                         <span className={t.assigned_to ? "" : "text-amber-700"}>{nameOf(t.assigned_to)}</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5">
                       <Tag tone={STATUS_TONE[t.status]}>{HK_STATUS_LABELS[t.status]}</Tag>
+                      {assign && ["pending", "in_progress"].includes(t.status) && (
+                        <details className="relative inline-block ml-2">
+                          <summary className="text-[11px] text-slate-500 hover:text-rose-700 cursor-pointer list-none">Cancel</summary>
+                          <div className="absolute right-0 z-10 mt-1 w-60 bg-white border border-slate-200 rounded-lg shadow-md p-3">
+                            <ActionForm action={cancelTask} submitLabel="Cancel task" submitClassName={dangerButtonClass} className="space-y-2">
+                              <input type="hidden" name="id" value={t.id} />
+                              <input name="reason" required placeholder="Duplicate, room off sale…" className={inputClass} />
+                            </ActionForm>
+                          </div>
+                        </details>
+                      )}
                     </td>
                     <td className={`px-4 py-2.5 text-xs whitespace-nowrap ${overdue(t) ? "text-rose-700 font-medium" : "text-slate-600"}`}>
                       {t.status === "in_progress" && t.started_at

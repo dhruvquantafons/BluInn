@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -25,7 +26,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
         title="Reports"
         description="Occupancy, revenue and performance. Figures from a closed night audit never change; live ones still can."
       />
-      <SectionTabs tabs={tabs} label="Report sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Report sections" />
       {children}
     </>
   );

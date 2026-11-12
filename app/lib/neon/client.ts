@@ -43,9 +43,14 @@ export function createNeonUserClient(cookies: CookieAdapter) {
   return client;
 }
 
-/** Trusted server work: bypasses row level security, as the service role did. */
-export function createNeonServiceClient() {
-  return build(() => Promise.resolve(SERVICE), null, true);
+/**
+ * Trusted server work: bypasses row level security, as the service role did.
+ * A nightly job passes the hotel it is working for, which current_property()
+ * then reports (0041), so defaults and report functions are that hotel's.
+ */
+export function createNeonServiceClient(propertyId?: string) {
+  const ctx = propertyId ? { ...SERVICE, claims: { ...SERVICE.claims, property: propertyId } } : SERVICE;
+  return build(() => Promise.resolve(ctx), null, true);
 }
 
 /** No cookies, no session kept: for checking a password without signing in. */

@@ -114,13 +114,16 @@ export default async function TemplatesPage({ searchParams }: { searchParams: Pr
                     <span className="text-slate-500">SMS ({preview.sms.length} chars):</span> {preview.sms}
                   </p>
                   {own && (
-                    <form action={resetTemplate}>
+                    <ActionForm
+                      action={resetTemplate}
+                      submitLabel={language === settings.default_language ? "Restore the built-in text" : "Remove this translation"}
+                      pendingLabel="Restoring…"
+                      submitClassName="text-xs text-rose-700 cursor-pointer"
+                      className="space-y-1"
+                    >
                       <input type="hidden" name="template" value={key} />
                       <input type="hidden" name="language" value={language} />
-                      <button className="text-xs text-rose-700 cursor-pointer">
-                        {language === settings.default_language ? "Restore the built-in text" : `Remove this translation`}
-                      </button>
-                    </form>
+                    </ActionForm>
                   )}
                 </div>
               </div>

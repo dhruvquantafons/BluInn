@@ -68,7 +68,7 @@ export async function saveProperty(_prev: ActionState, fd: FormData): Promise<Ac
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "We could not find that property." };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("properties")
     .update({
       name: str(fd, "name", 200) || "Your Hotel",
@@ -76,8 +76,14 @@ export async function saveProperty(_prev: ActionState, fd: FormData): Promise<Ac
       is_active: bool(fd, "is_active"),
       sort_order: int(fd, "sort_order", 0, 0, 999),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) return { error: friendlyDbError(error.message) };
+  // Row level security drops an update it does not allow without an error,
+  // so "Saved." used to show when nothing was written (0043).
+  if (!data || data.length === 0) {
+    return { error: "Nothing was saved: that property is not one you can change from here." };
+  }
 
   revalidatePath("/", "layout");
   return { success: "Saved." };

@@ -45,11 +45,21 @@ function mayWork(session: Session, task: HousekeepingTask) {
   return can(session, "housekeeping.assign") || task.assigned_to === session.staff.id;
 }
 
-async function setRoomHk(supabase: SupabaseClient, roomId: string, status: string, extra: Record<string, unknown> = {}) {
-  await supabase
+/**
+ * Sets the room's housekeeping status. Returns a sentence when it could not
+ * (0043): the task used to show cleaned while the room stayed dirty.
+ */
+async function setRoomHk(
+  supabase: SupabaseClient,
+  roomId: string,
+  status: string,
+  extra: Record<string, unknown> = {},
+): Promise<string> {
+  const { error } = await supabase
     .from("rooms")
     .update({ housekeeping_status: status, housekeeping_updated_at: new Date().toISOString(), ...extra })
     .eq("id", roomId);
+  return error ? ` The room's status was not updated: ${friendlyDbError(error.message)}` : "";
 }
 
 // ── Planning ────────────────────────────────────────────────────────────────
@@ -79,30 +89,58 @@ export async function createTask(_prev: ActionState, fd: FormData): Promise<Acti
   if (!id) return { error: "That room already has an open task of this kind today." };
 
   const assignee = uuidOrNull(fd, "assigned_to");
+  let warn = "";
   if (assignee) {
-    await supabase.from("housekeeping_tasks").update({ assigned_to: assignee, assigned_at: new Date().toISOString() }).eq("id", id);
+    const { error: assignError } = await supabase
+      .from("housekeeping_tasks")
+      .update({ assigned_to: assignee, assigned_at: new Date().toISOString() })
+      .eq("id", id);
+    if (assignError) warn += ` It was not assigned: ${friendlyDbError(assignError.message)}`;
   }
   // Starting a clean means the room is not ready, whatever it showed before.
   const { data: room } = await supabase.from("rooms").select("housekeeping_status, status").eq("id", roomId).single();
   if (room && room.status !== "occupied" && room.housekeeping_status === "inspected") {
-    await setRoomHk(supabase, roomId, "dirty");
+    warn += await setRoomHk(supabase, roomId, "dirty");
   }
 
   revalidateHk();
-  return { success: "Task added." };
+  return warn ? { error: `Task added.${warn}` } : { success: "Task added." };
 }
 
-export async function reassignTask(fd: FormData) {
+export async function reassignTask(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("housekeeping.assign");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (!id) return;
+  if (!id) return { error: "Task not found." };
   const staffId = uuidOrNull(fd, "assigned_to");
-  await supabase
+  const { error } = await supabase
     .from("housekeeping_tasks")
     .update({ assigned_to: staffId, assigned_at: staffId ? new Date().toISOString() : null })
     .eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateHk();
+  return { success: staffId ? "Assigned." : "Unassigned." };
+}
+
+/** Cancels a task that should not be done (the room was taken off sale, a duplicate…). */
+export async function cancelTask(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("housekeeping.assign");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  const reason = str(fd, "reason", 300);
+  if (!id) return { error: "Task not found." };
+  if (!reason) return { error: "Say why the task is cancelled." };
+  const { data: task } = await supabase.from("housekeeping_tasks").select("notes").eq("id", id).maybeSingle();
+  const { data, error } = await supabase
+    .from("housekeeping_tasks")
+    .update({ status: "cancelled", notes: [task?.notes, `Cancelled: ${reason}`].filter(Boolean).join(" · ") })
+    .eq("id", id)
+    .in("status", ["pending", "in_progress"])
+    .select("id");
+  if (error) return { error: friendlyDbError(error.message) };
+  if (!data?.length) return { error: "Only a task not yet cleaned can be cancelled." };
+  revalidateHk();
+  return { success: "Task cancelled." };
 }
 
 // ── Working a task ──────────────────────────────────────────────────────────
@@ -127,9 +165,9 @@ export async function startTask(_prev: ActionState, fd: FormData): Promise<Actio
     .eq("status", "pending");
   if (error) return { error: friendlyDbError(error.message) };
 
-  await setRoomHk(supabase, task.room_id, "cleaning");
+  const warn = await setRoomHk(supabase, task.room_id, "cleaning");
   revalidateHk();
-  return { success: "Started. The timer is running." };
+  return warn ? { error: `Started.${warn}` } : { success: "Started. The timer is running." };
 }
 
 export async function completeTask(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -145,7 +183,9 @@ export async function completeTask(_prev: ActionState, fd: FormData): Promise<Ac
     item_id: i.id,
     label: i.label,
     category: i.category,
-    done: bool(fd, `done_${i.id}`),
+    // A quantity typed in means it was restocked, ticked or not (0041); it
+    // used to be ignored, so the stock it used was never deducted.
+    done: bool(fd, `done_${i.id}`) || int(fd, `qty_${i.id}`, 0, 0, 99) > 0,
     qty: int(fd, `qty_${i.id}`, 0, 0, 99),
   }));
   const missed = checklist.filter((c) => c.category !== "minibar" && !c.done);
@@ -164,9 +204,9 @@ export async function completeTask(_prev: ActionState, fd: FormData): Promise<Ac
     .eq("id", task.id);
   if (error) return { error: friendlyDbError(error.message) };
 
-  await setRoomHk(supabase, task.room_id, "clean");
+  const warn = await setRoomHk(supabase, task.room_id, "clean");
   revalidateHk();
-  return { success: "Done. Waiting for the supervisor to inspect." };
+  return warn ? { error: `Marked cleaned.${warn}` } : { success: "Done. Waiting for the supervisor to inspect." };
 }
 
 export async function inspectTask(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -197,13 +237,14 @@ export async function inspectTask(_prev: ActionState, fd: FormData): Promise<Act
     .eq("id", task.id);
   if (error) return { error: friendlyDbError(error.message) };
 
-  await setRoomHk(
+  const warn = await setRoomHk(
     supabase,
     task.room_id,
     passed ? "inspected" : "dirty",
     passed && task.kind === "deep_clean" ? { last_deep_clean_on: task.task_date } : {},
   );
   revalidateHk();
+  if (warn) return { error: `${passed ? "Inspection passed." : "Sent back."}${warn}` };
   return { success: passed ? `Room ${task.rooms?.room_number} is ready for guests.` : "Sent back for re-cleaning." };
 }
 
@@ -246,6 +287,48 @@ export async function logLostItem(_prev: ActionState, fd: FormData): Promise<Act
   return { success: `Logged as ${data.reference}.` };
 }
 
+const LOST_CATEGORIES = ["electronics", "documents", "jewellery", "clothing", "money", "other"] as const;
+const LOST_STATUSES = ["stored", "returned", "disposed"] as const;
+
+/**
+ * Files a found item properly: what it is, where it is kept, whose stay it is
+ * likely from, and how it ended (returned to whom, or disposed of).
+ */
+export async function updateLostItem(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await requirePermission("housekeeping.lost_found");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  if (!id) return { error: "Item not found." };
+  const status = oneOf(fd, "status", LOST_STATUSES, "stored");
+  const returnedTo = str(fd, "returned_to", 200);
+  if (status === "returned" && !returnedTo) return { error: "Say who it was returned to." };
+
+  let bookingId: string | null = null;
+  const reference = str(fd, "booking_reference", 40).toUpperCase();
+  if (reference) {
+    const { data: booking } = await supabase.from("bookings").select("id").eq("reference", reference).maybeSingle();
+    if (!booking) return { error: `No booking ${reference} at this hotel.` };
+    bookingId = booking.id as string;
+  }
+
+  const { error } = await supabase
+    .from("lost_found_items")
+    .update({
+      category: oneOf(fd, "category", LOST_CATEGORIES, "other"),
+      storage_location: str(fd, "storage_location", 200),
+      booking_id: bookingId,
+      status,
+      returned_to: status === "returned" ? returnedTo : "",
+      notes: str(fd, "notes", 1000),
+      resolved_at: status === "stored" ? null : new Date().toISOString(),
+      resolved_by: status === "stored" ? null : session.staff.id,
+    })
+    .eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidatePath("/housekeeping/lost-found");
+  return { success: status === "stored" ? "Saved." : status === "returned" ? `Marked returned to ${returnedTo}.` : "Marked disposed." };
+}
+
 // ── Setup ───────────────────────────────────────────────────────────────────
 
 export async function saveZone(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -274,25 +357,30 @@ export async function saveZone(_prev: ActionState, fd: FormData): Promise<Action
   return { success: "Zone saved." };
 }
 
-export async function deleteZone(fd: FormData) {
+export async function deleteZone(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("housekeeping.assign");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (id) await supabase.from("housekeeping_zones").delete().eq("id", id);
+  if (!id) return { error: "Zone not found." };
+  const { error } = await supabase.from("housekeeping_zones").delete().eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateHk();
+  return { success: "Zone deleted." };
 }
 
-export async function setStaffDuty(fd: FormData) {
+export async function setStaffDuty(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("housekeeping.assign");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "staff_id");
-  if (!id) return;
-  await supabase.rpc("set_hk_staff", {
+  if (!id) return { error: "Staff member not found." };
+  const { error } = await supabase.rpc("set_hk_staff", {
     p_staff: id,
     p_zone: uuidOrNull(fd, "zone_id"),
     p_on_duty: bool(fd, "on_duty"),
   });
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateHk();
+  return { success: "Saved." };
 }
 
 export async function saveChecklistItem(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -366,7 +454,7 @@ export async function postRoomConsumption(_prev: ActionState, fd: FormData): Pro
   }
   if (items.length === 0) return { error: "Enter how many of at least one item." };
 
-  const { error } = await supabase.rpc("hk_post_consumption", {
+  const { data: orderId, error } = await supabase.rpc("hk_post_consumption", {
     p_room: roomId,
     p_outlet_kind: outlet,
     p_items: items,
@@ -376,15 +464,20 @@ export async function postRoomConsumption(_prev: ActionState, fd: FormData): Pro
 
   revalidateHk();
   revalidatePath("/pos");
+  // The charge lands on the guest's folio, so their booking shows it at once.
+  const { data: order } = await supabase.from("pos_orders").select("booking_id").eq("id", orderId as string).maybeSingle();
+  if (order?.booking_id) revalidatePath(`/bookings/${order.booking_id}`, "layout");
   return { success: outlet === "laundry" ? "Laundry collected and charged to the room." : "Minibar charged to the room." };
 }
 
-export async function setLaundryStatus(fd: FormData) {
+export async function setLaundryStatus(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAnyPermission(["housekeeping.post_charges", "housekeeping.assign", "pos.manage"]);
   const supabase = await createClient();
   const orderId = uuidOrNull(fd, "order_id");
   const status = oneOf(fd, "laundry_status", ["collected", "processing", "delivered"] as const, "processing");
-  if (!orderId) return;
-  await supabase.rpc("pos_set_laundry_status", { p_order: orderId, p_status: status });
+  if (!orderId) return { error: "Laundry bag not found." };
+  const { error } = await supabase.rpc("pos_set_laundry_status", { p_order: orderId, p_status: status });
+  if (error) return { error: rpcError(error) };
   revalidateHk();
+  return { success: status === "delivered" ? "Delivered to the room." : "Sent to laundry." };
 }

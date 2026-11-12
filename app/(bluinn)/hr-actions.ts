@@ -3,12 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../lib/supabase/server";
 import { requirePermission, requireSession, requireAnyPermission } from "../lib/auth";
+import { can } from "../lib/permissions";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
 import { addDays, dayOfWeek, eachNight, isIsoDate, todayIn, zonedTime } from "../lib/dates";
 import type { BloodGroup, LeaveKind, ShiftColor } from "../lib/types";
 import { BLOOD_GROUPS, LEAVE_KIND_LABELS } from "../lib/types";
 import { loadWeek, WEEK_PERSON_COLUMNS, type WeekPerson } from "../lib/timesheet-data";
+import { attendanceProblem, leaveCancelProblem, rosterCellsToFill } from "../lib/hr";
 import { type ActionState, str, int, num, bool, oneOf, dateStr, uuidOrNull } from "./form-utils";
 
 /** Module 12 — HR & Staff Management. */
@@ -130,18 +132,42 @@ export async function requestLeave(_prev: ActionState, fd: FormData): Promise<Ac
   return { success: "Leave requested. Your manager will approve or decline it." };
 }
 
-export async function cancelLeave(fd: FormData) {
+/**
+ * Cancels leave (0043): your own while pending, or once approved until its
+ * first day; HR (hr.manage) at any time, with a reason when it is someone
+ * else's approved leave. The roster cells it kept empty are left for HR to
+ * fill.
+ */
+export async function cancelLeave(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requireSession();
   const supabase = await createClient();
+  const today = todayIn((await getSettings()).timezone);
   const id = uuidOrNull(fd, "id");
-  if (!id) return;
-  await supabase
+  if (!id) return { error: "Request not found." };
+  const reason = str(fd, "reason", 500);
+
+  const { data: req } = await supabase
     .from("leave_requests")
-    .update({ status: "cancelled" })
+    .select("staff_id, status, start_date, decision_note")
     .eq("id", id)
-    .eq("staff_id", session.staff.id)
-    .eq("status", "pending");
+    .maybeSingle();
+  if (!req) return { error: "Request not found." };
+  const problem = leaveCancelProblem(req, { staffId: session.staff.id, isHr: can(session, "hr.manage"), today, reason });
+  if (problem) return { error: problem };
+
+  const { data, error } = await supabase
+    .from("leave_requests")
+    .update({
+      status: "cancelled",
+      ...(reason ? { decision_note: [req.decision_note, `Cancelled: ${reason}`].filter(Boolean).join(" · ") } : {}),
+    })
+    .eq("id", id)
+    .eq("status", req.status)
+    .select("id");
+  if (error) return { error: friendlyDbError(error.message) };
+  if (!data || data.length === 0) return { error: "This request has changed since you opened it. Refresh the page." };
   revalidateHr();
+  return { success: req.status === "approved" ? "Leave cancelled. Update the roster for those days." : "Request withdrawn." };
 }
 
 // ── Leave approval ──────────────────────────────────────────────────────────
@@ -212,7 +238,8 @@ export async function decideTimesheet(_prev: ActionState, fd: FormData): Promise
 
 /** Unlocks an approved week so its attendance can be corrected. */
 export async function reopenTimesheet(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("hr.manage");
+  // Whoever can approve a week can reopen it (0043).
+  await requireAnyPermission(["hr.manage", "hr.approve_time"]);
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
   if (!id) return { error: "Timesheet not found." };
@@ -329,10 +356,24 @@ export async function saveRoster(_prev: ActionState, fd: FormData): Promise<Acti
       .lte("shift_date", dates[dates.length - 1]);
     const wanted = new Set(clears.map((c) => `${c.staff_id}:${c.shift_date}`));
     const ids = (existing ?? []).filter((e) => wanted.has(`${e.staff_id}:${e.shift_date}`)).map((e) => e.id);
-    if (ids.length) await supabase.from("staff_shifts").delete().in("id", ids);
+    if (ids.length) {
+      const { error } = await supabase.from("staff_shifts").delete().in("id", ids);
+      if (error) return { error: `The roster is saved, but cleared days were not: ${friendlyDbError(error.message)}` };
+    }
   }
   revalidateHr();
   return { success: "Roster saved." };
+}
+
+/** Approved leave overlapping a week, for the roster fills. */
+async function approvedLeaveIn(supabase: Awaited<ReturnType<typeof createClient>>, from: string, to: string) {
+  const { data } = await supabase
+    .from("leave_requests")
+    .select("staff_id, start_date, end_date")
+    .eq("status", "approved")
+    .lte("start_date", to)
+    .gte("end_date", from);
+  return (data ?? []) as { staff_id: string; start_date: string; end_date: string }[];
 }
 
 /** Fills empty cells of the week from each person's shift pattern. */
@@ -340,24 +381,20 @@ export async function fillRosterFromPatterns(_prev: ActionState, fd: FormData): 
   const session = await requirePermission("hr.manage");
   const supabase = await createClient();
   const week = dateStr(fd, "week");
-  if (!week) return { error: "Week not found." };
+  if (!isMonday(week)) return { error: "Choose a week starting on a Monday." };
   const days = eachNight(week, addDays(week, 7));
 
-  const [{ data: people }, { data: existing }] = await Promise.all([
+  const [{ data: people }, { data: existing }, leave] = await Promise.all([
     supabase.from("staff").select("id, default_shift_id, weekly_off").eq("is_active", true).not("default_shift_id", "is", null),
     supabase.from("staff_shifts").select("staff_id, shift_date").gte("shift_date", week).lt("shift_date", addDays(week, 7)),
+    approvedLeaveIn(supabase, week, addDays(week, 6)),
   ]);
   const taken = new Set((existing ?? []).map((e) => `${e.staff_id}:${e.shift_date}`));
-  const rows = (people ?? []).flatMap((p) =>
-    days
-      .filter((d) => !taken.has(`${p.id}:${d}`))
-      .map((d) => ({
-        staff_id: p.id,
-        shift_date: d,
-        shift_type_id: p.weekly_off === dayOfWeek(d) ? null : p.default_shift_id,
-        updated_by: session.staff.id,
-      })),
-  );
+  // Approved leave is left empty rather than rostered over (0041).
+  const rows = rosterCellsToFill({ days, people: people ?? [], taken, leave, dayOfWeek }).map((r) => ({
+    ...r,
+    updated_by: session.staff.id,
+  }));
   if (rows.length === 0) return { success: "Nothing to fill — set shift patterns on the Staff tab, or the week is already full." };
   const { error } = await supabase.from("staff_shifts").insert(rows);
   if (error) return { error: friendlyDbError(error.message) };
@@ -370,17 +407,23 @@ export async function copyPreviousWeek(_prev: ActionState, fd: FormData): Promis
   const session = await requirePermission("hr.manage");
   const supabase = await createClient();
   const week = dateStr(fd, "week");
-  if (!week) return { error: "Week not found." };
+  if (!isMonday(week)) return { error: "Choose a week starting on a Monday." };
   const prev = addDays(week, -7);
 
-  const [{ data: last }, { data: existing }] = await Promise.all([
+  const [{ data: last }, { data: existing }, { data: active }, leave] = await Promise.all([
     supabase.from("staff_shifts").select("staff_id, shift_date, shift_type_id").gte("shift_date", prev).lt("shift_date", week),
     supabase.from("staff_shifts").select("staff_id, shift_date").gte("shift_date", week).lt("shift_date", addDays(week, 7)),
+    supabase.from("staff").select("id").eq("is_active", true),
+    approvedLeaveIn(supabase, week, addDays(week, 6)),
   ]);
   const taken = new Set((existing ?? []).map((e) => `${e.staff_id}:${e.shift_date}`));
+  const current = new Set((active ?? []).map((a) => a.id as string));
+  const onLeave = (staffId: string, day: string) =>
+    leave.some((l) => l.staff_id === staffId && l.start_date <= day && l.end_date >= day);
+  // Not for people who have left since, nor over approved leave (0041).
   const rows = (last ?? [])
     .map((s) => ({ staff_id: s.staff_id, shift_date: addDays(s.shift_date, 7), shift_type_id: s.shift_type_id, updated_by: session.staff.id }))
-    .filter((r) => !taken.has(`${r.staff_id}:${r.shift_date}`));
+    .filter((r) => !taken.has(`${r.staff_id}:${r.shift_date}`) && current.has(r.staff_id) && !onLeave(r.staff_id, r.shift_date));
   if (rows.length === 0) return { success: "Nothing to copy." };
   const { error } = await supabase.from("staff_shifts").insert(rows);
   if (error) return { error: friendlyDbError(error.message) };
@@ -402,11 +445,25 @@ export async function saveAttendance(_prev: ActionState, fd: FormData): Promise<
   if (!staffId || !date) return { error: "Choose the staff member and date." };
   if (!/^\d{2}:\d{2}$/.test(inTime)) return { error: "Enter the clock-in time." };
   if (outTime && !/^\d{2}:\d{2}$/.test(outTime)) return { error: "Enter the clock-out time as HH:MM." };
+  if (outTime && outTime === inTime) return { error: "Clock-out must be after clock-in." };
 
   const clockIn = zonedTime(date, inTime, settings.timezone);
   // A clock-out earlier than the clock-in is the next morning (night shift).
   const clockOut = outTime ? zonedTime(outTime > inTime ? date : addDays(date, 1), outTime, settings.timezone) : null;
   if (clockIn.getTime() > Date.now() + 5 * 60000) return { error: "Clock-in cannot be in the future." };
+  // No clock-out in the future, and no overlap with the person's other records (0043).
+  const { data: others } = await supabase
+    .from("attendance")
+    .select("id, clock_in, clock_out")
+    .eq("staff_id", staffId)
+    .gte("work_date", addDays(date, -2))
+    .lte("work_date", addDays(date, 2));
+  const problem = attendanceProblem(
+    clockIn,
+    clockOut,
+    (others ?? []).filter((o) => o.id !== id) as { clock_in: string; clock_out: string | null }[],
+  );
+  if (problem) return { error: problem };
 
   const payload = {
     staff_id: staffId,
@@ -425,12 +482,15 @@ export async function saveAttendance(_prev: ActionState, fd: FormData): Promise<
   return { success: "Attendance saved." };
 }
 
-export async function deleteAttendance(fd: FormData) {
+export async function deleteAttendance(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("hr.manage");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (id) await supabase.from("attendance").delete().eq("id", id);
+  if (!id) return { error: "Record not found." };
+  const { error } = await supabase.from("attendance").delete().eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateHr();
+  return { success: "Record deleted." };
 }
 
 // ── Setup ───────────────────────────────────────────────────────────────────
@@ -453,12 +513,15 @@ export async function saveDepartment(_prev: ActionState, fd: FormData): Promise<
   return { success: "Saved." };
 }
 
-export async function deleteDepartment(fd: FormData) {
+export async function deleteDepartment(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("hr.manage");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (id) await supabase.from("departments").delete().eq("id", id);
+  if (!id) return { error: "Department not found." };
+  const { error } = await supabase.from("departments").delete().eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidateHr();
+  return { success: "Department deleted." };
 }
 
 const COLORS: ShiftColor[] = ["slate", "yellow", "orange", "indigo", "emerald", "rose", "sky", "violet"];

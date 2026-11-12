@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requirePermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -16,7 +17,7 @@ export default async function GuestsLayout({ children }: { children: React.React
   return (
     <>
       <PageHeader title="Guests" description="Profiles, stay history, preferences and feedback." />
-      <SectionTabs tabs={tabs} label="Guest sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Guest sections" />
       {children}
     </>
   );

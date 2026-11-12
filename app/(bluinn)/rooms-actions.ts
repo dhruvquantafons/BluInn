@@ -98,24 +98,28 @@ export async function deleteRoom(_prev: ActionState, fd: FormData): Promise<Acti
 }
 
 /** Housekeeping status only. Occupancy follows check-in and check-out. */
-export async function updateHousekeepingStatus(fd: FormData) {
+export async function updateHousekeepingStatus(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("rooms.status");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
-  if (!id) return;
+  if (!id) return { error: "Room not found." };
   const status = oneOf(fd, "housekeeping_status", HK, "dirty");
   // Only a supervisor's inspection makes a room ready for guests (Module 5).
-  if (status === "inspected" && !can(session, "housekeeping.inspect")) return;
+  if (status === "inspected" && !can(session, "housekeeping.inspect")) {
+    return { error: "Only a housekeeping supervisor can mark a room inspected." };
+  }
 
-  await supabase
+  const { error } = await supabase
     .from("rooms")
     .update({
       housekeeping_status: status,
       housekeeping_updated_at: new Date().toISOString(),
     })
     .eq("id", id);
+  if (error) return { error: friendlyDbError(error.message) };
 
   revalidateRooms();
+  return { success: "Saved." };
 }
 
 /**
@@ -177,6 +181,15 @@ export async function releaseBlock(_prev: ActionState, fd: FormData): Promise<Ac
   if (error) return { error: friendlyDbError(error) };
   if (!released) return { error: "That block was already released." };
 
+  // A block from a maintenance ticket resolves the ticket too (0041).
+  const { data: block } = await supabase.from("room_blocks").select("ticket_id, maintenance_tickets(reference)").eq("id", id).maybeSingle();
+  const ticket = (block?.maintenance_tickets as unknown as { reference: string } | null)?.reference;
+
   revalidateRooms();
-  return { success: stillBlocked ? "Released. Another block still covers today." : "Released. The room is back in inventory, marked dirty for housekeeping." };
+  revalidatePath("/maintenance");
+  return {
+    success:
+      (stillBlocked ? "Released. Another block still covers today." : "Released. The room is back in inventory, marked dirty for housekeeping.") +
+      (ticket ? ` Maintenance ticket ${ticket} is marked resolved.` : ""),
+  };
 }

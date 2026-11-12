@@ -5,18 +5,12 @@ import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { friendlyDbError } from "../lib/db-errors";
-import { addDays, todayIn } from "../lib/dates";
-import { proposeRates, type RuleLimits } from "../lib/revenue";
+import { runPricing, describePricingRun } from "../lib/pricing-run";
 import type {
   AdjustmentKind,
   DiscountKind,
-  ForecastRow,
   MealPlan,
   PackageBasis,
-  PricingAdjustment,
-  PricingRule,
-  RateSeason,
-  RoomType,
 } from "../lib/types";
 import { type ActionState, str, num, int, bool, oneOf, uuidOrNull, dateStr } from "./form-utils";
 
@@ -162,115 +156,13 @@ export async function runPricingRules(_prev: ActionState, fd: FormData): Promise
   const session = await requirePermission("revenue.manage");
   const supabase = await createClient();
   const settings = await getSettings();
-
-  const today = todayIn(settings.timezone);
-  const days = int(fd, "days", settings.revenue_forecast_days, 7, 365);
-  const until = addDays(today, days);
-
-  const [forecast, rules, roomTypes, seasons, existing] = await Promise.all([
-    supabase.rpc("revenue_forecast", { p_from: today, p_to: until }),
-    supabase.from("pricing_rules").select("*").eq("is_active", true),
-    supabase.from("room_types").select("*").eq("is_active", true),
-    supabase.from("rate_seasons").select("*").gte("end_date", today),
-    supabase
-      .from("pricing_adjustments")
-      .select("*")
-      .in("status", ["pending", "applied"])
-      .gte("stay_date", today)
-      .lte("stay_date", until),
-  ]);
-
-  if (forecast.error) return { error: friendlyDbError(forecast.error.message) };
-  if ((rules.data ?? []).length === 0) {
-    return { error: "There are no active pricing rules to run." };
-  }
-
-  const limits: RuleLimits = {
-    floorRate: Number(settings.revenue_floor_rate),
-    ceilingRate: Number(settings.revenue_ceiling_rate),
-    autoApprovePercent: Number(settings.revenue_auto_approve_percent),
-  };
-
-  const proposals = proposeRates(
-    (forecast.data ?? []) as ForecastRow[],
-    (rules.data ?? []) as PricingRule[],
-    (roomTypes.data ?? []) as RoomType[],
-    (seasons.data ?? []) as RateSeason[],
-    limits,
-    today,
-  );
-
-  const live = (existing.data ?? []) as PricingAdjustment[];
-  const keyOf = (stayDate: string, roomTypeId: string) => `${stayDate}|${roomTypeId}`;
-  const liveByKey = new Map(live.map((a) => [keyOf(a.stay_date, a.room_type_id), a]));
-  const proposedKeys = new Set(proposals.map((p) => keyOf(p.stay_date, p.room_type_id)));
-
-  const expire: string[] = [];
-  const insert: Record<string, unknown>[] = [];
-
-  for (const p of proposals) {
-    const current = liveByKey.get(keyOf(p.stay_date, p.room_type_id));
-    const unchanged =
-      current &&
-      current.rule_id === p.rule_id &&
-      Number(current.proposed_rate) === p.proposed_rate &&
-      Number(current.base_rate) === p.base_rate;
-    if (unchanged) continue;
-
-    if (current) expire.push(current.id);
-    insert.push({
-      stay_date: p.stay_date,
-      room_type_id: p.room_type_id,
-      rule_id: p.rule_id,
-      rule_name: p.rule_name,
-      occasion: p.occasion,
-      base_rate: p.base_rate,
-      proposed_rate: p.proposed_rate,
-      change_percent: p.change_percent,
-      occupancy_percent: p.occupancy_percent,
-      rooms_sold: p.rooms_sold,
-      capacity: p.capacity,
-      status: p.autoApproves ? "applied" : "pending",
-      threshold_percent: limits.autoApprovePercent,
-      created_by: session.staff.id,
-      // A change that needs nobody's approval is decided the moment it is made.
-      decided_at: p.autoApproves ? new Date().toISOString() : null,
-    });
-  }
-
-  // Rates whose rule no longer matches this night.
-  for (const a of live) {
-    if (!proposedKeys.has(keyOf(a.stay_date, a.room_type_id))) expire.push(a.id);
-  }
-
-  // Expire first: a night may hold only one live or waiting rate per type.
-  if (expire.length > 0) {
-    const { error } = await supabase
-      .from("pricing_adjustments")
-      .update({ status: "expired", decided_at: new Date().toISOString() })
-      .in("id", expire);
-    if (error) return { error: friendlyDbError(error.message) };
-  }
-
-  if (insert.length > 0) {
-    const { error } = await supabase.from("pricing_adjustments").insert(insert);
-    if (error) return { error: friendlyDbError(error.message) };
-  }
-
-  const applied = insert.filter((r) => r.status === "applied").length;
-  const pending = insert.length - applied;
-
+  const r = await runPricing(supabase, settings, {
+    staffId: session.staff.id,
+    days: int(fd, "days", settings.revenue_forecast_days, 7, 365),
+  });
+  if ("error" in r) return { error: r.error };
   revalidateRevenue();
-
-  if (insert.length === 0 && expire.length === 0) {
-    return { success: `Rules run to ${until}. Every night is already at the rate the rules ask for.` };
-  }
-  const parts = [
-    applied > 0 ? `${applied} rate${applied === 1 ? "" : "s"} live` : "",
-    pending > 0 ? `${pending} waiting for approval` : "",
-    expire.length > 0 ? `${expire.length} withdrawn` : "",
-  ].filter(Boolean);
-  return { success: `Rules run to ${until}: ${parts.join(", ")}.` };
+  return { success: describePricingRun(r) };
 }
 
 /** Approves or rejects rates waiting in the queue. */

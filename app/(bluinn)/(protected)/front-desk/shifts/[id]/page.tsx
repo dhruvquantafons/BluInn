@@ -114,6 +114,8 @@ export default async function ShiftReportPage({ params }: { params: Promise<{ id
                   ["Cash taken at the desk", breakdown.folioCash],
                   ["Cash refunded at the desk", -breakdown.folioCashRefunds],
                   ["Cash taken at outlets", breakdown.outletCash],
+                  ["Event deposits and payments in cash", breakdown.eventCash],
+                  ["Event refunds in cash", -breakdown.eventCashRefunds],
                   ["Pay-ins", breakdown.payIns],
                   ["Paid-outs", -breakdown.paidOuts],
                   ["Safe drops", -breakdown.safeDrops],
@@ -128,6 +130,14 @@ export default async function ShiftReportPage({ params }: { params: Promise<{ id
                 <dt>Should be in the drawer</dt>
                 <dd className="tabular-nums">{fmtMoney(breakdown.expected)}</dd>
               </div>
+              {Object.entries(breakdown.foreignCash).map(([code, notes]) => (
+                <div key={code} className="flex justify-between text-slate-600">
+                  <dt>Plus foreign notes, counted apart</dt>
+                  <dd className="tabular-nums">
+                    {code} {notes.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </dd>
+                </div>
+              ))}
             </dl>
           </Card>
 
@@ -142,7 +152,9 @@ export default async function ShiftReportPage({ params }: { params: Promise<{ id
                     <dt className="text-slate-600">
                       {method.startsWith("outlet_")
                         ? `Outlet · ${method.slice(7)}`
-                        : (PAYMENT_METHOD_LABELS[method as PaymentMethod] ?? method)}
+                        : method.startsWith("event_")
+                          ? `Events · ${PAYMENT_METHOD_LABELS[method.slice(6) as PaymentMethod] ?? method.slice(6)}`
+                          : (PAYMENT_METHOD_LABELS[method as PaymentMethod] ?? method)}
                     </dt>
                     <dd className="tabular-nums">{fmtMoney(amount)}</dd>
                   </div>

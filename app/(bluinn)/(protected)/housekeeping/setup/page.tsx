@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
+import { canOpen } from "../../../../lib/page-access";
 import { getSettings } from "../../../../lib/settings";
 import type { HkChecklistItem, HkZone, Staff } from "../../../../lib/types";
 import { CHECKLIST_CATEGORY_LABELS } from "../../../../lib/types";
@@ -9,7 +10,16 @@ import { Card, Field, Check, SectionTitle, inputClass, secondaryButtonClass, tab
 import ActionForm from "../../../components/ActionForm";
 
 export default async function HousekeepingSetupPage() {
-  await requirePermission("housekeeping.assign");
+  const session = await requirePermission("housekeeping.assign");
+  // Links to pages a supervisor may not open are shown as plain text (0043).
+  const linkTo = (href: string, text: string) =>
+    canOpen(session, href) ? (
+      <Link href={href} className="text-brand-800">
+        {text}
+      </Link>
+    ) : (
+      text
+    );
   const supabase = await createClient();
   const settings = await getSettings();
 
@@ -38,7 +48,7 @@ export default async function HousekeepingSetupPage() {
         </p>
         {cleaners.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No staff have the Housekeeping Staff role yet. Add them on the <Link href="/staff" className="text-brand-800">Staff</Link> page.
+            No staff have the Housekeeping Staff role yet. Add them on the {linkTo("/staff", "Staff")} page.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -55,7 +65,12 @@ export default async function HousekeepingSetupPage() {
                 <tr key={s.id}>
                   <td className="px-3 py-2">{s.full_name || s.email}</td>
                   <td className="px-3 py-2" colSpan={3}>
-                    <form action={setStaffDuty} className="flex items-center gap-4">
+                    <ActionForm
+                      action={setStaffDuty}
+                      submitLabel="Save"
+                      submitClassName={`${secondaryButtonClass} !py-1`}
+                      className="flex flex-wrap items-center gap-4"
+                    >
                       <input type="hidden" name="staff_id" value={s.id} />
                       <select name="zone_id" defaultValue={s.hk_zone_id ?? ""} className={`${inputClass} max-w-[200px] !py-1`}>
                         <option value="">Any floor</option>
@@ -69,8 +84,7 @@ export default async function HousekeepingSetupPage() {
                         <input type="checkbox" name="on_duty" defaultChecked={s.on_duty} className={checkboxClass} />
                         <span className="text-slate-600">On duty</span>
                       </label>
-                      <button className={`${secondaryButtonClass} !py-1 ml-auto`}>Save</button>
-                    </form>
+                    </ActionForm>
                   </td>
                 </tr>
               ))}
@@ -89,10 +103,15 @@ export default async function HousekeepingSetupPage() {
                 <input name="name" defaultValue={z.name} className={`${inputClass} max-w-[200px]`} />
                 <input name="floors" defaultValue={z.floors.join(", ")} className={`${inputClass} max-w-[160px]`} />
               </ActionForm>
-              <form action={deleteZone}>
+              <ActionForm
+                action={deleteZone}
+                submitLabel="Delete"
+                pendingLabel="Deleting…"
+                submitClassName="text-xs text-slate-400 hover:text-rose-700 cursor-pointer pb-2"
+                className="space-y-1"
+              >
                 <input type="hidden" name="id" value={z.id} />
-                <button className="text-xs text-slate-400 hover:text-rose-700 cursor-pointer pb-2">Delete</button>
-              </form>
+              </ActionForm>
             </div>
           ))}
         </div>
@@ -158,12 +177,12 @@ export default async function HousekeepingSetupPage() {
         <p>
           Default turnaround: <strong>{settings.hk_default_minutes} minutes</strong>; deep clean every{" "}
           <strong>{settings.hk_deep_clean_days} days</strong> (set on{" "}
-          <Link href="/settings" className="text-brand-800">Settings</Link>). Deep cleans get three times the target.
+          {linkTo("/settings", "Settings")}). Deep cleans get three times the target.
         </p>
         <p className="mt-1">
           Per room type:{" "}
           {(types ?? []).map((t) => `${t.name} ${t.cleaning_minutes ?? settings.hk_default_minutes} min`).join(" · ")} (set on{" "}
-          <Link href="/rates" className="text-brand-800">Rates → Room types</Link>).
+          {linkTo("/rates", "Rates → Room types")}).
         </p>
       </Card>
     </div>

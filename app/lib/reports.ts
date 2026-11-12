@@ -583,3 +583,13 @@ export function lastClosedDay(businessDate: string): string {
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Whether a scheduled report carries money (0043): the KPI summary and the
+ * flash report do, and so does every report marked financial. Scheduling or
+ * sending one needs reports.financial, as opening it on screen does.
+ */
+export function scheduleNeedsFinancial(report: string): boolean {
+  if (report === "kpi_summary" || report === "flash") return true;
+  return reportByKind(report)?.financial ?? true;
+}

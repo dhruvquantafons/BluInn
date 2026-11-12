@@ -7,7 +7,8 @@ import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
 import type { Room, RoomType, Booking, RoomBlock, HousekeepingStatus } from "../../../lib/types";
 import { OCCUPYING_STATUSES, HOUSEKEEPING_STATUS_LABELS, roomBoardLabel } from "../../../lib/types";
-import { updateHousekeepingStatus, createBlock, releaseBlock } from "../../rooms-actions";
+import { createBlock, releaseBlock } from "../../rooms-actions";
+import RoomStatusButtons from "./RoomStatusButtons";
 import {
   PageHeader,
   Card,
@@ -281,27 +282,11 @@ export default async function RoomsPage({
                             {block && <p className="text-[10px] text-rose-800 truncate" title={block.reason}>{block.reason}</p>}
                             {room.dnd && <p className="text-[10px] font-medium text-violet-700">Do Not Disturb</p>}
                             {canStatus && !block ? (
-                              <form action={updateHousekeepingStatus} className="mt-1.5">
-                                <input type="hidden" name="id" value={room.id} />
-                                <div className="flex flex-wrap gap-1">
-                                  {HK_FLOW.filter((hk) => hk !== "inspected" || canInspect).map((hk) => (
-                                    <button
-                                      key={hk}
-                                      type="submit"
-                                      name="housekeeping_status"
-                                      value={hk}
-                                      title={`Mark ${HOUSEKEEPING_STATUS_LABELS[hk].toLowerCase()}`}
-                                      className={`text-[9px] px-1.5 py-0.5 rounded-md border cursor-pointer transition-colors duration-150 ${
-                                        room.housekeeping_status === hk
-                                          ? "bg-brand-600 text-white border-brand-600"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                                      }`}
-                                    >
-                                      {HOUSEKEEPING_STATUS_LABELS[hk]}
-                                    </button>
-                                  ))}
-                                </div>
-                              </form>
+                              <RoomStatusButtons
+                                roomId={room.id}
+                                current={room.housekeeping_status}
+                                statuses={HK_FLOW.filter((hk) => hk !== "inspected" || canInspect)}
+                              />
                             ) : (
                               <p className="text-[10px] text-slate-600 mt-1">{HOUSEKEEPING_STATUS_LABELS[room.housekeeping_status]}</p>
                             )}

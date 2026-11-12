@@ -9,7 +9,9 @@ import { getSettings } from "../lib/settings";
 import { getCurrentProperty } from "../lib/properties";
 import { friendlyDbError } from "../lib/db-errors";
 import { noShowPenalty } from "../lib/policies";
-import { ancillaryCharge, insertFolioEntries, postRoomCharges } from "../lib/folio";
+import { ancillaryCharge, postRoomCharges } from "../lib/folio";
+import { overstayExtension, propertyInvoiceProblem } from "../lib/checkout";
+import { issueOutstandingInvoices, lastBillTo } from "../lib/invoice-issue";
 import { addDays, todayIn, zonedTime } from "../lib/dates";
 import { escalateOverdueTickets } from "../lib/staff-alerts";
 import type { Booking, FolioEntry, RatePlan } from "../lib/types";
@@ -22,7 +24,9 @@ import { type ActionState, bool } from "./form-utils";
  *   2. Marks expected arrivals who never came as no-shows (optional), posting
  *      the rate plan's no-show penalty.
  *   3. Releases tentative holds that have expired.
- *   4. Closes the day's folio entries (the cashier shifts).
+ *   4. Closes the day's folio entries, so they can no longer be voided.
+ *      Cash shifts are not closed: the audit page lists any still open, and
+ *      each cashier (or a cash-shift auditor) counts and closes the drawer.
  *   5. Syncs room availability with room blocks for tomorrow, schedules
  *      due deep cleans and preventive maintenance, and escalates overdue
  *      maintenance tickets.
@@ -95,6 +99,85 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     return { error: `Night audit stopped: ${friendlyDbError(message)} Fix the problem and run it again.` };
   };
 
+  // Stays that need a GST invoice someone else must issue (the night auditor
+  // role cannot issue invoices), listed on the report.
+  const invoicing = can(session, "folio.invoice") && !propertyInvoiceProblem(settings);
+  const toInvoice: { reference: string; guest: string; reason: string }[] = [];
+  const invoiceStay = async (b: { id: string; reference: string; contact_name: string; guest_id: string | null }, why: string) => {
+    if (!invoicing) {
+      toInvoice.push({ reference: b.reference, guest: b.contact_name, reason: why });
+      return;
+    }
+    const billTo = await lastBillTo(supabase, b);
+    const r = await issueOutstandingInvoices(supabase, settings, b.id, billTo, staffId);
+    if (r.error) toInvoice.push({ reference: b.reference, guest: b.contact_name, reason: `${why}: ${r.error}` });
+  };
+
+  // ── 0. Stays due out tonight but still in house ──
+  const { data: dueOutData } = await supabase
+    .from("bookings")
+    .select("id, reference, contact_name, guest_id, check_in, check_out, quoted_rate, rate_breakdown, rooms_count, stay_type, total_amount, rooms(room_number)")
+    .eq("status", "checked_in")
+    .lte("check_out", day);
+  type DueOut = Pick<
+    Booking,
+    "id" | "reference" | "contact_name" | "guest_id" | "check_in" | "check_out" | "quoted_rate" | "rate_breakdown" | "rooms_count" | "stay_type" | "total_amount"
+  > & {
+    rooms: { room_number: string } | null;
+  };
+  const handovers: { reference: string; next: string }[] = [];
+  const overstays: { reference: string; guest: string; room: string; due_out: string; extended_to: string | null }[] = [];
+  // Overstays whose stay could not be extended (the room is booked to someone
+  // else from tonight): the guest is still in it, so tonight is charged anyway.
+  const stuck: DueOut[] = [];
+  for (const b of (dueOutData ?? []) as unknown as DueOut[]) {
+    // A stay split by date hands its room to its second part (0040): this
+    // part checks out, and the database checks the next one in.
+    const { data: next } = await supabase
+      .from("bookings")
+      .select("reference, check_in")
+      .eq("split_from_id", b.id)
+      .in("status", ["tentative", "confirmed"])
+      .lte("check_in", b.check_out)
+      .limit(1)
+      .maybeSingle();
+    if (next) {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "checked_out", checked_out_at: new Date().toISOString(), checked_out_by: staffId })
+        .eq("id", b.id)
+        .eq("status", "checked_in");
+      if (error) return fail(`Split stay ${b.reference} could not hand over to ${next.reference}: ${error.message}`);
+      handovers.push({ reference: b.reference, next: next.reference });
+      await invoiceStay(b, "split stay handed over");
+      continue;
+    }
+
+    // An overstay: the guest is still here tonight, so tonight is charged and
+    // the room stays theirs. The stay runs on at the last night's rate.
+    const ext = overstayExtension(b, day);
+    let extendedTo: string | null = null;
+    if (ext) {
+      // The nights added are added to the booking's total too (0041).
+      const added = ext.rate_breakdown.slice((b.rate_breakdown ?? []).length).reduce((s, n) => s + Number(n.rate), 0);
+      const total = Math.round((Number(b.total_amount) + added * b.rooms_count) * 100) / 100;
+      const { error } = await supabase
+        .from("bookings")
+        .update({ ...ext, total_amount: total })
+        .eq("id", b.id)
+        .eq("status", "checked_in");
+      if (!error) extendedTo = ext.check_out;
+      else stuck.push({ ...b, rate_breakdown: ext.rate_breakdown });
+    }
+    overstays.push({
+      reference: b.reference,
+      guest: b.contact_name,
+      room: b.rooms?.room_number ?? "",
+      due_out: b.check_out,
+      extended_to: extendedTo,
+    });
+  }
+
   // ── 1. Room charges ──
   const { data: inHouseData, error: inHouseError } = await supabase
     .from("bookings")
@@ -105,13 +188,13 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   if (inHouseError) return fail(inHouseError.message);
 
   const inHouse = (inHouseData ?? []) as unknown as (Booking & { rooms: { room_number: string } | null })[];
-  const charges = await postRoomCharges(supabase, inHouse, () => [day], settings, staffId, day);
+  const charges = await postRoomCharges(supabase, [...inHouse, ...(stuck as unknown as Booking[])], () => [day], settings, staffId, day);
   if (charges.error) return fail(charges.error);
 
   // ── 2. No-shows ──
   const { data: dueData } = await supabase
     .from("bookings")
-    .select("id, reference, contact_name, rooms_count, check_in, quoted_rate, rate_breakdown, rate_plans(*)")
+    .select("id, reference, contact_name, guest_id, rooms_count, check_in, quoted_rate, rate_breakdown, rate_plans(*)")
     .in("status", ["tentative", "confirmed"])
     .lte("check_in", day);
   const due = (dueData ?? []) as unknown as (Booking & { rate_plans: RatePlan | null })[];
@@ -120,7 +203,39 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   if (bool(fd, "mark_no_shows") && can(session, "bookings.cancel")) {
     for (const b of due) {
       const penalty = noShowPenalty(b.rate_plans, b.rate_breakdown ?? [], b.rooms_count);
-      const { error } = await supabase
+      // The penalty goes first, then the status (0043): a penalty that failed
+      // after the booking was closed was lost, since a rerun no longer finds
+      // the booking. A rerun after a failed status change finds this night's
+      // penalty already there and does not post it twice.
+      let penaltyId: string | null = null;
+      if (penalty.amount > 0) {
+        const { data: posted } = await supabase
+          .from("folio_entries")
+          .select("id")
+          .eq("booking_id", b.id)
+          .eq("kind", "penalty")
+          .eq("night_audit_date", day)
+          .is("voided_at", null)
+          .limit(1)
+          .maybeSingle();
+        if (!posted) {
+          const { data: entry, error: penaltyError } = await supabase
+            .from("folio_entries")
+            .insert({
+              booking_id: b.id,
+              kind: "penalty",
+              description: penalty.explanation,
+              ...ancillaryCharge(penalty.amount, b, settings),
+              night_audit_date: day,
+              created_by: staffId,
+            })
+            .select("id")
+            .single();
+          if (penaltyError) return fail(`No-show penalty for ${b.reference} was not posted: ${penaltyError.message}`);
+          penaltyId = entry.id as string;
+        }
+      }
+      const { data: closed, error } = await supabase
         .from("bookings")
         .update({
           status: "no_show",
@@ -131,21 +246,42 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
           hold_until: null,
         })
         .eq("id", b.id)
-        .in("status", ["tentative", "confirmed"]);
-      if (error) return fail(error.message);
+        .in("status", ["tentative", "confirmed"])
+        .select("id");
+      if (error || !closed || closed.length === 0) {
+        // Not closed (the guest arrived meanwhile, or the update failed): the
+        // penalty just posted comes off again.
+        if (penaltyId) {
+          await supabase
+            .from("folio_entries")
+            .update({ voided_at: new Date().toISOString(), voided_by: staffId, void_reason: "No-show not recorded" })
+            .eq("id", penaltyId);
+        }
+        if (error) return fail(error.message);
+        continue;
+      }
       if (penalty.amount > 0) {
-        const penaltyError = await insertFolioEntries(supabase, {
-          booking_id: b.id,
-          kind: "penalty",
-          description: penalty.explanation,
-          ...ancillaryCharge(penalty.amount, b, settings),
-          night_audit_date: day,
-          created_by: staffId,
-        });
-        if (penaltyError) return fail(`No-show penalty for ${b.reference} was not posted: ${penaltyError}`);
+        // The penalty is a taxable supply: it goes on a GST invoice like a stay.
+        await invoiceStay(b, "no-show penalty");
       }
       noShows.push({ reference: b.reference, guest: b.contact_name, penalty: penalty.amount });
     }
+  }
+
+  // ── 3a. Event rooms at their cut-off (0042) ──
+  // Rooms an event is holding that nobody has taken go back on sale.
+  const { data: dueBlocks } = await supabase
+    .from("booking_groups")
+    .select("event_id, event_bookings(number, title, status)")
+    .not("event_id", "is", null)
+    .lte("release_on", day);
+  const eventRoomsReleased: { event: string; rooms: number }[] = [];
+  for (const g of dueBlocks ?? []) {
+    const ev = g.event_bookings as unknown as { number: string; title: string; status: string } | null;
+    if (!ev || ev.status === "cancelled" || ev.status === "completed") continue;
+    const { data: released, error } = await supabase.rpc("event_release_unsold_rooms", { p_event: g.event_id });
+    if (error) return fail(`Unsold rooms for ${ev.number} were not released: ${error.message}`);
+    if (Number(released) > 0) eventRoomsReleased.push({ event: `${ev.number} ${ev.title}`, rooms: Number(released) });
   }
 
   // ── 3. Expired holds ──
@@ -162,13 +298,6 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     .lt("hold_until", new Date().toISOString())
     .gt("check_in", day)
     .select("reference, contact_name");
-
-  // ── Exceptions for the manager ──
-  const { data: overstays } = await supabase
-    .from("bookings")
-    .select("reference, contact_name, check_out, rooms(room_number)")
-    .eq("status", "checked_in")
-    .lte("check_out", day);
 
   // ── 4. Close the day's folio entries ──
   const { error: closeError } = await supabase.rpc("close_folio_day", { p_date: day });
@@ -201,7 +330,7 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
 
   // ── 5. Room blocks → room availability for tomorrow ──
   const [{ data: rooms }, { data: blocks }] = await Promise.all([
-    supabase.from("rooms").select("id, status"),
+    supabase.from("rooms").select("id, status, room_number"),
     supabase
       .from("room_blocks")
       .select("room_id, kind, start_date, end_date")
@@ -214,6 +343,9 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
       .map((b) => [b.room_id as string, b.kind as string]),
   );
   let blocksApplied = 0;
+  // Rooms whose status could not be synced are named in the report (0043);
+  // they used to be skipped without a word.
+  const roomStatusFailed: string[] = [];
   for (const room of rooms ?? []) {
     if (room.status === "occupied") continue;
     const kind = activeBlock.get(room.id);
@@ -221,6 +353,7 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     if (room.status !== target) {
       const { error } = await supabase.from("rooms").update({ status: target }).eq("id", room.id);
       if (!error) blocksApplied += 1;
+      else roomStatusFailed.push(String(room.room_number));
     }
   }
 
@@ -344,17 +477,19 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
       cancellations: cancellations ?? 0,
       no_shows: noShows,
       expired_holds: (expired ?? []).map((b) => ({ reference: b.reference, guest: b.contact_name })),
+      event_rooms_released: eventRoomsReleased,
       pending_arrivals_left: bool(fd, "mark_no_shows") ? [] : due.map((b) => ({ reference: b.reference, guest: b.contact_name })),
     },
     exceptions: {
-      overstays: (overstays ?? []).map((b) => ({
-        reference: b.reference,
-        guest: b.contact_name,
-        room: (b.rooms as unknown as { room_number: string } | null)?.room_number ?? "",
-        due_out: b.check_out,
-      })),
+      overstays,
+      handovers,
+      to_invoice: toInvoice,
     },
-    housekeeping: { room_statuses_updated: blocksApplied, tasks_created: (hkCreated as number | null) ?? 0 },
+    housekeeping: {
+      room_statuses_updated: blocksApplied,
+      room_statuses_failed: roomStatusFailed,
+      tasks_created: (hkCreated as number | null) ?? 0,
+    },
     maintenance: { preventive_created: (mtCreated as number | null) ?? 0, escalated: mtEscalated },
     compliance: { id_documents_purged: purged },
     loyalty: { points_expired: pointsExpired, tiers_reviewed: tiersReviewed },

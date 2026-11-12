@@ -56,8 +56,9 @@ export async function createClient() {
  *
  * Never import this into a Client Component.
  */
-export function createServiceClient() {
-  if (usesNeon()) return createNeonServiceClient();
+/** `propertyId`: the hotel a nightly job is working for (Neon only; see 0041). */
+export function createServiceClient(propertyId?: string) {
+  if (usesNeon()) return createNeonServiceClient(propertyId);
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set");
 

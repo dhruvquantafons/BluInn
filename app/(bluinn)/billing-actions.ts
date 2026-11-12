@@ -292,10 +292,14 @@ export async function cancelPaymentRequest(_prev: ActionState, fd: FormData): Pr
     const res = await cancelPaymentLink(tx.provider_link_id);
     if (!res.ok) return { error: res.error };
   }
-  await supabase
+  const { error } = await supabase
     .from("payment_transactions")
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", id);
+  if (error) {
+    revalidateBilling(tx.booking_id);
+    return { error: `The link was cancelled with the payment provider, but not recorded here: ${friendlyDbError(error.message)}` };
+  }
 
   revalidateBilling(tx.booking_id);
   return { success: "Payment link cancelled." };
@@ -438,6 +442,22 @@ async function payOutRefund(
     }
   }
 
+  // Cash comes out of a drawer: the open shift of whoever hands it over, or,
+  // when the approving manager has none, the requesting cashier's (0041).
+  // It used to land on the approver's shift, or fail when they had none open.
+  let shiftId: string | null = null;
+  if (request.method === "cash") {
+    const { data: shifts } = await supabase
+      .from("cashier_shifts")
+      .select("id, staff_id")
+      .in("staff_id", [staffId, request.requested_by].filter(Boolean) as string[])
+      .is("closed_at", null);
+    shiftId =
+      (shifts ?? []).find((sh) => sh.staff_id === staffId)?.id ??
+      (shifts ?? []).find((sh) => sh.staff_id === request.requested_by)?.id ??
+      null;
+  }
+
   const { data: entry, error } = await supabase
     .from("folio_entries")
     .insert({
@@ -449,6 +469,7 @@ async function payOutRefund(
       method: request.method,
       reference: gatewayRef ?? "",
       created_by: staffId,
+      ...(shiftId ? { shift_id: shiftId } : {}),
     })
     .select("id")
     .single();

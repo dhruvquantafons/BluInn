@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, } from "lucide-react";
 import { requirePermission } from "../../../../lib/auth";
+import { canOpen } from "../../../../lib/page-access";
 import { getCurrentProperty } from "../../../../lib/properties";
 import { EXPORT_TABLES } from "../../../../lib/data-export";
 import { Card, Check, Notice, PageHeader, SectionTitle, buttonClass } from "../../../components/ui";
@@ -10,7 +11,7 @@ import { Card, Check, Notice, PageHeader, SectionTitle, buttonClass } from "../.
  * for the hotel's own backup or for moving to another system.
  */
 export default async function DataExportPage() {
-  await requirePermission("data.export");
+  const session = await requirePermission("data.export");
   const property = await getCurrentProperty();
   const groups = new Map<string, string[]>();
   for (const t of EXPORT_TABLES) {
@@ -20,9 +21,11 @@ export default async function DataExportPage() {
 
   return (
     <>
-      <Link href="/settings" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
-        <ArrowLeft className="w-3.5 h-3.5" /> Settings
-      </Link>
+      {canOpen(session, "/settings") && (
+        <Link href="/settings" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700 mb-4">
+          <ArrowLeft className="w-3.5 h-3.5" /> Settings
+        </Link>
+      )}
       <PageHeader
         title="Data export"
         description="Download this property's data as CSV files, for your own records or to move to another system."

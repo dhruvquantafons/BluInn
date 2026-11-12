@@ -145,6 +145,21 @@ export interface FolioTotals {
 }
 
 /** Mirrors the folio_balance() SQL function. Voided entries do not count. */
+/**
+ * What the guest has actually paid towards the stay: payments less refunds
+ * (0043). An allowance or credit note lowers what is owed, but is not money
+ * received, so it does not count towards the deposit.
+ */
+export function depositReceived(entries: Pick<FolioEntry, "kind" | "amount" | "voided_at">[]): number {
+  let paid = 0;
+  for (const e of entries) {
+    if (e.voided_at) continue;
+    if (e.kind === "payment") paid += Number(e.amount);
+    else if (e.kind === "refund") paid -= Number(e.amount);
+  }
+  return round2(paid);
+}
+
 export function folioTotals(entries: Pick<FolioEntry, "kind" | "amount" | "tax_amount" | "voided_at" | "is_deposit">[]): FolioTotals {
   let charges = 0;
   let tax = 0;

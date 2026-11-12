@@ -89,6 +89,7 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
     { data: roomRows },
     { data: otherOpenRows },
     { data: tierRows },
+    { data: stockRows },
   ] = await Promise.all([
     supabase.from("pos_order_lines").select("*").eq("order_id", id).order("created_at"),
     supabase.from("pos_payments").select("*").eq("order_id", id).order("created_at"),
@@ -109,12 +110,17 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
       .eq("status", "open")
       .neq("id", id),
     supabase.from("loyalty_tiers").select("*").order("sort_order"),
+    // What is left of each stock-tracked item here (0042): tills cannot sell past it.
+    supabase.rpc("pos_item_stock", { p_outlet: outlet.id }),
   ]);
 
   const lines = (lineRows ?? []) as PosOrderLine[];
   const payments = (payRows ?? []) as PosPayment[];
   const categories = (catRows ?? []) as PosCategory[];
   const items = (itemRows ?? []) as PosItem[];
+  const stockLeft = new Map(
+    ((stockRows ?? []) as { pos_item_id: string; available: number }[]).map((r) => [r.pos_item_id, Number(r.available)]),
+  );
   const modifiers = (modRows ?? []) as PosModifier[];
   const links = (linkRows ?? []) as { item_id: string; modifier_id: string }[];
   const inHouse = (inHouseRows ?? []) as unknown as (Pick<
@@ -399,6 +405,20 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
                         <ul className="mt-2 space-y-2">
                           {own.map((item) => {
                             const mods = modifiersFor(item.id);
+                            const left = stockLeft.get(item.id);
+                            if (left !== undefined && left <= 0) {
+                              return (
+                                <li key={item.id} className="border border-slate-200 rounded-lg p-3 opacity-60">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm text-slate-900">{item.name}</p>
+                                      <p className="text-[11px] text-slate-500">{fmtMoney(item.price)}</p>
+                                    </div>
+                                    <Tag tone="red">Sold out</Tag>
+                                  </div>
+                                </li>
+                              );
+                            }
                             return (
                               <li key={item.id} className="border border-slate-200 rounded-lg p-3">
                                 <ActionForm
@@ -415,6 +435,7 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
                                       <p className="text-[11px] text-slate-500">
                                         {fmtMoney(item.price)}
                                         {item.description ? ` · ${item.description}` : ""}
+                                        {left !== undefined && <span className="text-amber-700"> · {left} left</span>}
                                       </p>
                                     </div>
                                     <div className="w-20">
@@ -423,7 +444,10 @@ export default async function PosOrderPage({ params }: { params: Promise<{ id: s
                                           type="number"
                                           name="qty"
                                           min={0.001}
-                                          step="1"
+                                          max={left !== undefined ? left : undefined}
+                                          // "any": step="1" counted from min 0.001 made the browser
+                                          // refuse every whole number, so nothing could be added.
+                                          step="any"
                                           defaultValue={1}
                                           className={inputClass}
                                         />

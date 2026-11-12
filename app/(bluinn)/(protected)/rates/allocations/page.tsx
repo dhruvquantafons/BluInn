@@ -8,7 +8,7 @@ import { Card, Field, Notice, inputClass, plural } from "../../../components/ui"
 import ActionForm from "../../../components/ActionForm";
 
 /** Channels that sell without a person at the desk deciding. */
-const CHANNELS: BookingSource[] = ["website", "ota", "travel_agent", "corporate", "mobile_app"];
+const CHANNELS: BookingSource[] = ["website", "ota", "travel_agent", "mobile_app"];
 
 export default async function AllocationsPage() {
   const session = await requireAnyPermission(["rates.view", "rates.manage"]);
@@ -28,8 +28,8 @@ export default async function AllocationsPage() {
       <Notice>
         The most rooms of each type a channel may hold on any one night — e.g. 5 for the website, 3 for OTAs. Leave a
         channel blank for no limit beyond the physical inventory. Phone, email and walk-in bookings made by staff are
-        always limited only by inventory. Website and OTA allocations are enforced by the booking engine and channel manager
-        (Module 9).
+        always limited only by inventory. These limits are recorded for when a booking engine or channel manager is
+        connected; until then nothing enforces them, and every booking is limited only by the rooms in inventory.
       </Notice>
 
       {((types ?? []) as Pick<RoomType, "id" | "name">[]).map((t) => (

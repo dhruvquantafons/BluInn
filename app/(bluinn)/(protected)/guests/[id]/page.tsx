@@ -41,7 +41,7 @@ import ActionForm from "../../../components/ActionForm";
 import { GuestTags, phoneKey } from "../shared";
 import LoyaltyPanel from "./LoyaltyPanel";
 
-type Stay = Pick<Booking, "id" | "reference" | "check_in" | "check_out" | "status" | "total_amount" | "special_requests" | "rooms_count"> & {
+type Stay = Pick<Booking, "id" | "reference" | "check_in" | "check_out" | "status" | "total_amount" | "special_requests" | "rooms_count" | "guest_id"> & {
   room_types: { name: string } | null;
   rooms: { room_number: string } | null;
 };
@@ -80,6 +80,12 @@ export default async function GuestProfilePage({
   const settings = await getSettings();
   const today = todayIn(settings.timezone);
 
+  const { data: sharedRows } = await supabase
+    .from("booking_guests")
+    .select("booking_id")
+    .eq("guest_id", id)
+    .eq("is_primary", false);
+  const sharedIds = [...new Set((sharedRows ?? []).map((r) => r.booking_id as string))];
   const [
     { data: statRow },
     { data: stayRows },
@@ -93,10 +99,12 @@ export default async function GuestProfilePage({
     { data: messages },
   ] = await Promise.all([
     supabase.from("guest_stats").select("*").eq("guest_id", id).maybeSingle(),
+    // Their own bookings and the stays they shared as a room guest (0030),
+    // so a sharer's history is not empty (0041).
     supabase
       .from("bookings")
-      .select("id, reference, check_in, check_out, status, total_amount, special_requests, rooms_count, room_types(name), rooms(room_number)")
-      .eq("guest_id", id)
+      .select("id, reference, check_in, check_out, status, total_amount, special_requests, rooms_count, guest_id, room_types(name), rooms(room_number)")
+      .or(sharedIds.length ? `guest_id.eq.${id},id.in.(${sharedIds.join(",")})` : `guest_id.eq.${id}`)
       .order("check_in", { ascending: false }),
     supabase.from("guest_feedback").select("*").eq("guest_id", id).order("created_at", { ascending: false }),
     supabase.rpc("guest_identity_masked", { p_guest: id }),
@@ -334,6 +342,7 @@ export default async function GuestProfilePage({
                       <Link href={`/bookings/${b.id}`} className="font-medium text-slate-900 hover:text-brand-800">
                         {b.reference}
                       </Link>
+                      {b.guest_id !== id && <span className="block text-[11px] text-slate-500">as room guest</span>}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       {fmtDate(b.check_in)} → {fmtDate(b.check_out)}

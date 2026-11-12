@@ -16,10 +16,16 @@ export function totalsByItem(rows: StockRow[]): Map<string, number> {
   return out;
 }
 
-export type StockState = "out" | "reorder" | "below_par" | "ok";
+export type StockState = "short" | "out" | "reorder" | "below_par" | "ok";
 
-/** Out, at or under the re-order level, under par, or fine. */
+/**
+ * Short (below zero: more was used than was recorded coming in, so the
+ * shelf needs counting), out, at or under the re-order level, under par, or
+ * fine. Outlet tills cannot sell past zero (0042), but minibar items found
+ * used in a room and cleaning amenities are never refused, so short happens.
+ */
 export function stockState(onHand: number, reorderLevel: number, parLevel: number): StockState {
+  if (onHand < 0) return "short";
   if (onHand <= 0) return "out";
   if (reorderLevel > 0 && onHand <= reorderLevel) return "reorder";
   if (parLevel > 0 && onHand < parLevel) return "below_par";

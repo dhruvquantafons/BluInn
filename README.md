@@ -90,8 +90,10 @@ Night audit closes the business day and locks it. Guest profiles and the loyalty
 <td valign="top">The live room board. Check-out, stay-over and deep-clean tasks, inspections, room discrepancies
 (skips and sleepers), minibar and laundry posted from the room, lost & found. Maintenance tickets with targets,
 assets and preventive schedules. Inventory: stores, par levels, receipts, issues, counts and automatic consumption.
-Seven outlet types with kitchen tickets and charge to room. Banquets across several spaces with a diary,
-quotations, contracts, banquet event orders and an equipment clash check.</td>
+Seven outlet types with kitchen tickets and charge to room; a till cannot sell more of a stock-tracked item
+than the outlet holds. Banquets across several spaces with a diary, quotations, contracts, banquet event
+orders and an equipment clash check, and room blocks for an event's guests (released unsold at a cut-off,
+paid by each guest or by the organiser on the event's invoice).</td>
 </tr>
 <tr>
 <td valign="top"><b>Commercial</b><br /><sub>Rates · Revenue · Billing · Reports · Notifications</sub></td>
@@ -646,11 +648,13 @@ Declared in `vercel.json`. They need `CRON_SECRET`, which Vercel sends as a bear
 | `/api/cron/reports` | 02:00 daily (07:30 IST) | Emails the scheduled reports |
 | `/api/cron/maintenance` | 02:30 daily | Escalates overdue tickets, raises due preventive work |
 | `/api/cron/notifications` | 03:00 daily | Pre-arrival, check-in and post-stay messages, and VIP arrival alerts |
+| `/api/cron/pricing` | 03:30 daily | Runs the pricing rules over the forecast window, as "Run the rules" does |
 
-They work through every active property in the deployment. Each run is recorded, and **Admin → System
+They work through every active property in the deployment, one hotel at a time, with each hotel's own
+settings, calendar and wording. Each run is recorded, and **Admin → System
 status** shows when each job last ran and whether it worked. Vercel Cron runs only on production; to test a
 job on a preview, call it with the bearer token. The Hobby plan limits the number of cron jobs; if it
-refuses three, merge them into one endpoint rather than dropping one.
+refuses four, merge them into one endpoint rather than dropping one.
 
 <br />
 
@@ -762,7 +766,7 @@ The full model, and the traps to know before changing database code, are in
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
 | [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
-| [Interconnection audit (7 Nov 2026)](docs/interconnection-audit-2026-11-07.md) | Gaps between modules: broken links, data that doesn't flow, missing validations, dead buttons and inconsistent numbers, with a "fix these first" list. Migration `0039` fixed the first ten from the 6 Nov audit |
+| [Interconnection audit (12 Nov 2026)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0043` fixed (including the broken links, missing validations and dead buttons), the 12 Nov decisions, and every gap still open (inconsistent numbers, security, items found in the demo data). The 7 Nov version is in git history |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

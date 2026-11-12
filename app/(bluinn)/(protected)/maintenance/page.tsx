@@ -8,6 +8,7 @@ import { addDays, minutesSince, todayIn, zonedTime } from "../../../lib/dates";
 import type { Asset, MaintenanceTicket, MtPriority, MtStatus, Room } from "../../../lib/types";
 import { MT_PRIORITIES, MT_PRIORITY_LABELS, MT_STATUS_LABELS } from "../../../lib/types";
 import { assignTicket } from "../../maintenance-actions";
+import ActionForm from "../../components/ActionForm";
 import {
   Card,
   EmptyState,
@@ -184,7 +185,13 @@ export default async function MaintenanceBoard({
                     </td>
                     <td className="px-4 py-2.5">
                       {manage && OPEN_STATUSES.includes(t.status) ? (
-                        <form action={assignTicket} className="flex gap-1">
+                        <ActionForm
+                          action={assignTicket}
+                          submitLabel="Save"
+                          pendingLabel="…"
+                          submitClassName="text-xs text-brand-800 cursor-pointer"
+                          className="flex flex-wrap items-center gap-1"
+                        >
                           <input type="hidden" name="id" value={t.id} />
                           <select name="assigned_to" defaultValue={t.assigned_to ?? ""} className={`${inputClass} !py-1 !text-xs max-w-[150px]`}>
                             <option value="">Unassigned</option>
@@ -194,8 +201,7 @@ export default async function MaintenanceBoard({
                               </option>
                             ))}
                           </select>
-                          <button className="text-xs text-brand-800 cursor-pointer">Save</button>
-                        </form>
+                        </ActionForm>
                       ) : (
                         <span className={t.assigned_to ? "" : "text-amber-700"}>{nameOf(engineers, t.assigned_to)}</span>
                       )}

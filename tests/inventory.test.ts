@@ -13,7 +13,7 @@ describe("inventory", () => {
   });
   it("reads out, re-order, below par and ok", () => {
     expect(stockState(0, 10, 50)).toBe("out");
-    expect(stockState(-2, 10, 50)).toBe("out");
+    expect(stockState(-2, 10, 50)).toBe("short");
     expect(stockState(10, 10, 50)).toBe("reorder");
     expect(stockState(30, 10, 50)).toBe("below_par");
     expect(stockState(50, 10, 50)).toBe("ok");

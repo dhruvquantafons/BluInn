@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -18,7 +19,7 @@ export default async function InventoryLayout({ children }: { children: React.Re
         title="Inventory"
         description="Amenities, linen, minibar, cleaning and engineering stock: where it is, what is low, and every movement."
       />
-      <SectionTabs tabs={tabs} label="Inventory sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Inventory sections" />
       {children}
     </>
   );

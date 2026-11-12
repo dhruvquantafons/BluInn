@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
+import { canOpen } from "../../../../lib/page-access";
 import { can } from "../../../../lib/permissions";
 import type { MaintenancePhoto, MaintenanceTicket } from "../../../../lib/types";
 import { MT_PRIORITIES, MT_PRIORITY_LABELS, MT_SOURCE_LABELS, MT_STATUS_LABELS } from "../../../../lib/types";
@@ -121,7 +122,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <Stat label="By">{nameOf(everyone, t.reported_by, "System")}</Stat>
               <Stat label="Source">
                 {MT_SOURCE_LABELS[t.source]}
-                {t.guest_requests?.booking_id && (
+                {t.guest_requests?.booking_id && canOpen(session, `/bookings/${t.guest_requests.booking_id}`) && (
                   <Link href={`/bookings/${t.guest_requests.booking_id}`} className="block text-xs text-brand-800">
                     View booking
                   </Link>
@@ -137,9 +138,13 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               )}
               {t.assets && (
                 <Stat label="Asset">
-                  <Link href={`/maintenance/assets/${t.assets.id}`} className="text-brand-800">
-                    {t.assets.code} · {t.assets.name}
-                  </Link>
+                  {canOpen(session, `/maintenance/assets/${t.assets.id}`) ? (
+                    <Link href={`/maintenance/assets/${t.assets.id}`} className="text-brand-800">
+                      {t.assets.code} · {t.assets.name}
+                    </Link>
+                  ) : (
+                    `${t.assets.code} · ${t.assets.name}`
+                  )}
                 </Stat>
               )}
             </dl>
@@ -209,7 +214,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
           {manage && isOpen && (
             <Card className="p-5 space-y-4">
               <SectionTitle>Supervisor</SectionTitle>
-              <form action={assignTicket} className="space-y-2">
+              <ActionForm action={assignTicket} submitLabel="Assign" submitClassName={secondaryButtonClass} className="space-y-2">
                 <input type="hidden" name="id" value={t.id} />
                 <Field label="Engineer">
                   <select name="assigned_to" defaultValue={t.assigned_to ?? ""} className={inputClass}>
@@ -221,9 +226,8 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
                     ))}
                   </select>
                 </Field>
-                <button className={secondaryButtonClass}>Assign</button>
-              </form>
-              <form action={setTicketPriority} className="space-y-2">
+              </ActionForm>
+              <ActionForm action={setTicketPriority} submitLabel="Change priority" submitClassName={secondaryButtonClass} className="space-y-2">
                 <input type="hidden" name="id" value={t.id} />
                 <Field label="Priority" hint="Changing it resets the target from when the ticket was raised.">
                   <select name="priority" defaultValue={t.priority} className={inputClass}>
@@ -234,8 +238,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
                     ))}
                   </select>
                 </Field>
-                <button className={secondaryButtonClass}>Change priority</button>
-              </form>
+              </ActionForm>
               <details>
                 <summary className="text-xs text-rose-700 cursor-pointer">Cancel ticket</summary>
                 <div className="mt-2">
@@ -250,10 +253,9 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
           {manage && !isOpen && (
             <Card className="p-5">
-              <form action={reopenTicket}>
+              <ActionForm action={reopenTicket} submitLabel="Reopen ticket" submitClassName={secondaryButtonClass} className="space-y-2">
                 <input type="hidden" name="id" value={t.id} />
-                <button className={secondaryButtonClass}>Reopen ticket</button>
-              </form>
+              </ActionForm>
             </Card>
           )}
 

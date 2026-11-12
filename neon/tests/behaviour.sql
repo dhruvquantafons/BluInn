@@ -307,7 +307,7 @@ select mt_release_room((select id from maintenance_tickets where title = 'Window
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000006', false);
 select mt_release_room((select id from maintenance_tickets where title = 'Window broken')) as released;
 select status, housekeeping_status from rooms where room_number = '101';
-\echo '--- room with a guest assigned cannot be blocked: EXPECT ROOM_IN_USE'
+\echo '--- 0041: a stay assigned but not yet in house does not stop a block; it loses the room: EXPECT t, t'
 reset role;
 insert into bookings (room_type_id, room_id, check_in, check_out, status, contact_name)
 values ((select room_type_id from rooms where room_number = '101'), (select id from rooms where room_number = '101'),
@@ -315,8 +315,16 @@ values ((select room_type_id from rooms where room_number = '101'), (select id f
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
 insert into maintenance_tickets (title, room_id, reported_by) values ('Door squeaks', (select id from rooms where room_number = '101'), auth.uid());
-select mt_block_room((select id from maintenance_tickets where title = 'Door squeaks'));
+select mt_block_room((select id from maintenance_tickets where title = 'Door squeaks')) is not null as blocked_expect_t;
 reset role;
+select room_id is null as unassigned_expect_t from bookings where contact_name = 'Block Guest';
+-- Put the room back, as before 0041, so what follows sees the same rooms.
+update room_blocks set released_at = now(), release_note = 'behaviour test'
+ where ticket_id = (select id from maintenance_tickets where title = 'Door squeaks') and released_at is null;
+update rooms set status = 'available' where room_number = '101' and status = 'out_of_order'
+   and property_id = (select id from properties where code = 'H1');
+update bookings set room_id = (select id from rooms where room_number = '101' and property_id = (select id from properties where code = 'H1'))
+ where contact_name = 'Block Guest';
 
 \echo '=== Module 8: guest CRM ==='
 reset role;
@@ -410,6 +418,9 @@ update invoices set status='cancelled', cancel_reason='test', cancelled_at=now()
 select number, status from invoices where number = 'TEST/2026-27/0001';
 
 \echo '--- EXPECT refusal: approving your own refund request'
+-- 0043: a refund needs the stay to be in credit, so it was paid twice.
+insert into folio_entries (booking_id, kind, description, amount, method)
+select id, 'payment', 'Settled, then paid 900 twice by mistake', stay_balance(id) + 900, 'cash' from bookings where reference='BK-OLD1';
 insert into refund_requests (booking_id, amount, reason, method, requested_by)
 select id, 900, 'Overcharged', 'cash', '00000000-0000-0000-0000-000000000001' from bookings where reference='BK-OLD1';
 update refund_requests set status='approved', decided_by='00000000-0000-0000-0000-000000000001', decided_at=now()
@@ -1728,7 +1739,7 @@ select credit_note_issue(:'gst_invoice', 'discount', '', '[{"line": 0, "amount":
 select credit_note_issue(:'gst_invoice', 'discount', '', '[{"line": 1, "amount": 10}]');
 \echo '--- EXPECT INVOICE_HAS_CREDIT_NOTE'
 update invoices set status = 'cancelled', cancel_reason = 'test', cancelled_at = now() where id = :'gst_invoice';
-\echo '--- the rest of it: EXPECT CN/<fy>/0002 for 3150, then nothing left: EXPECT CREDIT_NOTE_NOTHING'
+\echo '--- the rest of it: EXPECT CN/<fy>/0002 for 2100 (the invoice was 3150, 1050 already credited), then nothing left: EXPECT CREDIT_NOTE_NOTHING'
 select right(number, 4) as seq, grand_total from credit_note_issue(:'gst_invoice', 'cancellation', 'Stay cancelled');
 select credit_note_issue(:'gst_invoice', 'cancellation', '');
 
@@ -1788,6 +1799,16 @@ select phone, blood_group, date_of_birth, job_title is not null as kept from sta
 \echo '--- an unknown blood group: EXPECT check violation'
 select set_my_profile('98000', '', '', null, 'Z+');
 
+-- 0043: a timesheet cannot claim more than attendance shows, so the desk
+-- worked last Tuesday to Saturday (45 hours) before claiming 42.
+reset role;
+insert into attendance (staff_id, work_date, clock_in, clock_out, method)
+select '00000000-0000-0000-0000-000000000002', :'last_monday'::date + n,
+       (:'last_monday'::date + n + time '09:00') at time zone 'Asia/Kolkata',
+       (:'last_monday'::date + n + time '18:00') at time zone 'Asia/Kolkata', 'manual'
+  from generate_series(1, 5) n;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000002', false);
 \echo '--- the current week cannot be submitted: EXPECT TIMESHEET_WEEK_OPEN'
 select timesheet_submit(date_trunc('week', current_date)::date, '', 40, 0, 0, :'seven_days'::jsonb);
 \echo '--- last week can: EXPECT submitted 40 2'

@@ -21,9 +21,16 @@ interface Report {
     no_shows: { reference: string; guest: string; penalty: number }[];
     expired_holds: { reference: string; guest: string }[];
     pending_arrivals_left: { reference: string; guest: string }[];
+    /** Since 0042. */
+    event_rooms_released?: { event: string; rooms: number }[];
   };
-  exceptions: { overstays: { reference: string; guest: string; room: string; due_out: string }[] };
-  housekeeping: { room_statuses_updated: number; tasks_created?: number };
+  exceptions: {
+    overstays: { reference: string; guest: string; room: string; due_out: string; extended_to?: string | null }[];
+    /** Since 0040: split stays handed over, and stays waiting for a GST invoice. */
+    handovers?: { reference: string; next: string }[];
+    to_invoice?: { reference: string; guest: string; reason: string }[];
+  };
+  housekeeping: { room_statuses_updated: number; room_statuses_failed?: string[]; tasks_created?: number };
   maintenance?: { preventive_created: number; escalated: number };
   compliance: { id_documents_purged: number };
   loyalty?: { points_expired: number; tiers_reviewed: number };
@@ -150,6 +157,12 @@ export default async function NightAuditReportPage({ params }: { params: Promise
                 Holds released: {r.movements.expired_holds.map((n) => `${n.reference} ${n.guest}`).join(", ")}
               </p>
             )}
+            {(r.movements.event_rooms_released ?? []).length > 0 && (
+              <p className="text-xs text-slate-600 mt-1">
+                Unsold event rooms released at their cut-off:{" "}
+                {(r.movements.event_rooms_released ?? []).map((e) => `${e.event} (${e.rooms})`).join(", ")}
+              </p>
+            )}
             {r.movements.pending_arrivals_left.length > 0 && (
               <p className="text-xs text-amber-800 mt-1">
                 Carried forward (not marked no-show):{" "}
@@ -159,7 +172,30 @@ export default async function NightAuditReportPage({ params }: { params: Promise
             {r.exceptions.overstays.length > 0 && (
               <p className="text-xs text-rose-800 mt-1">
                 Past departure but still in house:{" "}
-                {r.exceptions.overstays.map((o) => `${o.reference} ${o.guest} (room ${o.room}, due ${o.due_out})`).join(", ")}
+                {r.exceptions.overstays
+                  .map(
+                    (o) =>
+                      `${o.reference} ${o.guest} (room ${o.room}, due ${o.due_out}${o.extended_to ? `, tonight charged, now due ${o.extended_to}` : o.extended_to === null ? ", could not be extended: the room is booked" : ""})`,
+                  )
+                  .join(", ")}
+              </p>
+            )}
+            {(r.exceptions.handovers ?? []).length > 0 && (
+              <p className="text-xs text-slate-600 mt-1">
+                Split stays handed over:{" "}
+                {(r.exceptions.handovers ?? []).map((h) => `${h.reference} → ${h.next}`).join(", ")}
+              </p>
+            )}
+            {(r.exceptions.to_invoice ?? []).length > 0 && (
+              <p className="text-xs text-amber-800 mt-1">
+                Needs a GST invoice (issue it from the booking&apos;s folio):{" "}
+                {(r.exceptions.to_invoice ?? []).map((t) => `${t.reference} ${t.guest} (${t.reason})`).join(", ")}
+              </p>
+            )}
+            {(r.housekeeping.room_statuses_failed ?? []).length > 0 && (
+              <p className="text-xs text-amber-800 mt-3">
+                Room status not synced with its block, so check it on the Rooms page:{" "}
+                {(r.housekeeping.room_statuses_failed ?? []).join(", ")}
               </p>
             )}
             <p className="text-[11px] text-slate-500 mt-3">

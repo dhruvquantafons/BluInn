@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
 import { friendlyDbError } from "../lib/db-errors";
+import { planAdjustmentProblem, overlappingSeason } from "../lib/rate-rules";
 import type { BookingSource, PenaltyKind, RateType } from "../lib/types";
 import {
   type ActionState,
@@ -21,7 +22,8 @@ import {
 const RATE_TYPES: RateType[] = ["bar", "package", "promotional", "group"];
 const PENALTIES: PenaltyKind[] = ["none", "first_night", "full_stay", "percent"];
 /** Channels that can be capped; staff-entered bookings are limited only by inventory. */
-const CHANNELS: BookingSource[] = ["website", "ota", "travel_agent", "corporate", "mobile_app"];
+// No "corporate": company accounts are out of BluInn (0043 audit).
+const CHANNELS: BookingSource[] = ["website", "ota", "travel_agent", "mobile_app"];
 
 function revalidateRates() {
   revalidatePath("/rates", "layout");
@@ -72,7 +74,8 @@ export async function createRoomType(_prev: ActionState, fd: FormData): Promise<
   const fields = roomTypeFields(fd);
 
   if (!fields.name) return { error: "Give the room type a name." };
-  if (fields.base_rate === null || fields.base_rate < 0) return { error: "Enter a valid nightly rate." };
+  if (fields.base_rate === null || fields.base_rate <= 0) return { error: "Enter a nightly rate above ₹0." };
+  if (fields.weekend_rate !== null && fields.weekend_rate <= 0) return { error: "A weekend rate must be above ₹0, or left blank." };
   if (fields.base_occupancy > fields.max_adults) return { error: "Included adults cannot exceed the maximum." };
 
   const baseSlug = slugify(fields.name);
@@ -105,7 +108,8 @@ export async function updateRoomType(_prev: ActionState, fd: FormData): Promise<
   const fields = roomTypeFields(fd);
 
   if (!fields.name) return { error: "Name is required." };
-  if (fields.base_rate === null || fields.base_rate < 0) return { error: "Enter a valid nightly rate." };
+  if (fields.base_rate === null || fields.base_rate <= 0) return { error: "Enter a nightly rate above ₹0." };
+  if (fields.weekend_rate !== null && fields.weekend_rate <= 0) return { error: "A weekend rate must be above ₹0, or left blank." };
   if (fields.base_occupancy > fields.max_adults) return { error: "Included adults cannot exceed the maximum." };
 
   const { error } = await supabase.from("room_types").update(fields).eq("id", str(fd, "id"));
@@ -265,6 +269,11 @@ export async function saveRatePlan(_prev: ActionState, fd: FormData): Promise<Ac
 
   const rateType = oneOf(fd, "rate_type", RATE_TYPES, "bar");
 
+  const adjustmentKind = oneOf(fd, "adjustment_kind", ["percent", "amount", "fixed"] as const, "percent");
+  const adjustmentValue = num(fd, "adjustment_value") ?? 0;
+  const adjustmentProblem = planAdjustmentProblem(adjustmentKind, adjustmentValue);
+  if (adjustmentProblem) return { error: adjustmentProblem };
+
   const isRefundable = bool(fd, "is_refundable");
   const payload = {
     code,
@@ -272,8 +281,8 @@ export async function saveRatePlan(_prev: ActionState, fd: FormData): Promise<Ac
     rate_type: rateType,
     description: str(fd, "description", 1000),
     meal_plan: oneOf(fd, "meal_plan", ["EP", "CP", "MAP", "AP"] as const, "CP"),
-    adjustment_kind: oneOf(fd, "adjustment_kind", ["percent", "amount", "fixed"] as const, "percent"),
-    adjustment_value: num(fd, "adjustment_value") ?? 0,
+    adjustment_kind: adjustmentKind,
+    adjustment_value: adjustmentValue,
     room_type_ids: fd.getAll("room_type_ids").map(String).filter((v) => /^[0-9a-f-]{36}$/i.test(v)),
     company_id: null,
     inclusions: lines(fd, "inclusions", 20),
@@ -290,7 +299,6 @@ export async function saveRatePlan(_prev: ActionState, fd: FormData): Promise<Ac
     los_discount_percent: numOrNull(fd, "los_discount_percent", 0, 100),
     valid_from: validFrom,
     valid_to: validTo,
-    is_public: bool(fd, "is_public"),
     is_active: bool(fd, "is_active"),
   };
 
@@ -324,8 +332,8 @@ export async function saveSeason(_prev: ActionState, fd: FormData): Promise<Acti
   if (days.length === 0) return { error: "Choose at least one day of the week." };
 
   const kind = oneOf(fd, "adjustment_kind", ["percent", "amount", "fixed"] as const, "percent");
-  if (kind === "fixed" && value < 0) return { error: "A fixed rate cannot be negative." };
-  if (kind === "percent" && value <= -100) return { error: "A discount must be less than 100%." };
+  const adjustmentProblem = planAdjustmentProblem(kind, value);
+  if (adjustmentProblem) return { error: adjustmentProblem };
 
   const payload = {
     name,
@@ -338,6 +346,18 @@ export async function saveSeason(_prev: ActionState, fd: FormData): Promise<Acti
     priority: int(fd, "priority", 0, -100, 100),
     is_active: bool(fd, "is_active"),
   };
+
+  // Two seasons on the same nights, for the same rooms, at the same priority
+  // leave the price to chance (0043). Different priorities are fine.
+  const { data: others } = await supabase
+    .from("rate_seasons")
+    .select("id, name, start_date, end_date, room_type_id, priority, days_of_week, is_active");
+  const clash = overlappingSeason({ ...payload, id }, (others ?? []) as Parameters<typeof overlappingSeason>[1]);
+  if (clash) {
+    return {
+      error: `${clash.name} already covers some of these nights for the same rooms at priority ${clash.priority}. Change the dates, or give one of them a higher priority.`,
+    };
+  }
 
   const { error } = id
     ? await supabase.from("rate_seasons").update(payload).eq("id", id)
@@ -435,7 +455,8 @@ export async function saveAllocations(_prev: ActionState, fd: FormData): Promise
     if (error) return { error: friendlyDbError(error.message) };
   }
   if (removals.length) {
-    await supabase.from("channel_allocations").delete().eq("room_type_id", roomTypeId).in("source", removals);
+    const { error } = await supabase.from("channel_allocations").delete().eq("room_type_id", roomTypeId).in("source", removals);
+    if (error) return { error: friendlyDbError(error.message) };
   }
 
   revalidateRates();

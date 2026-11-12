@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
+import { can } from "../lib/permissions";
+import { scheduleNeedsFinancial } from "../lib/reports";
 import { friendlyDbError } from "../lib/db-errors";
 import { buildScheduledReport, sendScheduledReport } from "../lib/report-email";
 import type { ReportSchedule } from "../lib/types";
@@ -20,6 +22,7 @@ import { type ActionState, str, bool, oneOf, uuidOrNull, lines as formLines } fr
 const REPORTS_THAT_CAN_BE_SCHEDULED = [
   "daily_revenue",
   "kpi_summary",
+  "flash",
   "outstanding",
   "outlet_sales",
   "housekeeping",
@@ -49,6 +52,10 @@ export async function saveReportSchedule(_prev: ActionState, fd: FormData): Prom
   const name = str(fd, "name", 80);
   const report = oneOf(fd, "report", REPORTS_THAT_CAN_BE_SCHEDULED, "kpi_summary");
   if (!name) return { error: "Give the schedule a name, such as “Morning revenue to the owner”." };
+  // Revenue goes out only on the say-so of someone who may see it (0043).
+  if (scheduleNeedsFinancial(report) && !can(session, "reports.financial")) {
+    return { error: "That report shows revenue. Only someone with financial reports can schedule it." };
+  }
 
   const { list, rejected } = recipientsFrom(fd);
   if (list.length === 0) {
@@ -96,7 +103,7 @@ export async function deleteReportSchedule(_prev: ActionState, fd: FormData): Pr
  * manager needs to know that before they rely on it.
  */
 export async function sendReportNow(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("reports.schedule");
+  const session = await requirePermission("reports.schedule");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
   if (!id) return { error: "Schedule not found." };
@@ -104,6 +111,9 @@ export async function sendReportNow(_prev: ActionState, fd: FormData): Promise<A
   const { data } = await supabase.from("report_schedules").select("*").eq("id", id).maybeSingle();
   const schedule = data as ReportSchedule | null;
   if (!schedule) return { error: "Schedule not found." };
+  if (scheduleNeedsFinancial(schedule.report) && !can(session, "reports.financial")) {
+    return { error: "That report shows revenue. Only someone with financial reports can send it." };
+  }
 
   const built = await buildScheduledReport(supabase, schedule);
   if (built.error) return { error: built.error };

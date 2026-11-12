@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { createClient } from "../../lib/supabase/server";
 import { requireSession } from "../../lib/auth";
+import { canOpen } from "../../lib/page-access";
 import { can } from "../../lib/permissions";
 import { getSettings } from "../../lib/settings";
 import type { Booking, Room } from "../../lib/types";
@@ -311,15 +312,27 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <CardHeader icon={<AlertTriangle />} title="Needs attention" count={alerts.length} />
           </div>
           <div className="divide-y divide-slate-100">
-            {alerts.map((a) => (
-              <Link key={a.text} href={a.href} className="group flex items-center gap-3 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150">
-                <span className="w-7 h-7 rounded-lg bg-amber-100 ring-1 ring-amber-200/70 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-                </span>
-                <span className="group-hover:text-slate-900 transition-colors duration-150">{a.text}</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-300 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-slate-500" />
-              </Link>
-            ))}
+            {alerts.map((a) => {
+              const inner = (
+                <>
+                  <span className="w-7 h-7 rounded-lg bg-amber-100 ring-1 ring-amber-200/70 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                  </span>
+                  <span className="group-hover:text-slate-900 transition-colors duration-150">{a.text}</span>
+                </>
+              );
+              // An alert links only to a page this person can open (0043).
+              return canOpen(session, a.href) ? (
+                <Link key={a.text} href={a.href} className="group flex items-center gap-3 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150">
+                  {inner}
+                  <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-300 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                </Link>
+              ) : (
+                <div key={a.text} className="flex items-center gap-3 px-5 py-3 text-sm text-slate-700">
+                  {inner}
+                </div>
+              );
+            })}
           </div>
         </Card>
       ) : (

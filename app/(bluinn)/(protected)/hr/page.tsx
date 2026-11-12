@@ -192,11 +192,18 @@ export default async function MyWorkPage() {
                     {l.decision_note && <span className="block text-xs text-slate-500">{l.decision_note}</span>}
                   </span>
                   <Tag tone={LEAVE_TONE[l.status]}>{LEAVE_STATUS_LABELS[l.status]}</Tag>
-                  {l.status === "pending" && (
-                    <form action={cancelLeave}>
+                  {/* Withdraw a request, or approved leave before its first day (0043). */}
+                  {(l.status === "pending" || (l.status === "approved" && l.start_date > today)) && (
+                    <ActionForm
+                      action={cancelLeave}
+                      submitLabel={l.status === "pending" ? "Cancel" : "Withdraw"}
+                      pendingLabel="Cancelling…"
+                      submitClassName="text-xs text-rose-700 cursor-pointer"
+                      className="space-y-1"
+                      confirmMessage={l.status === "approved" ? "Withdraw this approved leave?" : undefined}
+                    >
                       <input type="hidden" name="id" value={l.id} />
-                      <button className="text-xs text-rose-700 cursor-pointer">Cancel</button>
-                    </form>
+                    </ActionForm>
                   )}
                 </li>
               ))}

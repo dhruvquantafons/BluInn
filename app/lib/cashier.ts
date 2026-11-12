@@ -9,9 +9,19 @@ import type { CashMovementKind } from "./types";
  */
 export interface ShiftInputs {
   openingFloat: number;
-  folio: { kind: string; method: string | null; amount: number; voided_at: string | null }[];
+  folio: {
+    kind: string;
+    method: string | null;
+    amount: number;
+    voided_at: string | null;
+    /** Set when the guest paid in another currency: amount is the rupee value, fx_amount the notes. */
+    fx_currency?: string | null;
+    fx_amount?: number | null;
+  }[];
   pos: { kind: string; amount: number; voided_at: string | null }[];
   movements: { kind: CashMovementKind; amount: number }[];
+  /** Event deposits, payments and refunds taken on the shift (0040). */
+  events?: { kind: string; method: string | null; amount: number; voided_at: string | null }[];
 }
 
 export interface ShiftBreakdown {
@@ -19,11 +29,15 @@ export interface ShiftBreakdown {
   folioCash: number;
   folioCashRefunds: number;
   outletCash: number;
+  eventCash: number;
+  eventCashRefunds: number;
   payIns: number;
   paidOuts: number;
   safeDrops: number;
   /** Non-cash takings on the shift, by method — shown, not counted. */
   otherByMethod: Record<string, number>;
+  /** Foreign notes in the drawer, by currency, in that currency (0041): not counted as rupees. */
+  foreignCash: Record<string, number>;
   expected: number;
 }
 
@@ -33,12 +47,18 @@ export function shiftBreakdown(input: ShiftInputs): ShiftBreakdown {
   let folioCash = 0;
   let folioCashRefunds = 0;
   let outletCash = 0;
+  let eventCash = 0;
+  let eventCashRefunds = 0;
   const otherByMethod: Record<string, number> = {};
+  const foreignCash: Record<string, number> = {};
 
   for (const e of input.folio) {
     if (e.voided_at || (e.kind !== "payment" && e.kind !== "refund")) continue;
     const amount = Number(e.amount);
-    if (e.method === "cash") {
+    if (e.method === "cash" && e.fx_currency) {
+      const notes = Number(e.fx_amount ?? 0);
+      foreignCash[e.fx_currency] = round2((foreignCash[e.fx_currency] ?? 0) + (e.kind === "payment" ? notes : -notes));
+    } else if (e.method === "cash") {
       if (e.kind === "payment") folioCash += amount;
       else folioCashRefunds += amount;
     } else {
@@ -52,6 +72,18 @@ export function shiftBreakdown(input: ShiftInputs): ShiftBreakdown {
     else otherByMethod[`outlet_${p.kind}`] = round2((otherByMethod[`outlet_${p.kind}`] ?? 0) + Number(p.amount));
   }
 
+  for (const e of input.events ?? []) {
+    if (e.voided_at || !["advance", "payment", "refund"].includes(e.kind)) continue;
+    const amount = Number(e.amount);
+    if (e.method === "cash") {
+      if (e.kind === "refund") eventCashRefunds += amount;
+      else eventCash += amount;
+    } else {
+      const key = `event_${e.method ?? "other"}`;
+      otherByMethod[key] = round2((otherByMethod[key] ?? 0) + (e.kind === "refund" ? -amount : amount));
+    }
+  }
+
   const sum = (kind: CashMovementKind) =>
     round2(input.movements.filter((m) => m.kind === kind).reduce((s, m) => s + Number(m.amount), 0));
   const payIns = sum("pay_in");
@@ -59,7 +91,15 @@ export function shiftBreakdown(input: ShiftInputs): ShiftBreakdown {
   const safeDrops = sum("safe_drop");
 
   const expected = round2(
-    Number(input.openingFloat) + folioCash - folioCashRefunds + outletCash + payIns - paidOuts - safeDrops,
+    Number(input.openingFloat) +
+      folioCash -
+      folioCashRefunds +
+      outletCash +
+      eventCash -
+      eventCashRefunds +
+      payIns -
+      paidOuts -
+      safeDrops,
   );
 
   return {
@@ -67,10 +107,13 @@ export function shiftBreakdown(input: ShiftInputs): ShiftBreakdown {
     folioCash: round2(folioCash),
     folioCashRefunds: round2(folioCashRefunds),
     outletCash: round2(outletCash),
+    eventCash: round2(eventCash),
+    eventCashRefunds: round2(eventCashRefunds),
     payIns,
     paidOuts,
     safeDrops,
     otherByMethod,
+    foreignCash,
     expected,
   };
 }

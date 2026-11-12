@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -19,7 +20,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
         title="Point of sale"
         description="Restaurant, bar, spa, shop, mini-bar, room service and laundry. Bills can be charged to a guest's room."
       />
-      <SectionTabs tabs={tabs} label="Point of sale sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Point of sale sections" />
       {children}
     </>
   );

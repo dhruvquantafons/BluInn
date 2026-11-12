@@ -165,10 +165,15 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                                     </div>
                                     <input name="notes" defaultValue={r.notes} placeholder="Note" className={inputClass} />
                                   </ActionForm>
-                                  <form action={deleteAttendance}>
+                                  <ActionForm
+                                    action={deleteAttendance}
+                                    submitLabel="Delete record"
+                                    pendingLabel="Deleting…"
+                                    submitClassName="text-xs text-rose-700 cursor-pointer"
+                                    className="space-y-1"
+                                  >
                                     <input type="hidden" name="id" value={r.id} />
-                                    <button className="text-xs text-rose-700 cursor-pointer">Delete record</button>
-                                  </form>
+                                  </ActionForm>
                                 </div>
                               </details>
                             ))}

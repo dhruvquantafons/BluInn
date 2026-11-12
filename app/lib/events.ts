@@ -1,3 +1,4 @@
+import { addDays } from "./dates";
 import type {
   EventBooking,
   EventLayout,
@@ -200,8 +201,10 @@ export function amountPaid(payments: Pick<EventPayment, "kind" | "amount" | "voi
 export function eventBalance(
   event: Pick<EventBooking, "grand_total">,
   payments: Pick<EventPayment, "kind" | "amount" | "voided_at">[],
+  /** Rooms the organiser pays for (0042), from event_rooms_total(). */
+  roomsTotal = 0,
 ): number {
-  return round2(Number(event.grand_total) - amountPaid(payments));
+  return round2(Number(event.grand_total) + Number(roomsTotal) - amountPaid(payments));
 }
 
 /** The deposit the hotel normally asks for before holding the date. */
@@ -387,4 +390,18 @@ export function clientName(
 /** The printed reference for an event's quotation, contract and BEO. */
 export function formatEventNumber(financialYear: string, seq: number) {
   return `EVT/${financialYear}/${String(seq).padStart(4, "0")}`;
+}
+
+/** Unsold event rooms go back on sale this many days before the event (0042). */
+export const RELEASE_DAYS_BEFORE = 14;
+
+/**
+ * Where the "Hold rooms" form starts: the night of the event, and a cut-off
+ * 14 days before it — but never in the past, and never after the event.
+ */
+export function eventRoomDefaults(eventDate: string, today: string) {
+  const ideal = addDays(eventDate, -RELEASE_DAYS_BEFORE);
+  const tomorrow = addDays(today, 1);
+  const releaseOn = ideal > tomorrow ? ideal : tomorrow < eventDate ? tomorrow : eventDate;
+  return { checkIn: eventDate, checkOut: addDays(eventDate, 1), releaseOn };
 }

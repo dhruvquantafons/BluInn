@@ -18,6 +18,7 @@ import {
   equipmentForSpace,
   eventBalance,
   eventHours,
+  eventRoomDefaults,
   hhmm,
   isBilled,
   layoutFits,
@@ -76,6 +77,9 @@ import {
   submitEventQuote,
   takeEventPayment,
   updateEvent,
+  holdEventRooms,
+  updateEventRooms,
+  releaseEventRooms,
 } from "../../../event-actions";
 
 /**
@@ -118,6 +122,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     { data: creditRows },
     { data: sameDayRows },
     { data: residentRows },
+    { data: roomGroup },
+    { data: roomTypeRows },
+    { data: planRows },
+    { data: roomsTotal },
   ] = await Promise.all([
     supabase.from("event_lines").select("*").eq("event_id", id).order("sort_order").order("created_at"),
     supabase.from("event_payments").select("*").eq("event_id", id).order("created_at"),
@@ -138,6 +146,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       .gte("check_out", event.event_date)
       .order("check_in", { ascending: false })
       .limit(60),
+    // Rooms this event holds (0042).
+    supabase
+      .from("booking_groups")
+      .select("id, reference, check_in, check_out, release_on, room_billing, bookings(id, status, contact_name, guest_id, room_type_id)")
+      .eq("event_id", id)
+      .maybeSingle(),
+    supabase.from("room_types").select("id, name").eq("is_active", true).order("sort_order"),
+    supabase.from("rate_plans").select("id, name").eq("is_active", true).order("name"),
+    supabase.rpc("event_rooms_total", { p_event: id }),
   ]);
 
   const lines = (lineRows ?? []) as EventLine[];
@@ -158,7 +175,42 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
   const pax = billablePax(event);
   const paid = amountPaid(payments);
-  const balance = eventBalance(event, payments);
+  const balance = eventBalance(event, payments, Number(roomsTotal ?? 0));
+  const block = roomGroup as
+    | {
+        id: string;
+        reference: string;
+        check_in: string;
+        check_out: string;
+        release_on: string | null;
+        room_billing: "guest" | "organiser";
+        bookings: { id: string; status: string; contact_name: string; guest_id: string | null; room_type_id: string }[];
+      }
+    | null;
+  const roomTypes = (roomTypeRows ?? []) as { id: string; name: string }[];
+  const ratePlans = (planRows ?? []) as { id: string; name: string }[];
+  const roomDefaults = eventRoomDefaults(event.event_date, todayIn(settings.timezone));
+  // A room still carries the placeholder name until the rooming list names it.
+  const unnamed = (b: { contact_name: string; guest_id: string | null }) =>
+    !b.guest_id && Boolean(block) && b.contact_name.startsWith(`${event.title} — room`);
+  const blockRows = roomTypes
+    .map((t) => {
+      const mine = (block?.bookings ?? []).filter((b) => b.room_type_id === t.id);
+      return {
+        type: t.name,
+        held: mine.filter((b) => ["tentative", "confirmed", "checked_in", "checked_out"].includes(b.status)).length,
+        named: mine.filter((b) => b.status !== "cancelled" && !unnamed(b)).length,
+        inHouse: mine.filter((b) => b.status === "checked_in").length,
+        released: mine.filter((b) => b.status === "cancelled").length,
+      };
+    })
+    .filter((r) => r.held + r.released > 0);
+  // Its own GST invoice: once, and never for an event billed to a room (that
+  // is invoiced on the guest's folio). Paid in full by deposit still needs one (0041).
+  const canInvoiceAlone =
+    Number(event.grand_total) > 0 &&
+    !invoices.some((i) => i.status === "issued") &&
+    !payments.some((p) => p.kind === "room_charge" && !p.voided_at);
   const billed = isBilled(payments);
   const issuedInvoice = invoices.find((i) => i.status === "issued") ?? null;
   const cannotConfirm = blocksConfirmation(event);
@@ -733,13 +785,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </ActionForm>
           )}
 
-          {canBill && balance > 0 && (event.status === "confirmed" || event.status === "completed") && (
+          {canBill && (balance > 0 || canInvoiceAlone) && (event.status === "confirmed" || event.status === "completed") && (
             <div className="mt-5 pt-5 border-t border-slate-100 space-y-5">
               <p className="text-xs text-slate-600">
-                Bill the {fmtMoney(balance)} still owed to a guest&apos;s room, or issue a tax invoice for it. Either way
-                it goes into the main billing module, so it is chased and reported like any other money.
+                {balance > 0
+                  ? `Bill the ${fmtMoney(balance)} still owed to a guest's room, or issue a tax invoice for the event. Either way it goes into the main billing module, so it is chased and reported like any other money.`
+                  : "Paid in full. Issue the tax invoice for it, so its GST reaches the register."}
               </p>
 
+              {balance > 0 && (
               <ActionForm
                 action={billEventToRoom}
                 submitLabel="Bill it to a room"
@@ -763,8 +817,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   </select>
                 </Field>
               </ActionForm>
+              )}
 
-              {can(session, "folio.invoice") && (
+              {can(session, "folio.invoice") && canInvoiceAlone && (
                 <ActionForm
                   action={issueEventInvoice}
                   submitLabel="Issue a tax invoice for the event"
@@ -814,6 +869,138 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           )}
         </Card>
       </div>
+
+      {/* ── Rooms for the event's guests (0042) ── */}
+      {(block || (canBook && event.status !== "cancelled" && event.status !== "completed")) && (
+        <Card className="p-5">
+          <SectionTitle
+            action={
+              block ? (
+                <Link href={`/groups/${block.id}`} className="text-[11px] text-brand-700 hover:underline">
+                  Rooming list ({block.reference})
+                </Link>
+              ) : undefined
+            }
+          >
+            Rooms for this event
+          </SectionTitle>
+          {block ? (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-600">
+                {fmtDate(block.check_in)} → {fmtDate(block.check_out)} ·{" "}
+                {block.room_billing === "organiser"
+                  ? "The organiser pays for the rooms: their nights go on this event's invoice."
+                  : "Each guest pays for their own room."}{" "}
+                {block.release_on
+                  ? `Rooms still unnamed on ${fmtDate(block.release_on)} go back on sale.`
+                  : "No cut-off: unnamed rooms stay held until released."}
+                {Number(roomsTotal ?? 0) > 0 && ` Rooms billed to the event so far: ${fmtMoney(Number(roomsTotal))}.`}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className={tableHeadClass}>
+                      <th className="py-2 pr-3 font-semibold">Room type</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Held</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Named</th>
+                      <th className="py-2 pr-3 font-semibold text-right">In house</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Released</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {blockRows.map((r) => (
+                      <tr key={r.type}>
+                        <td className="py-2 pr-3">{r.type}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.held}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.named}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.inHouse}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.released}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {canBook && event.status !== "cancelled" && event.status !== "completed" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                  <ActionForm action={updateEventRooms} submitLabel="Save" submitClassName={secondaryButtonClass} className="space-y-3">
+                    <input type="hidden" name="id" value={id} />
+                    <Field label="Release unsold rooms on">
+                      <input type="date" name="release_on" defaultValue={block.release_on ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="Who pays for the rooms" hint="Fixed once a night has been billed to the organiser.">
+                      <select name="room_billing" defaultValue={block.room_billing} className={inputClass}>
+                        <option value="guest">Each guest pays their own</option>
+                        <option value="organiser">The organiser, on this event&apos;s invoice</option>
+                      </select>
+                    </Field>
+                  </ActionForm>
+                  <ActionForm
+                    action={releaseEventRooms}
+                    submitLabel="Release unsold rooms now"
+                    submitClassName={secondaryButtonClass}
+                    confirmMessage="Put every held room that has no guest's name back on sale?"
+                    className="space-y-3"
+                  >
+                    <input type="hidden" name="id" value={id} />
+                    <p className="text-xs text-slate-600">
+                      Rooms with a guest&apos;s name on the rooming list stay. The rest go back on sale.
+                    </p>
+                  </ActionForm>
+                </div>
+              )}
+            </div>
+          ) : (
+            <ActionForm action={holdEventRooms} submitLabel="Hold rooms" className="space-y-4" overbookHint={<span />}>
+              <input type="hidden" name="id" value={id} />
+              <p className="text-xs text-slate-600">
+                Hold a block of rooms for the guests. The rooms are tentative until the event is confirmed, are released if
+                it is cancelled, and those nobody has taken are released on the cut-off date.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {roomTypes.map((t) => (
+                  <Field key={t.id} label={t.name}>
+                    <input type="number" name={`rooms_${t.id}`} min={0} max={120} defaultValue={0} className={inputClass} />
+                  </Field>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Field label="Check-in">
+                  <input type="date" name="check_in" required defaultValue={roomDefaults.checkIn} className={inputClass} />
+                </Field>
+                <Field label="Check-out">
+                  <input type="date" name="check_out" required defaultValue={roomDefaults.checkOut} className={inputClass} />
+                </Field>
+                <Field label="Release unsold rooms on">
+                  <input type="date" name="release_on" defaultValue={roomDefaults.releaseOn} className={inputClass} />
+                </Field>
+                <Field label="Adults per room">
+                  <input type="number" name="adults_per_room" min={1} max={10} defaultValue={2} className={inputClass} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Rate plan">
+                  <select name="rate_plan_id" required defaultValue="" className={inputClass}>
+                    <option value="" disabled>
+                      Choose…
+                    </option>
+                    {ratePlans.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Who pays for the rooms">
+                  <select name="room_billing" defaultValue="guest" className={inputClass}>
+                    <option value="guest">Each guest pays their own</option>
+                    <option value="organiser">The organiser, on this event&apos;s invoice</option>
+                  </select>
+                </Field>
+              </div>
+            </ActionForm>
+          )}
+        </Card>
+      )}
 
       {/* ── The event order ── */}
       {canBook && (

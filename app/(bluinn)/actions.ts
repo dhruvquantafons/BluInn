@@ -107,13 +107,22 @@ export async function deleteStaffMember(_prev: ActionState, fd: FormData): Promi
   const id = str(fd, "id");
 
   if (id === session.staff.id) return { error: "You cannot delete your own account." };
-  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
-  const { error } = await createAdminClient().auth.admin.deleteUser(id);
-  if (error) return { error: error.message };
+  // Someone with any history (a folio line, a cash shift, attendance…) is
+  // deactivated and signed out rather than deleted, so their name stays on
+  // what they did and their HR records survive (0040). Deleting the sign-in
+  // used to fail with a raw database error, or cascade their records away.
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("staff_remove", { p_staff: id });
+  if (error) return { error: friendlyDbError(error.message) };
 
   revalidatePath("/staff");
-  return { success: "Staff account removed." };
+  return {
+    success:
+      data === "deactivated"
+        ? "They have a history here, so the account was suspended instead of deleted: they are signed out and cannot sign in, and their records keep their name. Set them back to Active on this page if needed."
+        : "Staff account removed.",
+  };
 }
 
 /** Sets a temporary password for someone who has lost theirs. */
@@ -130,7 +139,12 @@ export async function resetStaffPassword(_prev: ActionState, fd: FormData): Prom
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(id, { password });
   if (error) return { error: error.message };
-  await admin.from("staff").update({ must_change_password: true }).eq("id", id);
+  const { error: flagError } = await admin.from("staff").update({ must_change_password: true }).eq("id", id);
+  if (flagError) {
+    return {
+      error: `The temporary password is set, but they will not be asked to change it: ${friendlyDbError(flagError.message)} Tell them to change it themselves.`,
+    };
+  }
 
   return { success: "Temporary password set. They will choose their own at next sign-in." };
 }
@@ -149,7 +163,8 @@ export async function resetStaffTwoFactor(_prev: ActionState, fd: FormData): Pro
     const { data, error } = await admin.auth.admin.mfa.listFactors({ userId: id });
     if (error) return { error: error.message };
     for (const factor of data.factors) {
-      await admin.auth.admin.mfa.deleteFactor({ userId: id, id: factor.id });
+      const { error: removeError } = await admin.auth.admin.mfa.deleteFactor({ userId: id, id: factor.id });
+      if (removeError) return { error: `The authenticator could not be removed: ${removeError.message}` };
     }
   }
 
@@ -190,13 +205,23 @@ export async function updateStaffMember(_prev: ActionState, fd: FormData): Promi
     // Where they work (Module 14). Only offered for other people, for the same
     // reason as role and active: an administrator who moved themselves to
     // another hotel and cleared their group access could not get back.
-    const property = str(fd, "property_id", 36);
-    if (/^[0-9a-f-]{36}$/i.test(property)) details.property_id = property;
     details.all_properties = str(fd, "all_properties") === "true";
   }
 
   const { error } = await supabase.from("staff").update(details).eq("id", id);
   if (error) return { error: friendlyDbError(error.message) };
+
+  // A move to another hotel goes through the database, which checks the caller
+  // may manage staff at both: the plain update was refused by row security
+  // for any hotel other than the one the caller is working in (0041).
+  const property = str(fd, "property_id", 36);
+  if (id !== session.staff.id && /^[0-9a-f-]{36}$/i.test(property)) {
+    const { data: current } = await supabase.from("staff").select("property_id").eq("id", id).maybeSingle();
+    if (current && current.property_id !== property) {
+      const { error: moveError } = await supabase.rpc("staff_move_property", { p_staff: id, p_property: property });
+      if (moveError) return { error: `Saved, but not moved to the other hotel: ${friendlyDbError(moveError.message)}` };
+    }
+  }
 
   revalidatePath("/staff");
   return { success: "Staff member updated." };
@@ -269,11 +294,16 @@ export async function deleteRole(_prev: ActionState, fd: FormData): Promise<Acti
   if (!role) return { error: "Role not found." };
   if (role.is_system) return { error: "Built-in roles cannot be deleted; edit their permissions instead." };
 
-  const { count } = await supabase
-    .from("staff")
-    .select("id", { count: "exact", head: true })
-    .eq("role", key);
-  if ((count ?? 0) > 0) return { error: `${count} staff member(s) still have this role.` };
+  // Counted across every hotel (0043): the staff list only shows this one,
+  // so a role in use elsewhere used to fail with a raw foreign-key error.
+  const { data: usage, error: usageError } = await supabase.rpc("role_usage", { p_role: key });
+  if (usageError) return { error: friendlyDbError(usageError.message) };
+  const used = (usage ?? []) as { property: string; staff: number }[];
+  const total = used.reduce((t, u) => t + Number(u.staff), 0);
+  if (total > 0) {
+    const where = used.map((u) => `${u.property} (${u.staff})`).join(", ");
+    return { error: `${total} staff member(s) still have this role: ${where}. Give them another role first.` };
+  }
 
   const { error } = await supabase.from("roles").delete().eq("key", key);
   if (error) return { error: friendlyDbError(error.message) };

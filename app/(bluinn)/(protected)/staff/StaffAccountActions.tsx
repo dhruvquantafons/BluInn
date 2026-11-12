@@ -54,7 +54,7 @@ export default function StaffAccountActions({ member }: { member: Staff }) {
 
         <form
           action={deleteAction}
-          onSubmit={keepFormOnSubmit(deleteAction, `Remove ${member.full_name || member.email}'s account? Suspending them instead keeps their notes attributed.`)}
+          onSubmit={keepFormOnSubmit(deleteAction, `Remove ${member.full_name || member.email}'s account? If they have any history here (postings, shifts, attendance) they are suspended instead, so their records keep their name.`)}
         >
           <input type="hidden" name="id" value={member.id} />
           <button

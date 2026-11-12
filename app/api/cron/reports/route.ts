@@ -1,7 +1,7 @@
 import { createServiceClient } from "../../../lib/supabase/server";
 import { withJobRun } from "../../../lib/job-runs";
 import { hasBearer } from "../../../lib/bearer";
-import { buildScheduledReport, isDue, sendScheduledReport } from "../../../lib/report-email";
+import { buildScheduledReport, isDue, scheduleCreatorProblem, sendScheduledReport } from "../../../lib/report-email";
 import type { ReportSchedule } from "../../../lib/types";
 import { hasServiceAccess } from "../../../lib/supabase/config";
 
@@ -25,45 +25,58 @@ async function run(request: Request) {
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });
 
-  const supabase = createServiceClient();
-  const { data: settings } = await supabase.from("property_settings").select("timezone").maybeSingle();
-  const timezone = settings?.timezone ?? "Asia/Kolkata";
+  // Each schedule is built for the hotel it belongs to, on that hotel's
+  // calendar, with that hotel's figures (0041). Every schedule used to be
+  // built from the default hotel's data.
+  const { data: hotels } = await createServiceClient().from("properties").select("id, name, timezone").eq("is_active", true);
+  const results: { property: string; name: string; status: string }[] = [];
+  let active = 0;
+  let dueCount = 0;
+  for (const hotel of hotels ?? []) {
+    const supabase = createServiceClient(hotel.id as string);
+    const { today, weekday } = hotelDay((hotel.timezone as string) || "Asia/Kolkata");
 
-  // The property's own day and weekday, not the server's.
-  const now = new Date();
-  const today = now.toLocaleDateString("en-CA", { timeZone: timezone });
-  const weekday = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" })
-      .format(now)
-      .replace(/Sun/, "0")
-      .replace(/Mon/, "1")
-      .replace(/Tue/, "2")
-      .replace(/Wed/, "3")
-      .replace(/Thu/, "4")
-      .replace(/Fri/, "5")
-      .replace(/Sat/, "6"),
-  );
+    const { data } = await supabase.from("report_schedules").select("*").eq("is_active", true).eq("property_id", hotel.id);
+    const schedules = (data ?? []) as ReportSchedule[];
+    const due = schedules.filter((s) => isDue(s, today, weekday));
+    active += schedules.length;
+    dueCount += due.length;
 
-  const { data } = await supabase.from("report_schedules").select("*").eq("is_active", true);
-  const schedules = (data ?? []) as ReportSchedule[];
-  const due = schedules.filter((s) => isDue(s, today, weekday));
-
-  const results: { name: string; status: string }[] = [];
-  for (const schedule of due) {
-    const built = await buildScheduledReport(supabase, schedule);
-    if (built.error) {
-      await supabase
-        .from("report_schedules")
-        .update({ last_sent_at: new Date().toISOString(), last_status: built.error })
-        .eq("id", schedule.id);
-      results.push({ name: schedule.name, status: `not built: ${built.error}` });
-      continue;
+    for (const schedule of due) {
+      const refused = await scheduleCreatorProblem(supabase, schedule);
+      if (refused) {
+        await supabase
+          .from("report_schedules")
+          .update({ last_sent_at: new Date().toISOString(), last_status: `Not sent: ${refused}.` })
+          .eq("id", schedule.id);
+        results.push({ property: hotel.name as string, name: schedule.name, status: `not sent: ${refused}` });
+        continue;
+      }
+      const built = await buildScheduledReport(supabase, schedule);
+      if (built.error) {
+        await supabase
+          .from("report_schedules")
+          .update({ last_sent_at: new Date().toISOString(), last_status: built.error })
+          .eq("id", schedule.id);
+        results.push({ property: hotel.name as string, name: schedule.name, status: `not built: ${built.error}` });
+        continue;
+      }
+      const sent = await sendScheduledReport(supabase, schedule, built);
+      results.push({ property: hotel.name as string, name: schedule.name, status: sent.status });
     }
-    const sent = await sendScheduledReport(supabase, schedule, built);
-    results.push({ name: schedule.name, status: sent.status });
   }
 
-  return Response.json({ date: today, active: schedules.length, due: due.length, results });
+  return Response.json({ active, due: dueCount, results });
+}
+
+/** The hotel's own date and weekday (0 = Sunday), not the server's. */
+function hotelDay(timezone: string) {
+  const now = new Date();
+  const today = now.toLocaleDateString("en-CA", { timeZone: timezone });
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(now),
+  );
+  return { today, weekday };
 }
 
 export async function GET(request: Request) {

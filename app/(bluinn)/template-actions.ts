@@ -50,11 +50,13 @@ export async function saveTemplate(_prev: ActionState, fd: FormData): Promise<Ac
 }
 
 /** Removes a language's version, so the default language's is used instead. */
-export async function resetTemplate(fd: FormData) {
+export async function resetTemplate(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requirePermission("settings.manage");
   const supabase = await createClient();
   const template = oneOf(fd, "template", KEYS, "confirmation");
   const language = str(fd, "language", 2);
-  await supabase.from("message_templates").delete().eq("template", template).eq("language", language);
+  const { error } = await supabase.from("message_templates").delete().eq("template", template).eq("language", language);
+  if (error) return { error: friendlyDbError(error.message) };
   revalidatePath("/settings/templates");
+  return { success: "Back to the standard wording." };
 }

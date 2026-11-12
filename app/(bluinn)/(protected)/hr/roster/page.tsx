@@ -96,6 +96,10 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
                         className={`w-full text-xs rounded border border-slate-200 px-1.5 py-1.5 ${type ? SHIFT_COLOR_CLASS[type.color] : cell ? "bg-slate-50 text-slate-500" : "bg-white text-slate-400"}`}
                       >
                         <option value="">—</option>
+                        {/* A cell on a shift since switched off keeps it, so saving the week does not wipe it (0043). */}
+                        {type && !type.is_active && (
+                          <option value={type.id}>{type.name} (inactive)</option>
+                        )}
                         {active.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.name}

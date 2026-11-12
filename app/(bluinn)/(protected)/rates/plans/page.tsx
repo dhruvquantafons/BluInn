@@ -45,7 +45,6 @@ export default async function RatePlansPage() {
                 <Tag tone="gold">{RATE_TYPE_LABELS[plan.rate_type]}</Tag>
                 <Tag>{plan.meal_plan}</Tag>
                 {!plan.is_active && <Tag tone="red">Inactive</Tag>}
-                {plan.is_public && plan.is_active && <Tag tone="green">On website</Tag>}
                 {manage && <span className="ml-auto text-[11px] text-brand-700">Edit</span>}
               </div>
               <p className="text-xs text-slate-600 mt-1">
@@ -214,7 +213,6 @@ function PlanFields({
 
       <div className="flex flex-wrap gap-6">
         <Check name="is_active" defaultChecked={plan?.is_active ?? true} label="Active" />
-        <Check name="is_public" defaultChecked={plan?.is_public ?? true} label="Offer on the website" />
       </div>
     </>
   );

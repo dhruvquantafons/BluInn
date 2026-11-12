@@ -48,7 +48,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           staff={session.staff}
           roleName={session.role.name}
           access={access}
-          properties={properties.map((p) => ({ id: p.id, code: p.code, name: p.name }))}
+          // The switcher offers only open hotels; set_active_property refuses a closed one (0043).
+          properties={properties
+            .filter((p) => p.is_active || p.id === currentProperty?.id)
+            .map((p) => ({ id: p.id, code: p.code, name: p.name }))}
           currentProperty={currentProperty?.id ?? null}
         />
         <IdleTimer minutes={settings.session_timeout_minutes} />

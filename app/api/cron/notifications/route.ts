@@ -24,10 +24,10 @@ import { hasServiceAccess } from "../../../lib/supabase/config";
  * "Authorization: Bearer <CRON_SECRET>"; see vercel.json). Disabled until
  * CRON_SECRET is set.
  *
- * Safe to run more than once a day, and safe to miss a day: a partial unique
- * index on notifications refuses a second successful send of the same timed
- * message for the same booking, so a retry re-sends only what genuinely
- * failed. A day that is missed altogether is simply not sent — a reminder
+ * Safe to run more than once a day, and safe to miss a day: a booking that
+ * was already sent a timed message successfully is skipped before anything
+ * is sent (0041; the unique index alone only stopped the second record, not
+ * the second email), so a retry re-sends only what genuinely failed. A day that is missed altogether is simply not sent — a reminder
  * that arrives after the guest has left is worse than none.
  */
 
@@ -52,6 +52,18 @@ const forMessage = (b: Row) => ({
   meal_plan: b.rate_plans?.meal_plan ?? null,
 }) as Parameters<typeof sendBookingMessage>[2];
 
+/** Bookings already sent this message successfully, so a re-run does not send it again (0041). */
+async function alreadySent(supabase: ReturnType<typeof createServiceClient>, template: string, ids: string[]) {
+  if (ids.length === 0) return new Set<string>();
+  const { data } = await supabase
+    .from("notifications")
+    .select("booking_id")
+    .eq("template", template)
+    .eq("status", "sent")
+    .in("booking_id", ids);
+  return new Set((data ?? []).map((r) => r.booking_id as string));
+}
+
 async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || !hasServiceAccess()) {
@@ -59,12 +71,35 @@ async function run(request: Request) {
   }
   if (!hasBearer(request, secret)) return Response.json({ error: "Unauthorized." }, { status: 401 });
 
-  const supabase = createServiceClient();
+  // One hotel at a time, each with its own settings, calendar and wording
+  // (0041). It used to use the default hotel's for every hotel's guests.
+  const { data: hotels } = await createServiceClient().from("properties").select("id, name").eq("is_active", true);
+  const results = [];
+  for (const hotel of hotels ?? []) {
+    results.push({ property: hotel.name, ...(await runForHotel(hotel.id as string)) });
+  }
+  return Response.json({ properties: results });
+}
+
+async function runForHotel(propertyId: string) {
+  const supabase = createServiceClient(propertyId);
   const { data } = await supabase.from("property_settings").select("*").maybeSingle();
   const settings = { ...DEFAULT_SETTINGS, ...(data ?? {}) } as PropertySettings;
   const today = todayIn(settings.timezone);
 
-  const counts = { pre_arrival: 0, checkin_instructions: 0, post_stay: 0, vip_alerts: 0 };
+  const counts = { pre_arrival: 0, checkin_instructions: 0, post_stay: 0, vip_alerts: 0, skipped_already_sent: 0 };
+
+  const send = async (template: "pre_arrival" | "checkin_instructions" | "post_stay", rows: Row[]) => {
+    const done = await alreadySent(supabase, template, rows.map((b) => b.id));
+    for (const booking of rows) {
+      if (done.has(booking.id)) {
+        counts.skipped_already_sent++;
+        continue;
+      }
+      const summary = await sendBookingMessage(supabase, template, forMessage(booking), settings);
+      if (summary.email?.status === "sent" || summary.sms?.status === "sent") counts[template]++;
+    }
+  };
 
   // ── Pre-arrival reminder and check-in instructions ──
   // Both look forward from today, and both only for stays that are actually
@@ -78,13 +113,10 @@ async function run(request: Request) {
     const { data: due } = await supabase
       .from("bookings")
       .select(BOOKING_SELECT)
+      .eq("property_id", propertyId)
       .eq("check_in", addDays(today, days))
       .in("status", ["confirmed", "tentative"]);
-
-    for (const booking of (due ?? []) as unknown as Row[]) {
-      const summary = await sendBookingMessage(supabase, template, forMessage(booking), settings);
-      if (summary.email?.status === "sent" || summary.sms?.status === "sent") counts[template]++;
-    }
+    await send(template, (due ?? []) as unknown as Row[]);
   }
 
   // ── Post-stay thank-you ──
@@ -92,13 +124,10 @@ async function run(request: Request) {
     const { data: departed } = await supabase
       .from("bookings")
       .select(BOOKING_SELECT)
+      .eq("property_id", propertyId)
       .eq("check_out", addDays(today, -settings.notify_post_stay_days))
       .eq("status", "checked_out");
-
-    for (const booking of (departed ?? []) as unknown as Row[]) {
-      const summary = await sendBookingMessage(supabase, "post_stay", forMessage(booking), settings);
-      if (summary.email?.status === "sent" || summary.sms?.status === "sent") counts.post_stay++;
-    }
+    await send("post_stay", (departed ?? []) as unknown as Row[]);
   }
 
   // ── VIP arrivals today ──
@@ -106,6 +135,7 @@ async function run(request: Request) {
     const { data: vips } = await supabase
       .from("bookings")
       .select(BOOKING_SELECT)
+      .eq("property_id", propertyId)
       .eq("check_in", today)
       .eq("is_vip", true)
       .in("status", ["confirmed", "tentative"]);
@@ -126,7 +156,7 @@ async function run(request: Request) {
     }
   }
 
-  return Response.json({ date: today, ...counts });
+  return { date: today, ...counts };
 }
 
 export async function GET(request: Request) {

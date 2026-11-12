@@ -27,3 +27,7 @@ echo "All migrations applied."
 psql -d "$DB" -f "$HERE/behaviour.sql"
 # Assertions, not just output to read: stops at the first that fails.
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes.sql"
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes_0040.sql"
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes_0041.sql"
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes_0042.sql"
+psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$HERE/fixes_0043.sql"

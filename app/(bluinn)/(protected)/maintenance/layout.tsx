@@ -1,6 +1,7 @@
 import { } from "lucide-react";
 import { after } from "next/server";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { createClient } from "../../../lib/supabase/server";
 import { escalateOverdueTickets } from "../../../lib/staff-alerts";
@@ -29,7 +30,7 @@ export default async function MaintenanceLayout({ children }: { children: React.
     <>
       <LiveRefresh tables={["maintenance_tickets", "room_blocks"]} />
       <PageHeader title="Maintenance" description="Repairs and upkeep for rooms, equipment and common areas." />
-      <SectionTabs tabs={tabs} label="Maintenance sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Maintenance sections" />
       {children}
     </>
   );

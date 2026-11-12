@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../lib/auth";
+import { canOpen } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
 import { todayIn, zonedTime } from "../../../lib/dates";
@@ -147,9 +148,13 @@ export default async function PosPage({ searchParams }: { searchParams: Promise<
                 {openPage.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-50/60">
                     <td className="py-2 px-4">
-                      <Link href={`/pos/orders/${o.id}`} className="font-mono text-brand-700 hover:underline">
-                        {o.number}
-                      </Link>
+                      {canOpen(session, `/pos/orders/${o.id}`) ? (
+                        <Link href={`/pos/orders/${o.id}`} className="font-mono text-brand-700 hover:underline">
+                          {o.number}
+                        </Link>
+                      ) : (
+                        <span className="font-mono">{o.number}</span>
+                      )}
                     </td>
                     <td className="py-2 pr-3">{o.pos_outlets?.name ?? "—"}</td>
                     <td className="py-2 pr-3">

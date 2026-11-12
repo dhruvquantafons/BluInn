@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "../lib/supabase/server";
-import { requirePermission, requireAnyPermission } from "../lib/auth";
+import { requirePermission, requireAnyPermission, type Session } from "../lib/auth";
 import { can } from "../lib/permissions";
 import { getSettings } from "../lib/settings";
 import { loadPricingData, resolvePromo } from "../lib/rate-data";
@@ -13,6 +13,8 @@ import { discountNights, nightsTotal } from "../lib/revenue";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../lib/policies";
 import { friendlyDbError, isOverbooked } from "../lib/db-errors";
 import { ancillaryCharge, insertFolioEntries } from "../lib/folio";
+import { propertyInvoiceProblem } from "../lib/checkout";
+import { issueOutstandingInvoices, lastBillTo } from "../lib/invoice-issue";
 import { sendBookingMessage, describeSend, type Template } from "../lib/notifications";
 import { alertNewBooking } from "../lib/staff-alerts";
 import { eachNight, hoursUntil, todayIn, zonedTime } from "../lib/dates";
@@ -470,6 +472,42 @@ export async function reinstateBooking(_prev: ActionState, fd: FormData): Promis
   return { success: "Reinstated as tentative. Any penalty already posted stays on the folio until voided." };
 }
 
+/**
+ * Posts a cancellation or no-show penalty and then closes the booking (0043).
+ * The penalty goes first: if it cannot be posted, nothing has changed and the
+ * desk can simply try again. If the status change then fails, the penalty is
+ * voided so an open booking does not carry it. Returns an error, or null.
+ */
+async function penaltyThenClose(
+  supabase: SupabaseClient,
+  session: Session,
+  bookingId: string,
+  penaltyRow: Record<string, unknown> | null,
+  closing: Record<string, unknown>,
+): Promise<string | null> {
+  let penaltyId: string | null = null;
+  if (penaltyRow) {
+    const { data, error } = await supabase
+      .from("folio_entries")
+      .insert({ booking_id: bookingId, kind: "penalty", created_by: session.staff.id, ...penaltyRow })
+      .select("id")
+      .single();
+    if (error) return `The penalty could not be posted, so nothing was changed: ${friendlyDbError(error.message)}`;
+    penaltyId = data.id as string;
+  }
+  const { error } = await supabase.from("bookings").update(closing).eq("id", bookingId);
+  if (error) {
+    if (penaltyId) {
+      await supabase
+        .from("folio_entries")
+        .update({ voided_at: new Date().toISOString(), voided_by: session.staff.id, void_reason: "Status change failed" })
+        .eq("id", penaltyId);
+    }
+    return friendlyDbError(error.message);
+  }
+  return null;
+}
+
 export async function cancelBooking(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("bookings.cancel");
   const supabase = await createClient();
@@ -500,9 +538,12 @@ export async function cancelBooking(_prev: ActionState, fd: FormData): Promise<A
         );
   const charge = waive ? 0 : penalty.amount;
 
-  const { error } = await supabase
-    .from("bookings")
-    .update({
+  const closeError = await penaltyThenClose(
+    supabase,
+    session,
+    booking.id,
+    charge > 0 ? { description: `Cancellation charge — ${penalty.explanation}`, ...ancillaryCharge(charge, booking, settings) } : null,
+    {
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
       cancelled_by: session.staff.id,
@@ -510,30 +551,17 @@ export async function cancelBooking(_prev: ActionState, fd: FormData): Promise<A
       penalty_amount: penalty.amount,
       penalty_waived: waive && penalty.amount > 0,
       hold_until: null,
-    })
-    .eq("id", booking.id);
-  if (error) return { error: friendlyDbError(error.message) };
-
-  if (charge > 0) {
-    const penaltyError = await insertFolioEntries(supabase, {
-      booking_id: booking.id,
-      kind: "penalty",
-      description: `Cancellation charge — ${penalty.explanation}`,
-      ...ancillaryCharge(charge, booking, settings),
-      created_by: session.staff.id,
-    });
-    if (penaltyError) {
-      revalidateBooking(booking.id);
-      return { error: `Cancelled, but the penalty of ₹${charge.toLocaleString("en-IN")} was not posted: ${penaltyError} Post it from the folio.` };
-    }
-  }
+    },
+  );
+  if (closeError) return { error: closeError };
+  const invoiceNote = charge > 0 ? await invoicePenalty(supabase, session, settings, booking) : "";
 
   let sent = "";
   if (bool(fd, "notify_guest")) sent = " " + (await sendMessage(supabase, "cancellation", booking.id, session.staff.id));
 
   revalidateBooking(booking.id);
   return {
-    success: `Cancelled. ${charge > 0 ? `Penalty of ₹${charge.toLocaleString("en-IN")} posted to the folio.` : waive && penalty.amount > 0 ? "Penalty waived." : "No penalty."}${sent}`,
+    success: `Cancelled. ${charge > 0 ? `Penalty of ₹${charge.toLocaleString("en-IN")} posted to the folio.${invoiceNote}` : waive && penalty.amount > 0 ? "Penalty waived." : "No penalty."}${sent}`,
   };
 }
 
@@ -558,9 +586,12 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
   const penalty = noShowPenalty(booking.rate_plans, booking.rate_breakdown ?? [], booking.rooms_count);
   const charge = waive ? 0 : penalty.amount;
 
-  const { error } = await supabase
-    .from("bookings")
-    .update({
+  const closeError = await penaltyThenClose(
+    supabase,
+    session,
+    booking.id,
+    charge > 0 ? { description: penalty.explanation, ...ancillaryCharge(charge, booking, settings) } : null,
+    {
       status: "no_show",
       cancelled_at: new Date().toISOString(),
       cancelled_by: session.staff.id,
@@ -568,26 +599,32 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
       penalty_amount: penalty.amount,
       penalty_waived: waive && penalty.amount > 0,
       hold_until: null,
-    })
-    .eq("id", booking.id);
-  if (error) return { error: friendlyDbError(error.message) };
-
-  if (charge > 0) {
-    const penaltyError = await insertFolioEntries(supabase, {
-      booking_id: booking.id,
-      kind: "penalty",
-      description: penalty.explanation,
-      ...ancillaryCharge(charge, booking, settings),
-      created_by: session.staff.id,
-    });
-    if (penaltyError) {
-      revalidateBooking(booking.id);
-      return { error: `Marked as no-show, but the penalty of ₹${charge.toLocaleString("en-IN")} was not posted: ${penaltyError} Post it from the folio.` };
-    }
-  }
+    },
+  );
+  if (closeError) return { error: closeError };
+  const invoiceNote = charge > 0 ? await invoicePenalty(supabase, session, settings, booking) : "";
 
   revalidateBooking(booking.id);
-  return { success: `Marked as no-show.${charge > 0 ? ` ₹${charge.toLocaleString("en-IN")} posted to the folio.` : ""}` };
+  return { success: `Marked as no-show.${charge > 0 ? ` ₹${charge.toLocaleString("en-IN")} posted to the folio.${invoiceNote}` : ""}` };
+}
+
+/**
+ * A cancellation or no-show charge is a taxable supply, so it gets a GST
+ * invoice like a stay; before 0040 its tax was in the tax summary but never
+ * in GSTR-1. Returns a sentence for the success message.
+ */
+async function invoicePenalty(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  session: Session,
+  settings: PropertySettings,
+  booking: Pick<Booking, "id" | "guest_id" | "contact_name">,
+): Promise<string> {
+  if (!can(session, "folio.invoice")) return " Ask someone who can issue invoices to invoice it from the folio.";
+  const problem = propertyInvoiceProblem(settings);
+  if (problem) return ` No tax invoice was issued: ${problem}`;
+  const r = await issueOutstandingInvoices(supabase, settings, booking.id, await lastBillTo(supabase, booking), session.staff.id);
+  if (r.error) return ` The tax invoice was not issued: ${r.error} Issue it from the folio.`;
+  return r.issued.length ? ` Invoice ${r.issued.join(", ")} issued.` : "";
 }
 
 // ── Amendments ─────────────────────────────────────────────────────────────
@@ -608,6 +645,27 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
   if (booking.status === "checked_in" && checkIn !== booking.check_in) {
     return { error: "The guest has arrived; the check-in date cannot change." };
   }
+  // A booking not yet in house cannot be moved to arrive in the past (0043).
+  const { business_date: businessDate } = await getSettings();
+  if (booking.status !== "checked_in" && checkIn !== booking.check_in && checkIn < businessDate) {
+    return { error: "A booking cannot be moved to arrive before today's business date." };
+  }
+  // Nor can a stay end before a night already charged to its folio.
+  if (booking.status === "checked_in") {
+    const { data: lastCharged } = await supabase
+      .from("folio_entries")
+      .select("stay_date")
+      .eq("booking_id", booking.id)
+      .eq("kind", "room")
+      .is("voided_at", null)
+      .order("stay_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const night = lastCharged?.stay_date as string | undefined;
+    if (night && checkOut <= night) {
+      return { error: `The night of ${night} is already charged, so check-out cannot be before the next day.` };
+    }
+  }
 
   const roomTypeId = uuidOrNull(fd, "room_type_id");
   const ratePlanId = uuidOrNull(fd, "rate_plan_id");
@@ -626,6 +684,13 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
   const rateOverride = num(fd, "rate_override");
   let breakdown: NightRate[] = booking.rate_breakdown ?? [];
   let violations: string[] = [];
+
+  const { data: redemption } = await supabase
+    .from("promo_redemptions")
+    .select("id, discount_amount")
+    .eq("booking_id", booking.id)
+    .maybeSingle();
+  let redemptionGiven: number | null = null;
 
   if (rateOverride !== null) {
     if (rateOverride < 0) return { error: "Enter a valid nightly rate." };
@@ -656,7 +721,23 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
     const kept = new Map(
       (booking.status === "checked_in" ? booking.rate_breakdown ?? [] : []).map((n) => [n.date, n]),
     );
-    breakdown = quote.nights.map((n) => kept.get(n.date) ?? n);
+    // A promo code the booking was made with keeps its discount on the
+    // re-priced nights (0041). It used to be dropped while the redemption
+    // still counted the use.
+    const fresh = discountNights(
+      quote.nights.filter((n) => !kept.has(n.date)),
+      redemption ? Number(redemption.discount_amount) : 0,
+      rooms,
+    );
+    const freshByDate = new Map(fresh.map((n) => [n.date, n]));
+    breakdown = quote.nights.map((n) => kept.get(n.date) ?? freshByDate.get(n.date) ?? n);
+    if (redemption) {
+      const given =
+        (quote.nights.filter((n) => !kept.has(n.date)).reduce((t, n) => t + Number(n.rate), 0) -
+          fresh.reduce((t, n) => t + Number(n.rate), 0)) *
+        rooms;
+      redemptionGiven = Math.max(0, Math.round(given * 100) / 100);
+    }
   }
 
   if (violations.length && !(bool(fd, "override_restrictions") && can(session, "bookings.overbook"))) {
@@ -713,6 +794,9 @@ export async function updateBookingDetails(_prev: ActionState, fd: FormData): Pr
     .eq("id", booking.id);
 
   if (error) return { error: friendlyDbError(error.message), overbooked: isOverbooked(error.message) };
+  if (redemption && redemptionGiven !== null && redemptionGiven !== Number(redemption.discount_amount)) {
+    await supabase.from("promo_redemptions").update({ discount_amount: redemptionGiven }).eq("id", redemption.id);
+  }
 
   // Module 16, trigger event "booking modified". Only worth telling the
   // guest when the stay itself moved — a corrected phone number is not news,
@@ -818,7 +902,7 @@ export async function moveRoom(_prev: ActionState, fd: FormData): Promise<Action
 
   const { data: target } = await supabase
     .from("rooms")
-    .select("status, housekeeping_status, room_number")
+    .select("status, housekeeping_status, room_number, room_type_id, room_types(name)")
     .eq("id", toRoom)
     .single();
   if (!target) return { error: "Room not found." };
@@ -826,11 +910,20 @@ export async function moveRoom(_prev: ActionState, fd: FormData): Promise<Action
     return { error: `Room ${target.room_number} is not vacant and inspected.` };
   }
 
-  // The trigger frees and dirties the old room and occupies the new one.
+  // The triggers free and dirty the old room, occupy the new one and, for a
+  // room of another type, move the booking to that type and check that the
+  // type has a room free for the rest of the stay (0040).
+  const otherType = target.room_type_id !== booking.room_type_id;
+  const typeName = (target.room_types as unknown as { name: string } | null)?.name ?? "that type";
   const { error } = await supabase.from("bookings").update({ room_id: toRoom }).eq("id", booking.id);
-  if (error) return { error: friendlyDbError(error.message) };
+  if (error) {
+    if (otherType && isOverbooked(error.message)) {
+      return { error: `Every ${typeName} room is taken for part of the stay, so the guest cannot be moved to ${target.room_number}.` };
+    }
+    return { error: friendlyDbError(error.message) };
+  }
 
-  await supabase.from("room_moves").insert({
+  const { error: moveLogError } = await supabase.from("room_moves").insert({
     booking_id: booking.id,
     from_room_id: booking.room_id,
     to_room_id: toRoom,
@@ -840,7 +933,14 @@ export async function moveRoom(_prev: ActionState, fd: FormData): Promise<Action
   });
 
   revalidateBooking(booking.id);
-  return { success: `Moved to room ${target.room_number}. Re-issue key cards for the new room.` };
+  if (moveLogError) {
+    return {
+      error: `Moved to room ${target.room_number}, but the move was not recorded in its history: ${friendlyDbError(moveLogError.message)}`,
+    };
+  }
+  return {
+    success: `Moved to room ${target.room_number}.${otherType ? ` The booking is now a ${typeName} booking at the rate it was booked at.` : ""} Re-issue key cards for the new room.`,
+  };
 }
 
 /**
@@ -1037,14 +1137,24 @@ export async function postCharge(_prev: ActionState, fd: FormData): Promise<Acti
   const taxRate = num(fd, "tax_rate") ?? 0;
   if (taxRate < 0 || taxRate > 100) return { error: "Enter a tax rate between 0 and 100." };
 
+  const kind = oneOf(fd, "kind", ["extra", "fee", "penalty"] as const, "extra");
+  let money = { amount, tax_rate: taxRate, tax_amount: Math.round(amount * taxRate) / 100 };
+  if (kind === "penalty") {
+    // A cancellation or no-show charge the desk posts by hand, for example
+    // when the automatic one failed. It is taxed like the stay it replaces,
+    // as the automatic one is (0040), so the rate field is ignored.
+    if (!can(session, "bookings.cancel")) return { error: "Your role cannot post penalties." };
+    const [booking, settings] = await Promise.all([loadBooking(supabase, bookingId), getSettings()]);
+    if (!booking) return { error: "Booking not found." };
+    money = ancillaryCharge(amount, booking, settings);
+  }
+
   const { error } = await supabase.from("folio_entries").insert({
     booking_id: bookingId,
-    kind: oneOf(fd, "kind", ["extra", "fee"] as const, "extra"),
+    kind,
     description,
-    amount,
-    tax_rate: taxRate,
-    tax_amount: Math.round(amount * taxRate) / 100,
-    stay_date: dateStr(fd, "stay_date") || null,
+    ...money,
+    stay_date: kind === "penalty" ? null : dateStr(fd, "stay_date") || null,
     created_by: session.staff.id,
   });
   if (error) return { error: friendlyDbError(error.message) };

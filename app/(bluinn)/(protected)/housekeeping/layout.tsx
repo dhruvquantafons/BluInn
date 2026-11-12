@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
@@ -23,7 +24,7 @@ export default async function HousekeepingLayout({ children }: { children: React
     <>
       <LiveRefresh tables={["housekeeping_tasks", "rooms"]} />
       <PageHeader title="Housekeeping" description="Cleaning tasks, inspections and lost property." />
-      <SectionTabs tabs={tabs} label="Housekeeping sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Housekeeping sections" />
       {children}
     </>
   );

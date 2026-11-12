@@ -69,7 +69,6 @@ export default async function PackagesPage() {
                 <Tag tone="gold">{describePrice(pkg)}</Tag>
                 <Tag tone="blue">{MEAL_PLAN_LABELS[pkg.meal_plan]}</Tag>
                 {!pkg.is_active && <Tag tone="red">Inactive</Tag>}
-                {!pkg.is_public && <Tag tone="neutral">Not on the website</Tag>}
               </div>
               {pkg.description && <p className="text-sm text-slate-600 mb-3">{pkg.description}</p>}
 

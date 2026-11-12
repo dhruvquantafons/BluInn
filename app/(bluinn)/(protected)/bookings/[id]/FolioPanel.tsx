@@ -42,8 +42,13 @@ export default function FolioPanel({
   depositRequired,
   canPay,
   canPost,
+  canPenalty = false,
+  bookingClosed = false,
   canAdjust,
   today,
+  invoicedFolios = [],
+  masterFolioId = null,
+  uninvoicedAfterStay = false,
 }: {
   bookingId: string;
   entries: FolioEntry[];
@@ -51,9 +56,23 @@ export default function FolioPanel({
   depositRequired: number;
   canPay: boolean;
   canPost: boolean;
+  /** bookings.cancel: may post a cancellation or no-show penalty by hand. */
+  canPenalty?: boolean;
+  /** Cancelled, no-show or waitlisted: the folio takes only penalties and refunds (0043). */
+  bookingClosed?: boolean;
   canAdjust: boolean;
   today: string;
+  /** Folios with an issued invoice: their lines are corrected by credit note, not voided or discounted. */
+  invoicedFolios?: string[];
+  masterFolioId?: string | null;
+  /** A closed stay with charges no invoice covers yet (posted after check-out, say). */
+  uninvoicedAfterStay?: boolean;
 }) {
+  const invoiced = new Set(invoicedFolios);
+  const masterInvoiced = Boolean(masterFolioId && invoiced.has(masterFolioId));
+  const discountable = entries.filter(
+    (e) => !e.voided_at && ["room", "fee", "penalty", "extra"].includes(e.kind) && !invoiced.has(e.folio_id),
+  );
   return (
     <Card className="p-5">
       <SectionTitle
@@ -84,6 +103,13 @@ export default function FolioPanel({
           {fmtMoney(totals.deposits)} of {fmtMoney(depositRequired)}
         </p>
       </div>
+
+      {uninvoicedAfterStay && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Some charges on this stay are not on any tax invoice yet (posted after the invoice, or not invoiced at
+          check-out). Issue an invoice for that folio under Billing below, so their tax reaches the GST return.
+        </p>
+      )}
 
       {entries.length === 0 ? (
         <p className="text-sm text-slate-500 mb-4">
@@ -129,7 +155,15 @@ export default function FolioPanel({
                     </td>
                     {canAdjust && (
                       <td className="py-2 text-right">
-                        {!e.voided_at && e.night_audit_date && (
+                        {!e.voided_at && invoiced.has(e.folio_id) && (
+                          <span
+                            className="text-[11px] text-slate-400"
+                            title="On an issued tax invoice. Correct it with a credit note on the invoice."
+                          >
+                            Invoiced
+                          </span>
+                        )}
+                        {!e.voided_at && !invoiced.has(e.folio_id) && e.night_audit_date && (
                           <span
                             className="text-[11px] text-slate-400"
                             title={`Closed by night audit for ${fmtDate(e.night_audit_date)}. Correct it with an allowance.`}
@@ -137,7 +171,7 @@ export default function FolioPanel({
                             Closed
                           </span>
                         )}
-                        {!e.voided_at && !e.night_audit_date && (
+                        {!e.voided_at && !invoiced.has(e.folio_id) && !e.night_audit_date && (
                           <details className="relative inline-block text-left">
                             <summary className="text-[11px] text-slate-500 hover:text-rose-700 cursor-pointer list-none">
                               Void
@@ -197,7 +231,7 @@ export default function FolioPanel({
           </ActionForm>
         )}
 
-        {canPost && (
+        {canPost && (!bookingClosed || canPenalty) && (
           <ActionForm action={postCharge} submitLabel="Post charge" submitClassName={secondaryButtonClass} className="space-y-3">
             <p className="text-xs font-medium text-brand-700">Charge</p>
             <input type="hidden" name="booking_id" value={bookingId} />
@@ -212,9 +246,10 @@ export default function FolioPanel({
                 <input type="number" name="tax_rate" min={0} max={100} step="0.01" defaultValue={0} className={inputClass} />
               </Field>
               <Field label="Kind">
-                <select name="kind" defaultValue="extra" className={inputClass}>
-                  <option value="extra">Extra</option>
-                  <option value="fee">Fee</option>
+                <select name="kind" defaultValue={bookingClosed ? "penalty" : "extra"} className={inputClass}>
+                  {!bookingClosed && <option value="extra">Extra</option>}
+                  {!bookingClosed && <option value="fee">Fee</option>}
+                  {canPenalty && <option value="penalty">Penalty (taxed like the stay)</option>}
                 </select>
               </Field>
             </div>
@@ -222,7 +257,16 @@ export default function FolioPanel({
           </ActionForm>
         )}
 
-        {canAdjust && (
+        {canAdjust && masterInvoiced && discountable.length === 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-brand-700">Allowance</p>
+            <p className="text-[11px] text-slate-500">
+              Everything on this stay is on an issued tax invoice, so it cannot take an allowance. Correct it with a credit
+              note on the invoice (Billing, below); if your role cannot issue credit notes, ask a manager.
+            </p>
+          </div>
+        )}
+        {canAdjust && !(masterInvoiced && discountable.length === 0) && (
           <ActionForm action={postAdjustment} submitLabel="Post allowance" submitClassName={secondaryButtonClass} className="space-y-3">
             <p className="text-xs font-medium text-brand-700">Allowance</p>
             <p className="text-[11px] text-slate-500">
@@ -233,11 +277,22 @@ export default function FolioPanel({
             <Field label="Reason">
               <input name="description" required placeholder="Minibar posted twice on 12 Nov, service recovery…" className={inputClass} />
             </Field>
-            <Field label="Against charge" hint="Leave blank for a credit that is not a discount on a charge.">
-              <select name="applies_to" defaultValue="" className={inputClass}>
-                <option value="">Not against a particular charge</option>
-                {entries
-                  .filter((e) => !e.voided_at && ["room", "fee", "penalty", "extra"].includes(e.kind))
+            <Field
+              label="Against charge"
+              hint={
+                masterInvoiced
+                  ? "The main folio is invoiced: choose a charge posted after the invoice, or correct the invoice with a credit note."
+                  : "Leave blank for a credit that is not a discount on a charge."
+              }
+            >
+              <select name="applies_to" defaultValue="" required={masterInvoiced} className={inputClass}>
+                {!masterInvoiced && <option value="">Not against a particular charge</option>}
+                {masterInvoiced && (
+                  <option value="" disabled>
+                    Choose…
+                  </option>
+                )}
+                {discountable
                   .map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.stay_date ? `${fmtDate(e.stay_date)} · ` : ""}

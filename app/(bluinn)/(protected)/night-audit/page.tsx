@@ -154,7 +154,8 @@ export default async function NightAuditPage({ searchParams }: { searchParams: P
             )}
             {(openShifts ?? []).length > 0 && (
               <li className="text-amber-800">
-                <strong className="font-medium">{(openShifts ?? []).length}</strong> cash shift(s) are still open
+                <strong className="font-medium">{(openShifts ?? []).length}</strong> cash shift(s) are still open. The audit
+                does not close them: each cashier counts and closes their own drawer.
                 <span className="block text-xs text-slate-600">
                   {(openShifts ?? []).map((s) => {
                     const who = s.staff as unknown as { full_name: string; email: string } | null;

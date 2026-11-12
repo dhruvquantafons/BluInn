@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireAnyPermission } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import SectionTabs from "../../components/SectionTabs";
@@ -27,7 +28,7 @@ export default async function EventsLayout({ children }: { children: React.React
         title="Events & banquets"
         description="Conferences, banquets and functions. Catering is quoted per head; only a confirmed event holds the hall."
       />
-      <SectionTabs tabs={tabs} label="Event sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="Event sections" />
       {children}
     </>
   );

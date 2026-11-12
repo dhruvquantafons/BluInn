@@ -1,5 +1,6 @@
 import { } from "lucide-react";
 import { requireSession } from "../../../lib/auth";
+import { openableTabs } from "../../../lib/page-access";
 import { can, canAny } from "../../../lib/permissions";
 import { PageHeader } from "../../components/ui";
 import LiveRefresh from "../../components/LiveRefresh";
@@ -23,7 +24,7 @@ export default async function HrLayout({ children }: { children: React.ReactNode
     <>
       <LiveRefresh tables={["attendance", "leave_requests"]} />
       <PageHeader title="HR & attendance" description="Shifts, clock-in, leave and staff records." />
-      <SectionTabs tabs={tabs} label="HR sections" />
+      <SectionTabs tabs={openableTabs(session, tabs)} label="HR sections" />
       {children}
     </>
   );

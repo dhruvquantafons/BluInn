@@ -95,6 +95,11 @@ export async function recordFeedback(_prev: ActionState, fd: FormData): Promise<
   };
 
   if (bookingId) {
+    // The stay must be this guest's: feedback filed against someone else's
+    // booking showed on the wrong guest's history (0043).
+    const { data: stay } = await supabase.from("bookings").select("guest_id").eq("id", bookingId).maybeSingle();
+    if (!stay) return { error: "Booking not found." };
+    if (stay.guest_id !== guestId) return { error: "That stay belongs to a different guest." };
     const { data: existing } = await supabase.from("guest_feedback").select("id, submitted_at").eq("booking_id", bookingId).maybeSingle();
     if (existing?.submitted_at) return { error: "Feedback for this stay is already recorded." };
     const { error } = existing

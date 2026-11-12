@@ -158,8 +158,8 @@ function Fields({
         <Check
           name="is_public"
           defaultChecked={p?.is_public ?? true}
-          label="Guests may type it on the website"
-          hint="Off makes it a code only the desk can apply."
+          label="Any desk staff can apply it"
+          hint="Off: only people with revenue access can see and apply the code."
         />
         <Check name="is_active" defaultChecked={p?.is_active ?? true} label="Active" />
       </div>
@@ -227,7 +227,7 @@ export default async function PromoCodesPage({
                 <span className="text-base font-semibold font-mono">{p.code}</span>
                 <Tag tone="gold">{describeDiscount(p)}</Tag>
                 <Tag tone={status.tone}>{status.label}</Tag>
-                {!p.is_public && <Tag tone="blue">Desk only</Tag>}
+                {!p.is_public && <Tag tone="blue">Revenue staff only</Tag>}
                 <span className="text-xs text-slate-600">
                   {p.name} · used {p.redemption_count}
                   {p.max_redemptions !== null ? ` of ${p.max_redemptions}` : ""} time(s)

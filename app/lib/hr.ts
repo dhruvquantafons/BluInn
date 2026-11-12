@@ -301,3 +301,69 @@ export function approvedHoursIn(
   }
   return { regular: round2h(regular), overtime: round2h(overtime), offDay: round2h(offDay), weeks };
 }
+
+/**
+ * The empty roster cells a fill should write: each person's pattern shift,
+ * or a day off on their weekly off. A day they are on approved leave is left
+ * empty (0041), so the roster does not show them working through their leave.
+ */
+export function rosterCellsToFill(input: {
+  days: string[];
+  people: { id: string; default_shift_id: string | null; weekly_off: number | null }[];
+  taken: Set<string>;
+  leave: { staff_id: string; start_date: string; end_date: string }[];
+  dayOfWeek: (day: string) => number;
+}): { staff_id: string; shift_date: string; shift_type_id: string | null }[] {
+  const onLeave = (staffId: string, day: string) =>
+    input.leave.some((l) => l.staff_id === staffId && l.start_date <= day && l.end_date >= day);
+  return input.people.flatMap((p) =>
+    input.days
+      .filter((d) => !input.taken.has(`${p.id}:${d}`) && !onLeave(p.id, d))
+      .map((d) => ({
+        staff_id: p.id,
+        shift_date: d,
+        shift_type_id: p.weekly_off === input.dayOfWeek(d) ? null : p.default_shift_id,
+      })),
+  );
+}
+
+/**
+ * Who may cancel a leave request (0043): its owner while it is pending, or
+ * once approved until its first day; HR (hr.manage) at any time, with a
+ * reason when it is someone else's approved leave. Returns a sentence, or null.
+ */
+export function leaveCancelProblem(
+  req: { status: string; start_date: string; staff_id: string },
+  who: { staffId: string; isHr: boolean; today: string; reason: string },
+): string | null {
+  if (req.status !== "pending" && req.status !== "approved") return "Only pending or approved leave can be cancelled.";
+  const own = req.staff_id === who.staffId;
+  if (!own && !who.isHr) return "That leave is not yours.";
+  if (own && (req.status === "pending" || req.start_date > who.today)) return null;
+  if (!who.isHr) return "This leave has started. Ask HR to cancel it.";
+  if (req.status === "approved" && !who.reason) return "Give a reason for cancelling someone's approved leave.";
+  return null;
+}
+
+/**
+ * Checks a manual attendance record (0043): no clock-out in the future, a
+ * clock-out after the clock-in, and no overlap with the person's other
+ * records (an open one runs until now). Returns a sentence, or null.
+ */
+export function attendanceProblem(
+  clockIn: Date,
+  clockOut: Date | null,
+  others: { clock_in: string; clock_out: string | null }[],
+  now: Date = new Date(),
+): string | null {
+  if (clockOut && clockOut.getTime() > now.getTime() + 5 * 60000) return "Clock-out cannot be in the future.";
+  if (clockOut && clockOut.getTime() <= clockIn.getTime()) return "Clock-out must be after clock-in.";
+  const start = clockIn.getTime();
+  const end = (clockOut ?? now).getTime();
+  const overlaps = others.some((o) => {
+    const oStart = new Date(o.clock_in).getTime();
+    const oEnd = o.clock_out ? new Date(o.clock_out).getTime() : Number.POSITIVE_INFINITY;
+    return oStart < end && start < oEnd;
+  });
+  return overlaps ? "This overlaps another attendance record for the same person." : null;
+}

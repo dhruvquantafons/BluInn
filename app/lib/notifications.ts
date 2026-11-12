@@ -224,8 +224,14 @@ export async function sendBookingMessage(
   } = {},
 ): Promise<SendSummary> {
   // The guest's language when a template exists for it, else the property's.
+  // The hotel's own wording first, then the group's (property_id null).
   const [{ data: templateRows }, { data: guest }] = await Promise.all([
-    db.from("message_templates").select("*").eq("template", template),
+    db
+      .from("message_templates")
+      .select("*")
+      .eq("template", template)
+      .or(hotel.id ? `property_id.is.null,property_id.eq.${hotel.id}` : "property_id.is.null")
+      .order("property_id", { ascending: true, nullsFirst: false }),
     booking.guest_id
       ? db.from("guests").select("language").eq("id", booking.guest_id).maybeSingle()
       : Promise.resolve({ data: null }),

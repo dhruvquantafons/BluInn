@@ -111,10 +111,15 @@ export default async function HrSetupPage() {
                     className={`${inputClass} w-20`}
                   />
                 </ActionForm>
-                <form action={deleteDepartment}>
+                <ActionForm
+                  action={deleteDepartment}
+                  submitLabel="Remove"
+                  pendingLabel="Removing…"
+                  submitClassName="text-xs text-rose-700 cursor-pointer"
+                  className="space-y-1"
+                >
                   <input type="hidden" name="id" value={d.id} />
-                  <button className="text-xs text-rose-700 cursor-pointer">Remove</button>
-                </form>
+                </ActionForm>
               </li>
             ))}
           </ul>

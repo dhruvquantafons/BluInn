@@ -35,11 +35,32 @@ export function friendlyDbError(message: string | undefined | null): string {
     "REFUND_EXCEEDS_PAID:",
     "EVENT_REFUND_EXCEEDS_PAID:",
     "POS_DAY_CLOSED:",
+    // Fix-first guards (0040).
+    "EVENT_ON_CLOSED_FOLIO:",
+    "STAFF_SELF:",
+    "STAFF_NOT_FOUND:",
+    // Data-flow guards (0041).
+    "POS_OTHER_PROPERTY:",
+    "EVENT_OTHER_PROPERTY:",
+    "EVENT_ON_FOLIO:",
+    "GUEST_ERASED:",
+    "PROPERTY_NOT_YOURS:",
+    // Event rooms (0042).
+    "EVENT_ROOMS_",
+    // Validations (0043).
+    "BOOKING_CLOSED:",
+    "POS_ORDER_SETTLED:",
+    "PROMO_USED_UP:",
+    "LEAVE_WORKED:",
+    "PROPERTY_CLOSED:",
   ]) {
     if (message.startsWith(code)) {
       const detail = message.slice(message.indexOf(":") + 1).trim();
       if (detail) return `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`;
     }
+  }
+  if (message.includes("pos_order_lines_unit_price_check")) {
+    return "An item's price with its modifiers cannot be below ₹0.";
   }
   if (message.startsWith("REFUND_SELF_APPROVAL")) {
     return "A refund must be approved by someone other than the person who requested it.";
@@ -240,6 +261,9 @@ export function friendlyDbError(message: string | undefined | null): string {
 
   if (/row-level security/i.test(message)) {
     return "Your role does not allow that change.";
+  }
+  if (message.includes("invoices_one_issued_per_folio")) {
+    return "This folio already has an issued invoice. Cancel it before issuing another.";
   }
   if (/duplicate key/i.test(message)) {
     return "That already exists.";

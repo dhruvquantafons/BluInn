@@ -6,7 +6,7 @@ import { getSettings } from "../../../../lib/settings";
 import { addDays, eachNight, todayIn } from "../../../../lib/dates";
 import type { LeaveRequest } from "../../../../lib/types";
 import { LEAVE_KIND_LABELS, LEAVE_STATUS_LABELS } from "../../../../lib/types";
-import { decideLeave } from "../../../hr-actions";
+import { cancelLeave, decideLeave } from "../../../hr-actions";
 import {
   Card,
   EmptyState,
@@ -33,6 +33,7 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
   const session = await requireAnyPermission(["hr.approve_leave", "hr.view"]);
   const page = pageParam((await searchParams).page);
   const approver = can(session, "hr.approve_leave");
+  const hrManager = can(session, "hr.manage");
   const supabase = await createClient();
   const today = todayIn((await getSettings()).timezone);
 
@@ -121,6 +122,18 @@ export default async function LeavePage({ searchParams }: { searchParams: Promis
                   </span>
                 </span>
                 <Tag tone={TONE[r.status]}>{LEAVE_STATUS_LABELS[r.status]}</Tag>
+                {/* HR can cancel approved leave at any time, with a reason (0043). */}
+                {hrManager && r.status === "approved" && (
+                  <details className="relative">
+                    <summary className="text-xs text-rose-700 cursor-pointer list-none">Cancel</summary>
+                    <div className="absolute right-0 z-10 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-md p-3">
+                      <ActionForm action={cancelLeave} submitLabel="Cancel leave" submitClassName={dangerButtonClass} className="space-y-2">
+                        <input type="hidden" name="id" value={r.id} />
+                        <input name="reason" required placeholder="Reason" className={inputClass} />
+                      </ActionForm>
+                    </div>
+                  </details>
+                )}
               </li>
             ))}
           </ul>

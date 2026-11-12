@@ -1,7 +1,9 @@
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { emailConfigured } from "../../../../lib/integrations";
-import { reportByKind } from "../../../../lib/reports";
+import { reportByKind, scheduleNeedsFinancial } from "../../../../lib/reports";
+import { can } from "../../../../lib/permissions";
+import Link from "next/link";
 import type { ReportSchedule } from "../../../../lib/types";
 import { REPORT_FREQUENCY_LABELS } from "../../../../lib/types";
 import { saveReportSchedule, deleteReportSchedule, sendReportNow } from "../../../report-actions";
@@ -24,6 +26,7 @@ import ActionForm from "../../../components/ActionForm";
  *  of the email rather than a table, which is what a GM actually reads. */
 const SENDABLE = [
   { value: "kpi_summary", label: "Performance summary (occupancy, ADR, RevPAR)" },
+  { value: "flash", label: "Manager's flash report (day, month and year to date)" },
   { value: "daily_revenue", label: "Daily revenue" },
   { value: "outstanding", label: "Outstanding payments" },
   { value: "outlet_sales", label: "Outlet-wise sales" },
@@ -35,12 +38,18 @@ const SENDABLE = [
  * Scheduled email reports (Module 13). The sending is done by
  * /api/cron/reports so a report goes out whether or not anyone is signed in.
  */
-export default async function ReportSchedulesPage() {
-  await requirePermission("reports.schedule");
+export default async function ReportSchedulesPage({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
+  const session = await requirePermission("reports.schedule");
   const supabase = await createClient();
+  const { edit } = await searchParams;
 
   const { data } = await supabase.from("report_schedules").select("*").order("created_at");
   const schedules = (data ?? []) as ReportSchedule[];
+  // The schedule being edited, opened from its row; its fields fill the form (0043).
+  const editing = schedules.find((s) => s.id === edit) ?? null;
+  // Revenue and financial reports go only to someone who may see them (0043).
+  const financial = can(session, "reports.financial");
+  const offered = SENDABLE.filter((r) => financial || !scheduleNeedsFinancial(r.value));
   const emailReady = emailConfigured();
   const cronReady = Boolean(process.env.CRON_SECRET);
 
@@ -112,6 +121,9 @@ export default async function ReportSchedulesPage() {
                     </td>
                     <td className="py-2 pr-4 text-right">
                       <div className="flex items-center justify-end gap-3">
+                        <Link href={`/reports/schedules?edit=${s.id}#schedule-form`} className="text-[11px] text-brand-800 hover:underline">
+                          Edit
+                        </Link>
                         <ActionForm action={sendReportNow} submitLabel="Send now" submitClassName={secondaryButtonClass}>
                           <input type="hidden" name="id" value={s.id} />
                         </ActionForm>
@@ -136,26 +148,41 @@ export default async function ReportSchedulesPage() {
         )}
       </Card>
 
+      <div id="schedule-form" className="scroll-mt-20" />
       <Card className="p-5">
-        <SectionTitle>Add or edit a schedule</SectionTitle>
-        <ActionForm action={saveReportSchedule} submitLabel="Save schedule" submitClassName={secondaryButtonClass} className="space-y-3">
-          <Field label="Editing" hint="Leave blank to add a new one.">
-            <select name="id" defaultValue="" className={inputClass}>
-              <option value="">New schedule</option>
-              {schedules.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <SectionTitle
+          action={
+            editing ? (
+              <Link href="/reports/schedules#schedule-form" className="text-xs text-brand-800 hover:underline">
+                New schedule instead
+              </Link>
+            ) : undefined
+          }
+        >
+          {editing ? `Edit “${editing.name}”` : "Add a schedule"}
+        </SectionTitle>
+        <ActionForm
+          key={editing?.id ?? "new"}
+          action={saveReportSchedule}
+          submitLabel="Save schedule"
+          submitClassName={secondaryButtonClass}
+          className="space-y-3"
+        >
+          {editing && <input type="hidden" name="id" value={editing.id} />}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Name">
-              <input name="name" required maxLength={80} placeholder="Morning figures to the owner" className={inputClass} />
+              <input
+                name="name"
+                required
+                maxLength={80}
+                defaultValue={editing?.name ?? ""}
+                placeholder="Morning figures to the owner"
+                className={inputClass}
+              />
             </Field>
             <Field label="Report">
-              <select name="report" defaultValue="kpi_summary" className={inputClass}>
-                {SENDABLE.map((s) => (
+              <select name="report" defaultValue={editing?.report ?? offered[0]?.value} className={inputClass}>
+                {offered.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
                   </option>
@@ -163,7 +190,7 @@ export default async function ReportSchedulesPage() {
               </select>
             </Field>
             <Field label="How often">
-              <select name="frequency" defaultValue="daily" className={inputClass}>
+              <select name="frequency" defaultValue={editing?.frequency ?? "daily"} className={inputClass}>
                 {Object.entries(REPORT_FREQUENCY_LABELS).map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
@@ -173,9 +200,15 @@ export default async function ReportSchedulesPage() {
             </Field>
           </div>
           <Field label="Send to" hint="One address per line, or comma separated.">
-            <textarea name="recipients" rows={3} placeholder={"owner@example.com\ngm@example.com"} className={inputClass} />
+            <textarea
+              name="recipients"
+              rows={3}
+              defaultValue={editing ? editing.recipients.split(",").map((r) => r.trim()).join("\n") : ""}
+              placeholder={"owner@example.com\ngm@example.com"}
+              className={inputClass}
+            />
           </Field>
-          <Check name="is_active" defaultChecked label="Active" />
+          <Check name="is_active" defaultChecked={editing ? editing.is_active : true} label="Active" />
           <p className="text-[11px] text-slate-500">
             Financial reports go out to whoever is listed here, so keep the list to people who should see revenue.
           </p>

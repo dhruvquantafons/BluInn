@@ -27,7 +27,7 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
   const supabase = await createClient();
 
   const [{ data: group }, { data: bookings }, { data: types }] = await Promise.all([
-    supabase.from("booking_groups").select("*, rate_plans(name)").eq("id", id).maybeSingle(),
+    supabase.from("booking_groups").select("*, rate_plans(name), event_bookings(id, number, title)").eq("id", id).maybeSingle(),
     supabase
       .from("bookings")
       .select("*, room_types(id, name), rooms(id, room_number)")
@@ -37,7 +37,10 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
   ]);
   if (!group) notFound();
 
-  const g = group as BookingGroup & { rate_plans: { name: string } | null };
+  const g = group as BookingGroup & {
+    rate_plans: { name: string } | null;
+    event_bookings: { id: string; number: string; title: string } | null;
+  };
   const rooms = (bookings ?? []) as Booking[];
   const live = rooms.filter((b) => !["cancelled", "no_show"].includes(b.status));
   const total = live.reduce((s, b) => s + Number(b.total_amount ?? 0), 0);
@@ -54,6 +57,16 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
         {g.rate_plans?.name ?? "No plan"} · {plural(live.length, "room")} · {fmtMoney(total)}
         {g.organiser_name && ` · organiser ${g.organiser_name} ${g.organiser_phone}`}
       </p>
+      {g.event_bookings && (
+        <p className="text-xs text-slate-600 -mt-4 mb-6">
+          Rooms for the event{" "}
+          <Link href={`/events/${g.event_bookings.id}`} className="text-brand-700 hover:underline">
+            {g.event_bookings.number} {g.event_bookings.title}
+          </Link>
+          . {g.room_billing === "organiser" ? "The organiser pays: room nights go on the event's invoice." : "Each guest pays for their own room."}
+          {g.release_on && ` Rooms still unnamed on ${fmtDate(g.release_on)} go back on sale.`}
+        </p>
+      )}
 
       <div className="space-y-6">
         <Card className="p-4 flex flex-wrap gap-3 items-start">

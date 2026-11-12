@@ -35,6 +35,7 @@ const LABEL = { ok: "Working", off: "Not set up", warn: "Check" } as const;
 /** The scheduled jobs BluInn expects, and how often each should run. */
 const JOBS: { job: string; label: string; everyHours: number }[] = [
   { job: "notifications", label: "Guest and staff messages", everyHours: 24 },
+  { job: "pricing", label: "Pricing rules", everyHours: 24 },
   { job: "maintenance", label: "Maintenance escalation and preventive tickets", everyHours: 1 },
   { job: "reports", label: "Scheduled report emails", everyHours: 24 },
 ];

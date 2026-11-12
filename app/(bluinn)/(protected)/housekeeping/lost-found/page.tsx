@@ -4,11 +4,12 @@ import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { todayIn } from "../../../../lib/dates";
 import type { LostFoundItem, Room } from "../../../../lib/types";
-import { logLostItem } from "../../../housekeeping-actions";
+import { logLostItem, updateLostItem } from "../../../housekeeping-actions";
 import {
   Card,
   Field,
   SectionTitle,
+  Tag,
   EmptyState,
   inputClass,
   fmtDate,
@@ -30,14 +31,17 @@ export default async function LostFoundPage({ searchParams }: { searchParams: Pr
   const [{ data, error, count }, { data: rooms }] = await Promise.all([
     supabase
       .from("lost_found_items")
-      .select("*, rooms(room_number), staff:found_by(full_name)", { count: "exact" })
+      .select("*, rooms(room_number), staff:found_by(full_name), bookings(reference, contact_name)", { count: "exact" })
       .order("found_on", { ascending: false })
       .order("created_at", { ascending: false })
       .range(...pageRange(page)),
     supabase.from("rooms").select("id, room_number").order("room_number"),
   ]);
   if (outOfRange(error)) redirect(pageHref("/housekeeping/lost-found", {}, 1));
-  const items = (data ?? []) as (LostFoundItem & { staff: { full_name: string } | null })[];
+  const items = (data ?? []) as (LostFoundItem & {
+    staff: { full_name: string } | null;
+    bookings: { reference: string; contact_name: string } | null;
+  })[];
 
   return (
     <div className="space-y-6">
@@ -82,7 +86,48 @@ export default async function LostFoundPage({ searchParams }: { searchParams: Pr
                 <p className="text-xs text-slate-500 mt-0.5">
                   {i.rooms?.room_number ? `Room ${i.rooms.room_number}` : i.location} · found {fmtDate(i.found_on)}
                   {i.staff?.full_name && ` by ${i.staff.full_name}`}
+                  {i.storage_location && ` · kept in ${i.storage_location}`}
+                  {i.bookings && ` · ${i.bookings.reference} ${i.bookings.contact_name}`}{" "}
+                  <Tag tone={i.status === "stored" ? "amber" : i.status === "returned" ? "green" : "neutral"}>
+                    {i.status === "stored" ? "Stored" : i.status === "returned" ? `Returned to ${i.returned_to}` : "Disposed"}
+                  </Tag>
                 </p>
+                <details className="mt-2">
+                  <summary className="text-[11px] text-brand-700 cursor-pointer">Update</summary>
+                  <ActionForm action={updateLostItem} submitLabel="Save" className="mt-2 space-y-2">
+                    <input type="hidden" name="id" value={i.id} />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Field label="Category">
+                        <select name="category" defaultValue={i.category} className={inputClass}>
+                          {["electronics", "documents", "jewellery", "clothing", "money", "other"].map((c) => (
+                            <option key={c} value={c}>
+                              {c[0].toUpperCase() + c.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Kept in">
+                        <input name="storage_location" defaultValue={i.storage_location} placeholder="HK office locker 2" className={inputClass} />
+                      </Field>
+                      <Field label="Guest's booking" hint="Reference, if you know whose it is">
+                        <input name="booking_reference" defaultValue={i.bookings?.reference ?? ""} placeholder="BK-1234" className={inputClass} />
+                      </Field>
+                      <Field label="Status">
+                        <select name="status" defaultValue={i.status} className={inputClass}>
+                          <option value="stored">Stored</option>
+                          <option value="returned">Returned</option>
+                          <option value="disposed">Disposed</option>
+                        </select>
+                      </Field>
+                      <Field label="Returned to">
+                        <input name="returned_to" defaultValue={i.returned_to} placeholder="Name, and how (courier, in person)" className={inputClass} />
+                      </Field>
+                      <Field label="Notes">
+                        <input name="notes" defaultValue={i.notes} className={inputClass} />
+                      </Field>
+                    </div>
+                  </ActionForm>
+                </details>
               </li>
             ))}
           </ul>

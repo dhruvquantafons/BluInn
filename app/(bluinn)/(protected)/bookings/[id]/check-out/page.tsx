@@ -5,11 +5,13 @@ import { createClient } from "../../../../../lib/supabase/server";
 import { requirePermission } from "../../../../../lib/auth";
 import { can } from "../../../../../lib/permissions";
 import { getSettings, hhmm, taxSlabsOf } from "../../../../../lib/settings";
-import { ancillaryCharge, loadFolio } from "../../../../../lib/folio";
+import { ancillaryCharge, loadGuestFolio } from "../../../../../lib/folio";
 import { timingFee, isLate } from "../../../../../lib/policies";
 import { rateForNight } from "../../../../../lib/pricing";
 import { splitRoomTax } from "../../../../../lib/tax";
-import { todayIn, nowTimeIn, eachNight, addDays } from "../../../../../lib/dates";
+import { todayIn, nowTimeIn, eachNight } from "../../../../../lib/dates";
+import { checkoutDeparture, lateFeePosted, propertyInvoiceProblem, suggestedPayment } from "../../../../../lib/checkout";
+import { lastBillTo } from "../../../../../lib/invoice-issue";
 import type { Booking } from "../../../../../lib/types";
 import { PAYMENT_METHOD_CHOICES } from "../../../../../lib/types";
 import { checkOut } from "../../../../frontdesk-actions";
@@ -34,12 +36,26 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
 
   const today = todayIn(settings.timezone);
   const now = nowTimeIn(settings.timezone);
-  const folio = await loadFolio(supabase, id);
+  // The guest settles their own part; nights the event's organiser pays are
+  // billed on the event's invoice (0042).
+  const folio = await loadGuestFolio(supabase, id);
 
   // Preview what check-out will add, so the balance shown is the final one.
-  const departure =
-    booking.check_out > today ? (today > booking.check_in ? today : addDays(booking.check_in, 1)) : booking.check_out;
-  const posted = new Set(folio.entries.filter((e) => e.kind === "room" && !e.voided_at).map((e) => e.stay_date));
+  // The same rules as the checkOut action (app/lib/checkout.ts).
+  const { data: nextPart } = await supabase
+    .from("bookings")
+    .select("reference, check_in")
+    .eq("split_from_id", id)
+    .in("status", ["tentative", "confirmed"])
+    .order("check_in")
+    .limit(1)
+    .maybeSingle();
+  let departure = checkoutDeparture(booking, today, settings.business_date);
+  if (nextPart && departure > nextPart.check_in) departure = nextPart.check_in;
+  const handedOver = Boolean(nextPart && departure === nextPart.check_in);
+  const posted = new Set(
+    [...folio.entries, ...folio.organiser].filter((e) => e.kind === "room" && !e.voided_at).map((e) => e.stay_date),
+  );
   const unposted = eachNight(booking.check_in, departure).filter((n) => !posted.has(n));
   const slabs = taxSlabsOf(settings);
   const unpostedTotal = unposted.reduce((s, n) => {
@@ -47,7 +63,10 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
     return s + (split.net + split.tax) * booking.rooms_count;
   }, 0);
 
-  const late = booking.check_out <= today && isLate(now, settings.check_out_time);
+  const late =
+    !handedOver && departure >= booking.check_out && departure <= today && isLate(now, settings.check_out_time);
+  // A retried check-out has already posted it.
+  const feeDone = lateFeePosted(folio.entries, today);
   const lastNight = eachNight(booking.check_in, departure).at(-1) ?? booking.check_in;
   const lateFee = late
     ? timingFee(
@@ -60,7 +79,15 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
   const lateFeeCharge = ancillaryCharge(lateFee, booking, settings, lastNight);
   const lateFeeTotal = Math.round((lateFeeCharge.amount + lateFeeCharge.tax_amount) * 100) / 100;
 
-  const projected = Math.round((folio.totals.balance + unpostedTotal) * 100) / 100;
+  // Nights still to post for an organiser-paid room go to the event, not the guest.
+  const { data: group } = booking.group_id
+    ? await supabase.from("booking_groups").select("event_id, room_billing").eq("id", booking.group_id).maybeSingle()
+    : { data: null };
+  const organiserPays = Boolean(group?.event_id && group.room_billing === "organiser");
+  const projected = Math.round((folio.totals.balance + (organiserPays ? 0 : unpostedTotal)) * 100) / 100;
+  const chargeFee = late && lateFee > 0 && !feeDone;
+  const invoiceProblem = can(session, "folio.invoice") ? propertyInvoiceProblem(settings) : null;
+  const billTo = await lastBillTo(supabase, booking);
 
   return (
     <>
@@ -77,6 +104,30 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
       </p>
 
       <div className="space-y-4 max-w-3xl">
+        {(folio.organiser.length > 0 || organiserPays) && (
+          <Notice tone="info">
+            The event&apos;s organiser pays for this room
+            {folio.organiser.length > 0 ? ` (${fmtMoney(folio.organiserTotals.charges + folio.organiserTotals.tax)} so far)` : ""}. Its
+            nights are billed on the event&apos;s invoice, not settled here; the guest settles only their own extras.
+          </Notice>
+        )}
+        {handedOver && nextPart && (
+          <Notice tone="info">
+            This stay was split. Checking out ends this part on {fmtDate(departure)} and checks the guest in to{" "}
+            {nextPart.reference} in the same room. Their keys keep working and the room is not sent for cleaning.
+          </Notice>
+        )}
+        {departure > booking.check_out && (
+          <Notice tone="warn">
+            Stayed past the due-out date of {fmtDate(booking.check_out)}: the nights up to {fmtDate(departure)} are charged.
+          </Notice>
+        )}
+        {invoiceProblem && (
+          <Notice tone="warn">
+            No tax invoice can be issued yet: {invoiceProblem} The guest can still check out; issue the invoice from the
+            folio once that is set.
+          </Notice>
+        )}
         {booking.check_out > today && (
           <Notice tone="warn">
             Early departure: the stay will end today, {fmtDate(departure)}. Nights after that are released and not charged.
@@ -103,7 +154,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
               <dt className="text-xs text-slate-500 font-semibold">Balance to settle</dt>
               <dd className={projected > 0 ? "text-rose-700 font-medium" : "text-emerald-700 font-medium"}>
                 {fmtMoney(projected)}
-                {late && lateFee > 0 ? ` + late fee ${fmtMoney(lateFeeTotal)}` : ""}
+                {chargeFee ? ` + late fee ${fmtMoney(lateFeeTotal)}` : ""}
               </dd>
             </div>
           </dl>
@@ -118,7 +169,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
           <ActionForm action={checkOut} submitLabel="Check out" pendingLabel="Checking out…">
             <input type="hidden" name="booking_id" value={id} />
 
-            {late && lateFee > 0 && (
+            {chargeFee && (
               <Check
                 name="apply_late_fee"
                 defaultChecked
@@ -134,7 +185,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
                     name="payment_amount"
                     min={0}
                     step="0.01"
-                    defaultValue={projected > 0 ? projected : undefined}
+                    defaultValue={suggestedPayment(projected, lateFeeTotal, chargeFee) || undefined}
                     className={inputClass}
                   />
                 </Field>
@@ -165,7 +216,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
                 <p className="text-xs text-slate-600">
                   A tax invoice is issued for each folio as the guest checks out. For a business guest, add the GSTIN and address.
                 </p>
-                <BillToFields defaults={{ name: booking.contact_name, gstin: "", address: "" }} taxRegime={settings.tax_regime ?? "gst"} />
+                <BillToFields defaults={billTo} taxRegime={settings.tax_regime ?? "gst"} />
               </div>
             )}
 

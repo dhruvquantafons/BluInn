@@ -565,6 +565,10 @@ export interface BookingGroup {
   check_out: string;
   notes: string;
   created_at: string;
+  /** An event's room block (0042): the event, the cut-off for unsold rooms, and who pays. */
+  event_id?: string | null;
+  release_on?: string | null;
+  room_billing?: "guest" | "organiser";
 }
 
 export interface FolioEntry {
@@ -713,6 +717,8 @@ export interface CashMovement {
 export type FolioType = "master" | "split";
 
 export interface Folio {
+  /** Set on an "Organiser" folio: its nights are billed on this event's invoice (0042). */
+  event_id?: string | null;
   id: string;
   booking_id: string;
   kind: FolioType;
@@ -922,6 +928,8 @@ export interface GuestRequest {
 }
 
 export interface PropertySettings {
+  /** The hotel these settings belong to (the property_settings view has it; the built-in defaults do not). */
+  id?: string;
   name: string;
   legal_name: string;
   address: string;
@@ -1784,6 +1792,7 @@ export interface ReportSchedule {
   is_active: boolean;
   last_sent_at: string | null;
   last_status: string;
+  created_by?: string | null;
   created_at: string;
 }
 

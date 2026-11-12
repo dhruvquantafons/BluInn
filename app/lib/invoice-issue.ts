@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { friendlyDbError } from "./db-errors";
-import { invoiceLines, invoiceTotals, taxBreakdown, gstTotals, formatInvoiceNumber, financialYearOf } from "./invoices";
+import { invoiceLines, invoiceTotals, taxBreakdown, gstTotals, formatInvoiceNumber, financialYearOf, foliosToInvoice } from "./invoices";
 import { invoiceTaxFields } from "./gst";
 import { todayIn } from "./dates";
 import type { Booking, FolioEntry, PropertySettings } from "./types";
@@ -27,7 +27,7 @@ export async function issueFolioInvoice(
   folioId: string,
   billTo: BillTo,
   staffId: string,
-): Promise<{ error: string } | { id: string; number: string; bookingId: string }> {
+): Promise<{ error: string; overAllowed?: true } | { id: string; number: string; bookingId: string }> {
   const { data: folio } = await supabase
     .from("folios")
     .select("id, booking_id, label")
@@ -84,7 +84,7 @@ export async function issueFolioInvoice(
 
   const lines = invoiceLines(entries, { regime, interstate: tax.fields.is_interstate });
   const totals = invoiceTotals(lines);
-  if (totals.net < 0) return { error: "Allowances on this folio are larger than its charges." };
+  if (totals.net < 0) return { error: "Allowances on this folio are larger than its charges.", overAllowed: true };
   const bands = taxBreakdown(lines);
   const split = gstTotals(lines);
 
@@ -133,4 +133,96 @@ export async function issueFolioInvoice(
   if (error) return { error: friendlyDbError(error.message) };
 
   return { id: invoice.id as string, number: invoice.number as string, bookingId: folio.booking_id as string };
+}
+
+/**
+ * How a returning business guest was billed last time, so check-out and the
+ * folio's invoice form start from their GSTIN and address rather than a
+ * bare name (a B2C invoice to a company is a credit note later).
+ */
+export async function lastBillTo(
+  supabase: SupabaseClient,
+  booking: Pick<Booking, "guest_id" | "contact_name">,
+): Promise<BillTo> {
+  const billTo: BillTo = { name: booking.contact_name, gstin: "", address: "" };
+  if (!booking.guest_id) return billTo;
+  const { data: stays } = await supabase.from("bookings").select("id").eq("guest_id", booking.guest_id);
+  const ids = (stays ?? []).map((b) => b.id as string);
+  if (ids.length === 0) return billTo;
+  const { data: last } = await supabase
+    .from("invoices")
+    .select("bill_to_name, bill_to_gstin, bill_to_address")
+    .in("booking_id", ids)
+    .neq("bill_to_gstin", "")
+    .order("issued_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return last ? { name: last.bill_to_name, gstin: last.bill_to_gstin, address: last.bill_to_address } : billTo;
+}
+
+/**
+ * Checks a bill-to against what a tax invoice must carry, before anything is
+ * posted, so check-out can refuse cleanly instead of half-way through.
+ * `grandTotal` is the largest invoice the stay will produce.
+ */
+export function billToProblem(
+  settings: PropertySettings,
+  billTo: BillTo,
+  contactName: string,
+  grandTotal: number,
+): string | null {
+  const tax = invoiceTaxFields(
+    { name: billTo.name || contactName, gstin: billTo.gstin, address: billTo.address },
+    {
+      regime: settings.tax_regime ?? "gst",
+      propertyGstin: settings.gstin,
+      propertyStateCode: settings.gst_state_code,
+      propertyState: settings.state,
+      invoicePrefix: settings.invoice_prefix,
+      grandTotal,
+    },
+  );
+  return "error" in tax ? tax.error : null;
+}
+
+/**
+ * Issues an invoice for every folio of a stay that holds charges and has
+ * none yet: at check-out, after a cancellation or no-show penalty, and when
+ * a split stay hands over. Stops at the first refusal and says which.
+ *
+ * A folio whose allowances outweigh its charges has nothing to put on a tax
+ * invoice, so it is skipped and named in `skipped` rather than refusing the
+ * whole check-out (0043); the desk corrects it from the folio.
+ */
+export async function issueOutstandingInvoices(
+  supabase: SupabaseClient,
+  settings: PropertySettings,
+  bookingId: string,
+  billTo: BillTo,
+  staffId: string,
+): Promise<{ issued: string[]; skipped: string[]; error: string | null }> {
+  const [{ data: entryRows }, { data: issuedRows }, { data: eventFolios }] = await Promise.all([
+    supabase.from("folio_entries").select("folio_id, kind, voided_at, amount, tax_amount").eq("booking_id", bookingId),
+    supabase.from("invoices").select("folio_id").eq("booking_id", bookingId).eq("status", "issued"),
+    // An organiser folio is invoiced on its event's invoice, never to the guest (0042).
+    supabase.from("folios").select("id").eq("booking_id", bookingId).not("event_id", "is", null),
+  ]);
+  const toInvoice = foliosToInvoice(
+    (entryRows ?? []) as Pick<FolioEntry, "folio_id" | "kind" | "voided_at" | "amount" | "tax_amount">[],
+    new Set([...(issuedRows ?? []).map((r) => r.folio_id as string), ...(eventFolios ?? []).map((f) => f.id as string)]),
+  );
+  const issued: string[] = [];
+  const skipped: string[] = [];
+  for (const folioId of toInvoice) {
+    const r = await issueFolioInvoice(supabase, settings, folioId, billTo, staffId);
+    if ("error" in r) {
+      if (r.overAllowed) {
+        skipped.push(folioId);
+        continue;
+      }
+      return { issued, skipped, error: r.error };
+    }
+    issued.push(r.number);
+  }
+  return { issued, skipped, error: null };
 }

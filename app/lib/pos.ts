@@ -227,3 +227,16 @@ export function outletSummary(
     })
     .sort((a, b) => b.openBills - a.openBills || a.outlet.sort_order - b.outlet.sort_order);
 }
+
+/**
+ * A modifier may take money off ("no cheese, −₹30"), but never take an item
+ * below ₹0 (0043). Checked against every item it is offered on; the cheapest
+ * one sets the limit. Returns a sentence, or null when it is fine.
+ */
+export function modifierFloorProblem(delta: number, items: { name: string; price: number }[]): string | null {
+  if (delta >= 0) return null;
+  const cheapest = [...items].sort((a, b) => Number(a.price) - Number(b.price))[0];
+  if (!cheapest || Number(cheapest.price) + delta >= 0) return null;
+  const price = Number(cheapest.price).toLocaleString("en-IN");
+  return `${cheapest.name} costs ₹${price}, so this modifier can take off at most ₹${price}.`;
+}

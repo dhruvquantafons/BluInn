@@ -3,20 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../lib/supabase/server";
 import { requirePermission } from "../lib/auth";
+import { can } from "../lib/permissions";
 import { getSettings } from "../lib/settings";
-import { friendlyDbError } from "../lib/db-errors";
-import { financialYearOf, formatInvoiceNumber, gstTotals, invoiceTotals, taxBreakdown } from "../lib/invoices";
-import { invoiceTaxFields, splitGst } from "../lib/gst";
+import { friendlyDbError, isOverbooked } from "../lib/db-errors";
+import { loadPricingData } from "../lib/rate-data";
+import { quoteStay } from "../lib/pricing";
+import { financialYearOf } from "../lib/invoices";
 import { clientName, defaultPaymentTerms, eventHours, formatEventNumber, holdWindow } from "../lib/events";
-import { todayIn } from "../lib/dates";
+import { invoiceEvent } from "../lib/event-invoice";
 import type {
   EventBooking,
   EventSpace,
   EventType,
-  InvoiceLine,
   PaymentMethod,
   RentalBasis,
-  TaxBand,
 } from "../lib/types";
 import {
   type ActionState,
@@ -82,6 +82,34 @@ const timeStr = (fd: FormData, key: string) => {
  * and the confirmed event becomes the bill, so the history of a function is
  * one row with one number on it.
  */
+/**
+ * A layout must be one of the chosen space's own, and still in use (0043):
+ * the form could send a layout from another hall. Returns a sentence, or null.
+ */
+async function layoutProblem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  spaceId: string,
+  layoutId: string | null,
+): Promise<string | null> {
+  if (!layoutId) return null;
+  const { data } = await supabase.from("event_layouts").select("space_id, is_active").eq("id", layoutId).maybeSingle();
+  if (!data || data.space_id !== spaceId) return "That layout belongs to a different space.";
+  if (!data.is_active) return "That layout is no longer in use. Choose another.";
+  return null;
+}
+
+/** A line added to or taken off an approved quotation changes its price, so it needs approving again (0043). */
+async function unapproveIfQuoted(supabase: Awaited<ReturnType<typeof createClient>>, eventId: string): Promise<string> {
+  const { data } = await supabase
+    .from("event_bookings")
+    .update({ approved_at: null, approved_by: null, updated_at: new Date().toISOString() })
+    .eq("id", eventId)
+    .eq("status", "quoted")
+    .not("approved_at", "is", null)
+    .select("id");
+  return data && data.length > 0 ? " The quotation needs approving again: send it again, then ask a manager." : "";
+}
+
 export async function createEvent(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const session = await requirePermission("events.book");
   const supabase = await createClient();
@@ -113,6 +141,9 @@ export async function createEvent(_prev: ActionState, fd: FormData): Promise<Act
     .maybeSingle();
   if (!spaceRow) return { error: "That space no longer exists." };
   const space = spaceRow as EventSpace;
+  if (!space.is_active) return { error: `${space.name} is no longer offered. Choose another space.` };
+  const badLayout = await layoutProblem(supabase, spaceId, uuidOrNull(fd, "layout_id"));
+  if (badLayout) return { error: badLayout };
 
   // The hall is held either side of the event by the space's own allowances,
   // so the diary does not promise it while it is being dressed or cleared.
@@ -210,6 +241,30 @@ export async function updateEvent(_prev: ActionState, fd: FormData): Promise<Act
     event.event_spaces?.teardown_minutes ?? 60,
   );
   const basis = oneOf(fd, "rental_basis", RENTAL_BASES, event.rental_basis);
+  const badLayout = await layoutProblem(supabase, event.space_id, uuidOrNull(fd, "layout_id"));
+  if (badLayout) return { error: badLayout };
+
+  // Anything that changes the price of an approved quotation sends it back
+  // for approval (0043); before, the old approval stood for the new price.
+  const priced = {
+    pax_expected: int(fd, "pax_expected", event.pax_expected, 1, 100000),
+    pax_guaranteed: int(fd, "pax_guaranteed", event.pax_guaranteed, 0, 100000),
+    package_id: uuidOrNull(fd, "package_id"),
+    rental_basis: basis,
+    rental_hours: basis === "hourly" ? (num(fd, "rental_hours") ?? eventHours(startTime, endTime)) : 0,
+    rental_override: basis === "custom" ? num(fd, "rental_override") : null,
+    discount_percent: Math.min(100, Math.max(0, num(fd, "discount_percent") ?? 0)),
+  };
+  const repriced =
+    priced.pax_expected !== event.pax_expected ||
+    priced.pax_guaranteed !== event.pax_guaranteed ||
+    priced.package_id !== (event.package_id ?? null) ||
+    priced.rental_basis !== event.rental_basis ||
+    Number(priced.rental_hours) !== Number(event.rental_hours) ||
+    (priced.rental_override === null ? null : Number(priced.rental_override)) !==
+      (event.rental_override === null || event.rental_override === undefined ? null : Number(event.rental_override)) ||
+    Number(priced.discount_percent) !== Number(event.discount_percent);
+  const unapprove = repriced && event.status === "quoted" && Boolean(event.approved_at);
 
   const { error } = await supabase
     .from("event_bookings")
@@ -228,22 +283,21 @@ export async function updateEvent(_prev: ActionState, fd: FormData): Promise<Act
       end_time: endTime,
       setup_from: hold.setup_from,
       teardown_to: hold.teardown_to,
-      pax_expected: int(fd, "pax_expected", event.pax_expected, 1, 100000),
-      pax_guaranteed: int(fd, "pax_guaranteed", event.pax_guaranteed, 0, 100000),
-      package_id: uuidOrNull(fd, "package_id"),
+      ...priced,
       menu_notes: str(fd, "menu_notes", 2000),
-      rental_basis: basis,
-      rental_hours: basis === "hourly" ? (num(fd, "rental_hours") ?? eventHours(startTime, endTime)) : 0,
-      rental_override: basis === "custom" ? num(fd, "rental_override") : null,
-      discount_percent: Math.min(100, Math.max(0, num(fd, "discount_percent") ?? 0)),
       notes: str(fd, "notes", 2000),
+      ...(unapprove ? { approved_at: null, approved_by: null } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
   if (error) return { error: friendlyDbError(error.message) };
 
   revalidateEvent(id);
-  return { success: "Event updated." };
+  return {
+    success: unapprove
+      ? "Event updated. The price changed, so the quotation needs approving again: send it again, then ask a manager."
+      : "Event updated.",
+  };
 }
 
 /** The banquet event order: what each department needs to know on the day. */
@@ -350,9 +404,10 @@ export async function addEventLine(_prev: ActionState, fd: FormData): Promise<Ac
     created_by: session.staff.id,
   });
   if (error) return { error: friendlyDbError(error.message) };
+  const reapprove = await unapproveIfQuoted(supabase, eventId);
 
   revalidateEvent(eventId);
-  return { success: `“${description}” added.` };
+  return { success: `“${description}” added.${reapprove}` };
 }
 
 export async function removeEventLine(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -364,9 +419,10 @@ export async function removeEventLine(_prev: ActionState, fd: FormData): Promise
 
   const { error } = await supabase.from("event_lines").delete().eq("id", id);
   if (error) return { error: friendlyDbError(error.message) };
+  const reapprove = eventId ? await unapproveIfQuoted(supabase, eventId) : "";
 
   revalidateEvent(eventId ?? undefined);
-  return { success: "Charge removed." };
+  return { success: `Charge removed.${reapprove}` };
 }
 
 // ── Quotation, approval, confirmation ───────────────────────────────────────
@@ -426,7 +482,7 @@ export async function confirmEvent(_prev: ActionState, fd: FormData): Promise<Ac
 }
 
 export async function completeEvent(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requirePermission("events.book");
+  const session = await requirePermission("events.book");
   const supabase = await createClient();
   const id = uuidOrNull(fd, "id");
   const paxActual = num(fd, "pax_actual");
@@ -444,12 +500,39 @@ export async function completeEvent(_prev: ActionState, fd: FormData): Promise<A
     .eq("id", id)
     .maybeSingle();
 
+  // A closed event is a supply made: it gets its tax invoice now, so its GST
+  // reaches the register (0041), unless it is already invoiced or billed to a
+  // room. Someone who cannot invoice is told to ask.
+  let invoiceNote = "";
+  const [{ data: invoiced }, { data: onFolio }] = await Promise.all([
+    supabase.from("invoices").select("id").eq("event_id", id).eq("status", "issued").limit(1),
+    supabase.from("event_payments").select("id").eq("event_id", id).eq("kind", "room_charge").is("voided_at", null).limit(1),
+  ]);
+  if ((invoiced ?? []).length === 0 && (onFolio ?? []).length === 0 && Number(data?.grand_total ?? 0) > 0) {
+    if (can(session, "folio.invoice")) {
+      const { data: client } = await supabase.from("event_bookings").select("*, guests(full_name)").eq("id", id).maybeSingle();
+      const issued = await invoiceEvent(supabase, await getSettings(), session.staff.id, id, {
+        name: client ? clientName(client as EventBooking) : "",
+        gstin: "",
+        address: "",
+      });
+      invoiceNote =
+        "error" in issued
+          ? ` The tax invoice was not issued: ${issued.error} Issue it below.`
+          : ` Invoice ${issued.number} issued.`;
+      revalidatePath("/billing/invoices");
+    } else {
+      invoiceNote = " Ask someone who can issue invoices to invoice it.";
+    }
+  }
+
   revalidateEvent(id);
   return {
     success:
-      paxActual > Number(data?.pax_guaranteed ?? 0)
+      (paxActual > Number(data?.pax_guaranteed ?? 0)
         ? `Closed at ${paxActual} attending, above the guarantee, so the catering has been rebilled on ${paxActual}.`
-        : `Closed at ${paxActual} attending. The guarantee of ${data?.pax_guaranteed ?? 0} is still what is billed.`,
+        : `Closed at ${paxActual} attending. The guarantee of ${data?.pax_guaranteed ?? 0} is still what is billed.`) +
+      invoiceNote,
   };
 }
 
@@ -517,7 +600,7 @@ export async function billEventToRoom(_prev: ActionState, fd: FormData): Promise
   if (error) return { error: friendlyDbError(error.message) };
 
   revalidateEvent(id);
-  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath(`/bookings/${bookingId}`, "layout");
   return { success: "Event billed to the room. It is now on the guest's folio and will appear on their invoice." };
 }
 
@@ -532,116 +615,18 @@ export async function issueEventInvoice(_prev: ActionState, fd: FormData): Promi
   const settings = await getSettings();
   const id = uuidOrNull(fd, "id");
   if (!id) return { error: "Event not found." };
-
-  const { data: row } = await supabase
-    .from("event_bookings")
-    .select("*, guests(full_name), event_spaces(name)")
-    .eq("id", id)
-    .maybeSingle();
-  if (!row) return { error: "Event not found." };
-  const event = row as EventBooking & { event_spaces: { name: string } | null };
-
-  if (event.status !== "confirmed" && event.status !== "completed") {
-    return { error: "Confirm the event before invoicing it." };
-  }
-
-  const { data: existing } = await supabase
-    .from("invoices")
-    .select("number")
-    .eq("event_id", id)
-    .eq("status", "issued")
-    .maybeSingle();
-  if (existing) {
-    return { error: `This event already has invoice ${existing.number}. Cancel it before issuing another.` };
-  }
-
-  // The bands come from the database, so the invoice cannot disagree with the
-  // event or with the tax summary report.
-  const { data: bandRows, error: bandError } = await supabase.rpc("event_tax_bands", { p_event: id });
-  if (bandError) return { error: friendlyDbError(bandError.message) };
-  const bands = ((bandRows ?? []) as TaxBand[]).map((b) => ({
-    rate: Number(b.rate),
-    net: Number(b.net),
-    tax: Number(b.tax),
-  }));
-  if (bands.length === 0) return { error: "There is nothing to invoice on this event yet." };
-
-  const regime = settings.tax_regime ?? "gst";
-  const grand = Math.round(bands.reduce((s, b) => s + b.net + b.tax, 0) * 100) / 100;
-  const tax = invoiceTaxFields(
-    {
-      name: str(fd, "bill_to_name", 200) || clientName(event),
-      gstin: str(fd, "bill_to_gstin", 20),
-      address: str(fd, "bill_to_address", 500),
-    },
-    {
-      regime,
-      propertyGstin: settings.gstin,
-      propertyStateCode: settings.gst_state_code,
-      propertyState: settings.state,
-      invoicePrefix: settings.invoice_prefix,
-      grandTotal: grand,
-    },
-  );
-  if ("error" in tax) return { error: tax.error };
-
-  const invoiceLines: InvoiceLine[] = bands.map((b) => {
-    const line: InvoiceLine = {
-      date: event.event_date,
-      description:
-        `${event.title} — ${event.event_spaces?.name ?? "Event"} on ${event.event_date}` +
-        (b.rate ? ` (taxed at ${b.rate}%)` : ""),
-      kind: "event",
-      net: b.net,
-      tax_rate: b.rate,
-      tax: b.tax,
-      total: Math.round((b.net + b.tax) * 100) / 100,
-      dept: "events",
-    };
-    return regime === "gst"
-      ? { ...line, sac: settings.sac_event, ...splitGst(b.tax, tax.fields.is_interstate) }
-      : line;
+  const issued = await invoiceEvent(supabase, settings, session.staff.id, id, {
+    name: str(fd, "bill_to_name", 200),
+    gstin: str(fd, "bill_to_gstin", 20),
+    address: str(fd, "bill_to_address", 500),
   });
-  const totals = invoiceTotals(invoiceLines);
-  const split = gstTotals(invoiceLines);
-
-  const fy = financialYearOf(todayIn(settings.timezone));
-  const { data: seq, error: seqError } = await supabase.rpc("next_invoice_number", {
-    p_series: settings.invoice_prefix || "INV",
-    p_fy: fy,
-  });
-  if (seqError || typeof seq !== "number") {
-    return { error: friendlyDbError(seqError?.message ?? "Could not allocate an invoice number.") };
-  }
-
-  const { data: invoice, error } = await supabase
-    .from("invoices")
-    .insert({
-      number: formatInvoiceNumber(settings.invoice_prefix || "INV", fy, seq),
-      series: settings.invoice_prefix || "INV",
-      financial_year: fy,
-      seq,
-      event_id: id,
-      ...tax.fields,
-      currency: settings.currency,
-      net_total: totals.net,
-      tax_total: totals.tax,
-      grand_total: totals.grand,
-      cgst_total: split.cgst,
-      sgst_total: split.sgst,
-      igst_total: split.igst,
-      tax_breakdown: taxBreakdown(invoiceLines),
-      lines: invoiceLines,
-      issued_by: session.staff.id,
-    })
-    .select("number")
-    .single();
-  if (error) return { error: friendlyDbError(error.message) };
+  if ("error" in issued) return { error: issued.error };
 
   revalidateEvent(id);
   revalidatePath("/billing/invoices");
-  return { success: `Invoice ${invoice.number} issued for this event.` };
+  return { success: `Invoice ${issued.number} issued for this event.` };
 }
+
 
 // ── Setup: the hall, its layouts, the packages and the equipment ────────────
 
@@ -795,4 +780,132 @@ export async function saveEventEquipment(_prev: ActionState, fd: FormData): Prom
 
   revalidatePath("/events/setup");
   return { success: `“${name}” saved.` };
+}
+
+// ── Rooms for an event (0042) ────────────────────────────────────────────────
+
+const MAX_EVENT_ROOMS = 120;
+
+/**
+ * Holds a block of guest rooms for an event: a group linked to it, one
+ * booking per room, priced from the rate plan like any group. The rooms follow
+ * the event (tentative until it is confirmed, released if it is cancelled),
+ * and those nobody has taken are released on the cut-off date.
+ */
+export async function holdEventRooms(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("events.book");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  const checkIn = dateStr(fd, "check_in");
+  const checkOut = dateStr(fd, "check_out");
+  const releaseOn = dateStr(fd, "release_on");
+  const ratePlanId = uuidOrNull(fd, "rate_plan_id");
+  const roomBilling = oneOf(fd, "room_billing", ["guest", "organiser"] as const, "guest");
+  if (!id) return { error: "Event not found." };
+  if (!checkIn || !checkOut || checkOut <= checkIn) return { error: "Check the room dates." };
+  if (!ratePlanId) return { error: "Choose the rate plan the rooms are sold at." };
+  if (releaseOn && releaseOn >= checkIn) return { error: "Release unsold rooms before the guests are due to arrive." };
+
+  const { data: event } = await supabase.from("event_bookings").select("title").eq("id", id).maybeSingle();
+  if (!event) return { error: "Event not found." };
+
+  const pricing = await loadPricingData(supabase);
+  const plan = pricing.plans.find((p) => p.id === ratePlanId) ?? null;
+  if (!plan) return { error: "Rate plan not found." };
+  const adults = int(fd, "adults_per_room", 2, 1, 10);
+
+  const rooms: Record<string, unknown>[] = [];
+  const problems: string[] = [];
+  for (const type of pricing.roomTypes) {
+    const count = int(fd, `rooms_${type.id}`, 0, 0, MAX_EVENT_ROOMS);
+    if (count === 0) continue;
+    const quote = quoteStay({
+      roomType: type,
+      plan,
+      checkIn,
+      checkOut,
+      adults,
+      children: 0,
+      rooms: 1,
+      seasons: pricing.seasons,
+      restrictions: pricing.restrictions,
+      extraCharges: pricing.extraCharges,
+      adjustments: pricing.adjustments,
+    });
+    problems.push(...quote.violations);
+    for (let i = 0; i < count; i++) {
+      rooms.push({
+        room_type_id: type.id,
+        adults,
+        quoted_rate: quote.averageNightly,
+        total_amount: quote.total,
+        rate_breakdown: quote.nights,
+        // The placeholder the rooming list replaces with a guest's name.
+        contact_name: `${event.title} — room ${rooms.length + 1}`,
+      });
+    }
+  }
+  if (rooms.length === 0) return { error: "Hold at least one room." };
+  if (rooms.length > MAX_EVENT_ROOMS) return { error: `Hold at most ${MAX_EVENT_ROOMS} rooms at once.` };
+  if (problems.length) return { error: [...new Set(problems)].join(" ") };
+
+  const { error } = await supabase.rpc("event_hold_rooms", {
+    p_event: id,
+    p_group: { check_in: checkIn, check_out: checkOut, release_on: releaseOn ?? "", room_billing: roomBilling, rate_plan_id: ratePlanId },
+    p_rooms: rooms,
+  });
+  if (error) return { error: friendlyDbError(error.message), overbooked: isOverbooked(error.message) };
+
+  revalidateEvent(id);
+  revalidatePath("/groups");
+  revalidatePath("/bookings");
+  return {
+    success: `${rooms.length} room${rooms.length === 1 ? "" : "s"} held. Add the guests' names on the rooming list; rooms still unnamed on ${releaseOn ?? "the cut-off"} go back on sale.`,
+  };
+}
+
+/** Changes the cut-off date, or who pays (until a night has been posted to the organiser). */
+export async function updateEventRooms(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("events.book");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  if (!id) return { error: "Event not found." };
+  const releaseOn = dateStr(fd, "release_on");
+  const roomBilling = oneOf(fd, "room_billing", ["guest", "organiser"] as const, "guest");
+
+  const { data: group } = await supabase
+    .from("booking_groups")
+    .select("id, check_in, room_billing")
+    .eq("event_id", id)
+    .maybeSingle();
+  if (!group) return { error: "This event holds no rooms." };
+  if (releaseOn && releaseOn >= group.check_in) return { error: "Release unsold rooms before the guests are due to arrive." };
+  if (roomBilling !== group.room_billing) {
+    const { data: posted } = await supabase.from("folios").select("id").eq("event_id", id).limit(1);
+    if ((posted ?? []).length > 0) {
+      return { error: "Nights are already billed to the organiser, so who pays can no longer change." };
+    }
+  }
+
+  const { error } = await supabase
+    .from("booking_groups")
+    .update({ release_on: releaseOn, room_billing: roomBilling })
+    .eq("id", group.id);
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateEvent(id);
+  return { success: "Saved." };
+}
+
+/** Puts the event's unsold rooms (still unnamed) back on sale now. */
+export async function releaseEventRooms(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requirePermission("events.book");
+  const supabase = await createClient();
+  const id = uuidOrNull(fd, "id");
+  if (!id) return { error: "Event not found." };
+  const { data, error } = await supabase.rpc("event_release_unsold_rooms", { p_event: id });
+  if (error) return { error: friendlyDbError(error.message) };
+  revalidateEvent(id);
+  revalidatePath("/groups");
+  const n = Number(data ?? 0);
+  return { success: n ? `${n} unsold room${n === 1 ? "" : "s"} back on sale.` : "Every held room has a guest's name, so none were released." };
 }
