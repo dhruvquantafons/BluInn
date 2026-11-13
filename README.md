@@ -101,7 +101,9 @@ paid by each guest or by the organiser on the event's invoice).</td>
 packages, promo codes and competitor rates. GST tax invoices (SAC, CGST/SGST/IGST, B2B with the buyer's
 GSTIN), credit notes, a monthly GST register for GSTR-1, refund approval and exchange rates. The manager's daily
 flash report (day, month and year to date against last year), operational and financial reports, a custom
-report builder, scheduled report emails and the notification log.</td>
+report builder, scheduled report emails and the notification log. Every screen counts revenue the same way: before
+tax, with outlet and event sales in, allowances and credit notes off, and paid-outs and tips out (they are billed at
+cost in their own block). Occupancy leaves out only rooms out of order that night.</td>
 </tr>
 <tr>
 <td valign="top"><b>People</b><br /><sub>HR & attendance (My work · My profile · Roster · Attendance · Timesheets · Leave) · Staff</sub></td>
@@ -776,7 +778,7 @@ The full model, and the traps to know before changing database code, are in
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
 | [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
-| [Interconnection audit (12 Nov 2026)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0043` fixed (including the broken links, missing validations and dead buttons), the 12 Nov decisions, and every gap still open (inconsistent numbers, security, items found in the demo data). The 7 Nov version is in git history |
+| [Interconnection audit (12 Nov 2026, updated 13 Nov)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0044` fixed (including the broken links, missing validations, dead buttons, orphan pages and inconsistent numbers), the 12 and 13 Nov decisions, and every gap still open (security, two items found in the demo data). The 7 Nov version is in git history |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

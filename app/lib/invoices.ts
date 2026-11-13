@@ -24,6 +24,15 @@ export interface InvoiceLineOptions {
   interstate?: boolean;
 }
 
+/**
+ * Cash paid out for the guest and tips charged to the room (0044). They are on
+ * the bill, and the guest pays them, but they are not the hotel's supplies:
+ * no taxable value, no tax band, no GST register, no revenue, no points.
+ */
+export function isReimbursement(dept: string | null | undefined): boolean {
+  return dept === "paid_out" || dept === "tip";
+}
+
 /** An allowance that names the charge it reduces is a discount on the bill. */
 export function isAllowance(e: Pick<FolioEntry, "kind" | "applies_to">): boolean {
   return e.kind === "adjustment" && !!e.applies_to;
@@ -61,6 +70,7 @@ export function invoiceLines(entries: FolioEntry[], opts: InvoiceLineOptions = {
           total: round2(Number(e.amount) + Number(e.tax_amount)),
           sac: e.sac_code ?? "",
           dept: e.revenue_dept ?? null,
+          ...(isReimbursement(e.revenue_dept) ? { reimbursement: true } : {}),
         },
         opts,
       ),
@@ -77,6 +87,7 @@ export function invoiceLines(entries: FolioEntry[], opts: InvoiceLineOptions = {
         total: -round2(Number(e.amount)),
         sac: e.sac_code ?? "",
         dept: e.revenue_dept ?? null,
+        ...(isReimbursement(e.revenue_dept) ? { reimbursement: true } : {}),
       },
       opts,
     ),
@@ -91,6 +102,7 @@ export function invoiceLines(entries: FolioEntry[], opts: InvoiceLineOptions = {
 export function taxBreakdown(lines: InvoiceLine[]): TaxBand[] {
   const bands = new Map<string, TaxBand>();
   for (const l of lines) {
+    if (l.reimbursement) continue;
     const key = `${l.sac ?? ""}|${l.tax_rate}`;
     const band = bands.get(key) ?? {
       rate: l.tax_rate,
@@ -129,15 +141,20 @@ export function gstTotals(lines: InvoiceLine[]): GstSplit {
 }
 
 export interface InvoiceTotals {
+  /** Taxable value: supplies only. */
   net: number;
   tax: number;
+  /** Paid-outs and tips, billed at cost on top (0044). */
+  reimbursements: number;
   grand: number;
 }
 
 export function invoiceTotals(lines: InvoiceLine[]): InvoiceTotals {
-  const net = round2(lines.reduce((s, l) => s + l.net, 0));
-  const tax = round2(lines.reduce((s, l) => s + l.tax, 0));
-  return { net, tax, grand: round2(net + tax) };
+  const supplies = lines.filter((l) => !l.reimbursement);
+  const net = round2(supplies.reduce((s, l) => s + l.net, 0));
+  const tax = round2(supplies.reduce((s, l) => s + l.tax, 0));
+  const reimbursements = round2(lines.filter((l) => l.reimbursement).reduce((s, l) => s + l.total, 0));
+  return { net, tax, reimbursements, grand: round2(net + tax + reimbursements) };
 }
 
 /**

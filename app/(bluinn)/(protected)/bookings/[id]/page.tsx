@@ -5,11 +5,12 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { loadGuestFolio } from "../../../../lib/folio";
+import { chargeWithTax, loadGuestFolio } from "../../../../lib/folio";
 import { lastBillTo } from "../../../../lib/invoice-issue";
 import { foliosToInvoice } from "../../../../lib/invoices";
 import { razorpayConfigured, isTestMode } from "../../../../lib/razorpay";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../../../../lib/policies";
+
 import { rankRooms } from "../../../../lib/room-assignment";
 import { hoursUntil, todayIn } from "../../../../lib/dates";
 import type {
@@ -188,6 +189,9 @@ export default async function BookingDetailPage({
       ? { amount: 0, explanation: "Waitlisted — no penalty." }
       : cancellationPenalty(plan, booking.rate_breakdown ?? [], booking.rooms_count, hoursToArrival);
   const noShowPreview = noShowPenalty(plan, booking.rate_breakdown ?? [], booking.rooms_count);
+  // What the folio will actually post, GST included when prices are before tax (0044).
+  const cancelCharged = chargeWithTax(cancelPreview.amount, booking, settings);
+  const noShowCharged = chargeWithTax(noShowPreview.amount, booking, settings);
 
   const { ranked, ineligible } = rankRooms(
     {
@@ -363,7 +367,9 @@ export default async function BookingDetailPage({
                     <p className="text-xs text-slate-700">
                       {cancelPreview.amount > 0 ? (
                         <>
-                          Penalty: <strong>{fmtMoney(cancelPreview.amount)}</strong> — {cancelPreview.explanation}
+                          Penalty: <strong>{fmtMoney(cancelCharged)}</strong>
+                          {cancelCharged !== cancelPreview.amount && ` (${fmtMoney(cancelPreview.amount)} + ${settings.tax_label})`} —{" "}
+                          {cancelPreview.explanation}
                         </>
                       ) : (
                         cancelPreview.explanation
@@ -390,7 +396,9 @@ export default async function BookingDetailPage({
                     <ActionForm action={markNoShow} submitLabel="Mark no-show" className="space-y-3">
                       <input type="hidden" name="id" value={id} />
                       <p className="text-xs text-slate-700">
-                        {noShowPreview.amount > 0 ? `Penalty ${fmtMoney(noShowPreview.amount)}. ` : ""}
+                        {noShowPreview.amount > 0
+                          ? `Penalty ${fmtMoney(noShowCharged)}${noShowCharged !== noShowPreview.amount ? ` (${fmtMoney(noShowPreview.amount)} + ${settings.tax_label})` : ""}. `
+                          : ""}
                         {noShowPreview.explanation}
                       </p>
                       {noShowPreview.amount > 0 && can(session, "bookings.waive_penalty") && (

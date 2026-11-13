@@ -43,3 +43,19 @@ export function depositState(
   if (dueOn && dueOn < today) return "overdue";
   return received > 0 ? "part" : "due";
 }
+
+type Movement = { status: string; check_in: string; check_out: string };
+
+/**
+ * Still to arrive (0044): due today or late from an earlier day, and not yet
+ * checked in. The dashboard and the front desk both count this; a closed day's
+ * "arrived" (night audit, flash) is a different figure and is labelled so.
+ */
+export function isToArrive(b: Movement, today: string): boolean {
+  return (b.status === "tentative" || b.status === "confirmed") && b.check_in <= today && b.check_out > today;
+}
+
+/** Still to depart (0044): due out today or overstaying, still checked in. */
+export function isToDepart(b: Movement, today: string): boolean {
+  return b.status === "checked_in" && b.check_out <= today;
+}

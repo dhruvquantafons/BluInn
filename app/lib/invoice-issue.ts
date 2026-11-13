@@ -30,7 +30,7 @@ export async function issueFolioInvoice(
 ): Promise<{ error: string; overAllowed?: true } | { id: string; number: string; bookingId: string }> {
   const { data: folio } = await supabase
     .from("folios")
-    .select("id, booking_id, label")
+    .select("id, booking_id, label, company_id")
     .eq("id", folioId)
     .maybeSingle();
   if (!folio) return { error: "Folio not found." };
@@ -114,6 +114,9 @@ export async function issueFolioInvoice(
       seq,
       booking_id: folio.booking_id,
       folio_id: folioId,
+      // A company-billed folio's invoice is the company's spend, so it earns
+      // the guest no loyalty points (loyalty_award_for_invoice, 0016; 0044).
+      company_id: folio.company_id ?? null,
       ...tax.fields,
       currency: settings.currency,
       net_total: totals.net,

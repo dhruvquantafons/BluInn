@@ -28,7 +28,9 @@ export default async function InvoicePage({
 
   const { data } = await supabase
     .from("invoices")
-    .select("*, bookings(reference, check_in, check_out, rooms(room_number), room_types(name))")
+    .select(
+      "*, bookings(reference, check_in, check_out, rooms(room_number), room_types(name))",
+    )
     .eq("id", invoiceId)
     .eq("booking_id", id)
     .maybeSingle();
@@ -69,7 +71,8 @@ export default async function InvoicePage({
       >
         {cancelled && (
           <p className="mb-5 border border-rose-300 bg-rose-50 text-rose-800 rounded-lg px-4 py-2 text-xs font-medium">
-            CANCELLED — {invoice.cancel_reason}. This invoice is void; the number stays on record and is not reused.
+            CANCELLED — {invoice.cancel_reason}. This invoice is void; the
+            number stays on record and is not reused.
           </p>
         )}
 
@@ -100,28 +103,39 @@ export default async function InvoicePage({
               grand: Number(invoice.grand_total),
             }}
             aside={
-                <>
-                  <p className="text-slate-500 uppercase tracking-wider text-[10px]">Stay</p>
-                  {invoice.bookings && (
-                    <>
-                      <p className="text-sm">
-                        Booking {invoice.bookings.reference} · Room {invoice.bookings.rooms?.room_number ?? "—"}
-                        {invoice.bookings.room_types?.name ? ` · ${invoice.bookings.room_types.name}` : ""}
-                      </p>
-                      <p>
-                        {fmtDate(invoice.bookings.check_in)} → {fmtDate(invoice.bookings.check_out)}
-                      </p>
-                    </>
-                  )}
-                </>
+              <>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px]">
+                  Stay
+                </p>
+                {invoice.bookings && (
+                  <>
+                    <p className="text-sm">
+                      Booking {invoice.bookings.reference} · Room{" "}
+                      {invoice.bookings.rooms?.room_number ?? "—"}
+                      {invoice.bookings.room_types?.name
+                        ? ` · ${invoice.bookings.room_types.name}`
+                        : ""}
+                    </p>
+                    <p>
+                      {fmtDate(invoice.bookings.check_in)} →{" "}
+                      {fmtDate(invoice.bookings.check_out)}
+                    </p>
+                  </>
+                )}
+              </>
             }
             footer={
               creditNotes.length > 0 && (
                 <div className="mt-6 text-xs border-t border-slate-100 pt-3">
-                  <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">Credit notes against this invoice</p>
+                  <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
+                    Credit notes against this invoice
+                  </p>
                   {creditNotes.map((c) => (
                     <p key={c.id} className="flex justify-between gap-4">
-                      <Link href={`/billing/credit-notes/${c.id}`} className="font-mono text-brand-700 hover:underline print:no-underline">
+                      <Link
+                        href={`/billing/credit-notes/${c.id}`}
+                        className="font-mono text-brand-700 hover:underline print:no-underline"
+                      >
                         {c.number}
                       </Link>
                       <span className="text-slate-600">{c.note}</span>
@@ -134,134 +148,193 @@ export default async function InvoicePage({
           />
         ) : (
           <>
-          <div className="flex justify-between gap-6 border-b border-slate-200 pb-5 mb-5">
-            <div>
-              <p className="text-xl font-semibold tracking-tight">{settings.name}</p>
-              <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">
-                {[
-                  settings.legal_name,
-                  settings.address,
-                  [settings.city, settings.state, settings.postcode].filter(Boolean).join(", "),
-                ]
-                  .filter(Boolean)
-                  .join("\n")}
-              </p>
-              <p className="text-xs text-slate-700">
-                {[settings.phone, settings.email].filter(Boolean).join(" · ")}
-                {settings.gstin && ` · GSTIN ${settings.gstin}`}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Tax invoice</p>
-              <p className="font-mono text-base">{invoice.number}</p>
-              <p className="text-xs text-slate-700 mt-1">Issued {fmtDateTime(invoice.issued_at)}</p>
-              <p className="text-xs text-slate-700">Booking {invoice.bookings?.reference}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
-            <div>
-              <p className="text-slate-500 uppercase tracking-wider text-[10px]">Billed to</p>
-              <p className="text-sm">{invoice.bill_to_name}</p>
-              {invoice.bill_to_address && <p className="whitespace-pre-line">{invoice.bill_to_address}</p>}
-              {invoice.bill_to_gstin && <p>GSTIN {invoice.bill_to_gstin}</p>}
-              {invoice.place_of_supply && <p className="mt-1">Place of supply: {invoice.place_of_supply}</p>}
-            </div>
-            <div>
-              <p className="text-slate-500 uppercase tracking-wider text-[10px]">Stay</p>
-              {invoice.bookings && (
-                <>
-                  <p className="text-sm">
-                    Room {invoice.bookings.rooms?.room_number ?? "—"}
-                    {invoice.bookings.room_types?.name ? ` · ${invoice.bookings.room_types.name}` : ""}
-                  </p>
-                  <p>
-                    {fmtDate(invoice.bookings.check_in)} → {fmtDate(invoice.bookings.check_out)}
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-
-          <table className="w-full text-xs mb-6">
-            <thead>
-              <tr className="border-b border-slate-900 text-left">
-                <th className="py-2">Date</th>
-                <th className="py-2">Description</th>
-                <th className="py-2 text-right">Taxable value</th>
-                <th className="py-2 text-right">{settings.tax_label}</th>
-                <th className="py-2 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.lines.map((l, i) => (
-                <tr key={i} className="border-b border-slate-100">
-                  <td className="py-1.5 whitespace-nowrap">{fmtDate(l.date)}</td>
-                  <td className="py-1.5">{l.description}</td>
-                  <td className="py-1.5 text-right">{fmtMoney(l.net)}</td>
-                  <td className="py-1.5 text-right">{l.tax ? `${fmtMoney(l.tax)} @ ${l.tax_rate}%` : "—"}</td>
-                  <td className="py-1.5 text-right">{fmtMoney(l.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex flex-wrap justify-between gap-8">
-            {invoice.tax_breakdown.length > 0 && (
-              <div className="text-xs">
-                <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
-                  {settings.tax_label} summary
+            <div className="flex justify-between gap-6 border-b border-slate-200 pb-5 mb-5">
+              <div>
+                <p className="text-xl font-semibold tracking-tight">
+                  {settings.name}
                 </p>
-                <table>
-                  <thead>
-                    <tr className="text-left text-slate-500">
-                      <th className="pr-6 font-medium">Rate</th>
-                      <th className="pr-6 font-medium">Taxable value</th>
-                      <th className="font-medium">Tax</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoice.tax_breakdown.map((b) => (
-                      <tr key={b.rate}>
-                        <td className="pr-6 py-0.5">{b.rate}%</td>
-                        <td className="pr-6 py-0.5">{fmtMoney(b.net)}</td>
-                        <td className="py-0.5">{fmtMoney(b.tax)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">
+                  {[
+                    settings.legal_name,
+                    settings.address,
+                    [settings.city, settings.state, settings.postcode]
+                      .filter(Boolean)
+                      .join(", "),
+                  ]
+                    .filter(Boolean)
+                    .join("\n")}
+                </p>
+                <p className="text-xs text-slate-700">
+                  {[settings.phone, settings.email].filter(Boolean).join(" · ")}
+                  {settings.gstin && ` · GSTIN ${settings.gstin}`}
+                </p>
               </div>
-            )}
-
-            <div className="ml-auto min-w-[14rem] space-y-1 text-sm">
-              <p className="flex justify-between">
-                <span className="text-slate-700">Taxable value</span>
-                <span>{fmtMoney(invoice.net_total)}</span>
-              </p>
-              <p className="flex justify-between">
-                <span className="text-slate-700">{settings.tax_label}</span>
-                <span>{fmtMoney(invoice.tax_total)}</span>
-              </p>
-              <p className="flex justify-between border-t border-slate-900 pt-2 font-semibold">
-                <span>Invoice total</span>
-                <span>{fmtMoney(invoice.grand_total)}</span>
-              </p>
-              {invoice.fx_currency && invoice.fx_rate && Number(invoice.fx_rate) > 0 && (
-                <p className="flex justify-between text-[11px] text-slate-500">
-                  <span>
-                    Settled in {invoice.fx_currency} at {Number(invoice.fx_rate)} per unit
-                  </span>
-                  <span>
-                    {invoice.fx_currency}{" "}
-                    {(Number(invoice.grand_total) / Number(invoice.fx_rate)).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
+              <div className="text-right">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Tax invoice
                 </p>
-              )}
+                <p className="font-mono text-base">{invoice.number}</p>
+                <p className="text-xs text-slate-700 mt-1">
+                  Issued {fmtDateTime(invoice.issued_at)}
+                </p>
+                <p className="text-xs text-slate-700">
+                  Booking {invoice.bookings?.reference}
+                </p>
+              </div>
             </div>
-          </div>
+
+            <div className="grid grid-cols-2 gap-6 mb-6 text-xs">
+              <div>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px]">
+                  Billed to
+                </p>
+                <p className="text-sm">{invoice.bill_to_name}</p>
+                {invoice.bill_to_address && (
+                  <p className="whitespace-pre-line">
+                    {invoice.bill_to_address}
+                  </p>
+                )}
+                {invoice.bill_to_gstin && <p>GSTIN {invoice.bill_to_gstin}</p>}
+                {invoice.place_of_supply && (
+                  <p className="mt-1">
+                    Place of supply: {invoice.place_of_supply}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px]">
+                  Stay
+                </p>
+                {invoice.bookings && (
+                  <>
+                    <p className="text-sm">
+                      Room {invoice.bookings.rooms?.room_number ?? "—"}
+                      {invoice.bookings.room_types?.name
+                        ? ` · ${invoice.bookings.room_types.name}`
+                        : ""}
+                    </p>
+                    <p>
+                      {fmtDate(invoice.bookings.check_in)} →{" "}
+                      {fmtDate(invoice.bookings.check_out)}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <table className="w-full text-xs mb-6">
+              <thead>
+                <tr className="border-b border-slate-900 text-left">
+                  <th className="py-2">Date</th>
+                  <th className="py-2">Description</th>
+                  <th className="py-2 text-right">Taxable value</th>
+                  <th className="py-2 text-right">{settings.tax_label}</th>
+                  <th className="py-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.lines.map((l, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="py-1.5 whitespace-nowrap">
+                      {fmtDate(l.date)}
+                    </td>
+                    <td className="py-1.5">
+                      {l.description}
+                      {/* Paid out for the guest or a tip: billed at cost, not a supply (0044). */}
+                      {l.reimbursement && (
+                        <span className="text-slate-500">
+                          {" "}
+                          (reimbursement, no tax)
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1.5 text-right">
+                      {l.reimbursement ? "—" : fmtMoney(l.net)}
+                    </td>
+                    <td className="py-1.5 text-right">
+                      {l.tax ? `${fmtMoney(l.tax)} @ ${l.tax_rate}%` : "—"}
+                    </td>
+                    <td className="py-1.5 text-right">{fmtMoney(l.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="flex flex-wrap justify-between gap-8">
+              {invoice.tax_breakdown.length > 0 && (
+                <div className="text-xs">
+                  <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
+                    {settings.tax_label} summary
+                  </p>
+                  <table>
+                    <thead>
+                      <tr className="text-left text-slate-500">
+                        <th className="pr-6 font-medium">Rate</th>
+                        <th className="pr-6 font-medium">Taxable value</th>
+                        <th className="font-medium">Tax</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoice.tax_breakdown.map((b) => (
+                        <tr key={b.rate}>
+                          <td className="pr-6 py-0.5">{b.rate}%</td>
+                          <td className="pr-6 py-0.5">{fmtMoney(b.net)}</td>
+                          <td className="py-0.5">{fmtMoney(b.tax)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="ml-auto min-w-[14rem] space-y-1 text-sm">
+                <p className="flex justify-between">
+                  <span className="text-slate-700">Taxable value</span>
+                  <span>{fmtMoney(invoice.net_total)}</span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-700">{settings.tax_label}</span>
+                  <span>{fmtMoney(invoice.tax_total)}</span>
+                </p>
+                {invoice.lines.some((l) => l.reimbursement) && (
+                  <p className="flex justify-between">
+                    <span className="text-slate-700">
+                      Reimbursements and tips
+                    </span>
+                    <span>
+                      {fmtMoney(
+                        invoice.lines
+                          .filter((l) => l.reimbursement)
+                          .reduce((s, l) => s + Number(l.total), 0),
+                      )}
+                    </span>
+                  </p>
+                )}
+                <p className="flex justify-between border-t border-slate-900 pt-2 font-semibold">
+                  <span>Invoice total</span>
+                  <span>{fmtMoney(invoice.grand_total)}</span>
+                </p>
+                {invoice.fx_currency &&
+                  invoice.fx_rate &&
+                  Number(invoice.fx_rate) > 0 && (
+                    <p className="flex justify-between text-[11px] text-slate-500">
+                      <span>
+                        Settled in {invoice.fx_currency} at{" "}
+                        {Number(invoice.fx_rate)} per unit
+                      </span>
+                      <span>
+                        {invoice.fx_currency}{" "}
+                        {(
+                          Number(invoice.grand_total) / Number(invoice.fx_rate)
+                        ).toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </p>
+                  )}
+              </div>
+            </div>
           </>
         )}
 
@@ -271,7 +344,8 @@ export default async function InvoicePage({
           </p>
         )}
         <p className="mt-4 text-[11px] text-slate-500">
-          This is a computer-generated invoice. Payments received against this stay are shown on the guest folio.
+          This is a computer-generated invoice. Payments received against this
+          stay are shown on the guest folio.
         </p>
         <PrintFooter />
       </div>

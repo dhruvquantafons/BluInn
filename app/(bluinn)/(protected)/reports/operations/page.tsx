@@ -63,7 +63,7 @@ export default async function OperationsReportsPage({
           value={raised}
           hint={breached > 0 ? `${breached} past their target` : "All within target"}
         />
-        <StatCard label="Hours worked" value={hours.toFixed(1)} hint={`${att.rows.length} staff`} />
+        <StatCard label="Hours worked" value={hours.toFixed(2)} hint={`${att.rows.length} staff`} />
         <StatCard label="Absences" value={absences} hint="Rostered but no clock-in" />
       </div>
 

@@ -203,8 +203,10 @@ export function eventBalance(
   payments: Pick<EventPayment, "kind" | "amount" | "voided_at">[],
   /** Rooms the organiser pays for (0042), from event_rooms_total(). */
   roomsTotal = 0,
+  /** Credit notes issued against the event's invoices, as SQL event_balance counts them (0044). */
+  creditNotes = 0,
 ): number {
-  return round2(Number(event.grand_total) + Number(roomsTotal) - amountPaid(payments));
+  return round2(Number(event.grand_total) + Number(roomsTotal) - amountPaid(payments) - Number(creditNotes));
 }
 
 /** The deposit the hotel normally asks for before holding the date. */

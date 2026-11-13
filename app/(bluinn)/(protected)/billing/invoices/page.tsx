@@ -34,30 +34,38 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const settings = await getSettings();
   const fy = financialYearOf(todayIn(settings.timezone));
 
-  // The list pages; the year's figures come from every invoice in the year.
+  // The list pages; the year's figures are summed in the database (0044), net
+  // of the year's credit notes and without the row cap a plain read hits.
   const [{ data, error, count }, { data: yearRows }] = await Promise.all([
     supabase
       .from("invoices")
       .select("*, bookings(reference, check_in, check_out), event_bookings(number, title, event_date)", { count: "exact" })
       .order("issued_at", { ascending: false })
       .range(...pageRange(page)),
-    supabase.from("invoices").select("status, grand_total, tax_total").eq("financial_year", fy),
+    supabase.rpc("invoice_year_totals", { p_fy: fy }),
   ]);
   if (outOfRange(error)) redirect(pageHref("/billing/invoices", {}, 1));
   const invoices = (data ?? []) as Invoice[];
 
-  const thisYear = (yearRows ?? []) as Pick<Invoice, "status" | "grand_total" | "tax_total">[];
-  const issued = thisYear.filter((i) => i.status === "issued");
-  const billed = issued.reduce((s, i) => s + Number(i.grand_total), 0);
-  const tax = issued.reduce((s, i) => s + Number(i.tax_total), 0);
+  const year = ((yearRows ?? []) as { issued: number; cancelled: number; billed: number; tax: number; credited: number }[])[0] ?? {
+    issued: 0,
+    cancelled: 0,
+    billed: 0,
+    tax: 0,
+    credited: 0,
+  };
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Financial year" value={fy} hint="1 April to 31 March" />
-        <StatCard label="Invoices issued" value={issued.length} hint={`${thisYear.length - issued.length} cancelled`} />
-        <StatCard label="Billed" value={fmtMoney(billed)} hint="Including tax" />
-        <StatCard label={settings.tax_label} value={fmtMoney(tax)} hint="Collected this year" />
+        <StatCard label="Invoices issued" value={year.issued} hint={`${year.cancelled} cancelled`} />
+        <StatCard
+          label="Billed"
+          value={fmtMoney(Number(year.billed))}
+          hint={Number(year.credited) ? `Including tax, less ${fmtMoney(Number(year.credited))} of credit notes` : "Including tax"}
+        />
+        <StatCard label={settings.tax_label} value={fmtMoney(Number(year.tax))} hint="This year, less credit notes" />
       </div>
 
       <Card>

@@ -23,7 +23,12 @@ import { getSettings } from "../../lib/settings";
 import type { Booking, Room } from "../../lib/types";
 import { OCCUPYING_STATUSES, roomBoardLabel } from "../../lib/types";
 import { todayIn, minutesSince, addDays } from "../../lib/dates";
-import { kpisFrom, lastClosedDay, reportByKind, resolveRange, type DailyRow } from "../../lib/reports";
+import {
+  kpisFrom,
+  lastClosedDay,
+  reportByKind,
+  type DailyRow,
+} from "../../lib/reports";
 import { runReport } from "../../lib/report-data";
 import LiveRefresh from "../components/LiveRefresh";
 import {
@@ -38,10 +43,15 @@ import {
   secondaryButtonClass,
   fmtDate,
   fmtMoney,
-  plural
+  plural,
 } from "../components/ui";
 import TapeChart, { TapeChartLegend } from "../components/TapeChart";
-import { OccupancyRevenueChart, OCCUPANCY_COLOR, REVENUE_COLOR, RoomStatusDonut } from "../components/charts";
+import {
+  OccupancyRevenueChart,
+  OCCUPANCY_COLOR,
+  REVENUE_COLOR,
+  RoomStatusDonut,
+} from "../components/charts";
 
 /**
  * Donut colours per room-board state (hex: they are drawn as SVG), in slice
@@ -58,13 +68,18 @@ const BOARD_TONE: Record<string, string> = {
   "Out of Service": "#94a0b0",
 };
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ denied?: string }>;
+}) {
   const session = await requireSession();
   const { denied } = await searchParams;
   const supabase = await createClient();
   const settings = await getSettings();
   const today = todayIn(settings.timezone);
-  const seesBookings = can(session, "bookings.view") || can(session, "frontdesk.view");
+  const seesBookings =
+    can(session, "bookings.view") || can(session, "frontdesk.view");
   const seesRevenue = can(session, "reports.financial");
   const canCreate = can(session, "bookings.create");
 
@@ -78,8 +93,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // sold with almost no room revenue, so ADR and RevPAR would read near zero.
   const kpiDay = lastClosedDay(settings.business_date);
   const revenueRows = seesRevenue
-    ? (((await runReport(supabase, reportByKind("daily_revenue")!, resolveRange("last30", today))).rows ??
-        []) as unknown as DailyRow[])
+    ? // The 30 days up to the last closed day (0044): later days have no room
+      // charges yet, so the chart used to dip at its end, and a business date
+      // far behind the calendar left the tiles' day outside the range.
+      (((
+        await runReport(supabase, reportByKind("daily_revenue")!, {
+          from: addDays(kpiDay, -29),
+          to: kpiDay,
+        })
+      ).rows ?? []) as unknown as DailyRow[])
     : [];
   const todayKpis = seesRevenue
     ? kpisFrom(
@@ -91,8 +113,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const revenueTrend = revenueRows
     .map((r) => ({
       day: r.day,
-      occupancy: Number(r.rooms_available) > 0 ? Math.round((Number(r.rooms_sold) / Number(r.rooms_available)) * 1000) / 10 : null,
-      revenue: Math.round((Number(r.total_revenue) - Number(r.tax_total)) * 100) / 100,
+      occupancy:
+        Number(r.rooms_available) > 0
+          ? Math.round(
+              (Number(r.rooms_sold) / Number(r.rooms_available)) * 1000,
+            ) / 10
+          : null,
+      revenue:
+        Math.round((Number(r.total_revenue) - Number(r.tax_total)) * 100) / 100,
     }))
     .sort((a, z) => a.day.localeCompare(z.day));
 
@@ -104,6 +132,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     inHouse,
     occupied,
     rooms,
+    sellableRooms,
     unassigned,
     openRequests,
     hkOpen,
@@ -114,21 +143,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     tapeBookings,
     tapeBlocks,
   ] = await Promise.all([
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "tentative"),
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "waitlisted"),
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "tentative"),
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "waitlisted"),
+    // Still to arrive and still to depart, late arrivals and overstays
+    // included, as the front desk counts them (isToArrive / isToDepart, 0044).
     supabase
       .from("bookings")
       .select("*, guests(id, full_name), rooms(id, room_number)")
-      .eq("check_in", today)
+      .lte("check_in", today)
+      .gt("check_out", today)
       .in("status", ["tentative", "confirmed"])
+      .order("check_in")
       .order("created_at"),
     supabase
       .from("bookings")
       .select("*, guests(id, full_name), rooms(id, room_number)")
-      .eq("check_out", today)
+      .lte("check_out", today)
       .eq("status", "checked_in")
+      .order("check_out")
       .order("created_at"),
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "checked_in"),
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "checked_in"),
     supabase
       .from("bookings")
       .select("rooms_count")
@@ -136,13 +179,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .gt("check_out", today)
       .in("status", OCCUPYING_STATUSES),
     supabase.from("rooms").select("id, status, housekeeping_status"),
+    // Rooms available tonight: every room but those out of order (0044).
+    supabase.rpc("sellable_rooms", { p_day: today }),
     supabase
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .is("room_id", null)
       .lte("check_in", today)
       .in("status", ["confirmed", "checked_in"]),
-    supabase.from("guest_requests").select("id", { count: "exact", head: true }).eq("status", "open"),
+    supabase
+      .from("guest_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open"),
     supabase
       .from("housekeeping_tasks")
       .select("status, started_at, target_minutes")
@@ -152,24 +200,41 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .from("maintenance_tickets")
       .select("priority, due_at, assigned_to")
       .in("status", ["open", "in_progress", "on_hold"]),
-    supabase.from("leave_requests").select("staff_id").eq("status", "pending").neq("staff_id", session.staff.id),
+    supabase
+      .from("leave_requests")
+      .select("staff_id")
+      .eq("status", "pending")
+      .neq("staff_id", session.staff.id),
     supabase.from("rooms").select("*").order("room_number"),
     supabase.from("room_types").select("*").order("sort_order"),
     supabase
       .from("bookings")
-      .select("id, reference, contact_name, check_in, check_out, status, room_id, room_type_id, rooms_count, is_vip")
+      .select(
+        "id, reference, contact_name, check_in, check_out, status, room_id, room_type_id, rooms_count, is_vip",
+      )
       .in("status", ["tentative", "confirmed", "checked_in", "checked_out"])
       .lt("check_in", tapeEnd)
       .gt("check_out", tapeStart),
-    supabase.from("room_blocks").select("*").is("released_at", null).lt("start_date", tapeEnd),
+    supabase
+      .from("room_blocks")
+      .select("*")
+      .is("released_at", null)
+      .lt("start_date", tapeEnd),
   ]);
 
   const arrivalList = (arrivals.data ?? []) as Booking[];
   const departureList = (departures.data ?? []) as Booking[];
-  const roomList = (rooms.data ?? []) as Pick<Room, "id" | "status" | "housekeeping_status">[];
-  const sellable = roomList.filter((r) => r.status !== "out_of_service" && r.status !== "out_of_order").length;
-  const committed = (occupied.data ?? []).reduce((s, b) => s + Number((b as { rooms_count: number }).rooms_count), 0);
-  const occupancy = sellable > 0 ? Math.round((committed / sellable) * 100) : null;
+  const roomList = (rooms.data ?? []) as Pick<
+    Room,
+    "id" | "status" | "housekeeping_status"
+  >[];
+  const sellable = Number(sellableRooms.data ?? 0);
+  const committed = (occupied.data ?? []).reduce(
+    (s, b) => s + Number((b as { rooms_count: number }).rooms_count),
+    0,
+  );
+  const occupancy =
+    sellable > 0 ? Math.round((committed / sellable) * 100) : null;
   const statusCounts = roomList.reduce<Record<string, number>>((acc, r) => {
     const label = roomBoardLabel(r);
     acc[label] = (acc[label] ?? 0) + 1;
@@ -178,30 +243,58 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const alerts: { text: string; href: string }[] = [];
   if (settings.business_date < today && can(session, "frontdesk.night_audit")) {
-    alerts.push({ text: `Night audit has not closed ${fmtDate(settings.business_date)}`, href: "/night-audit" });
+    alerts.push({
+      text: `Night audit has not closed ${fmtDate(settings.business_date)}`,
+      href: "/night-audit",
+    });
   }
   if ((unassigned.count ?? 0) > 0) {
-    alerts.push({ text: `${unassigned.count} arriving or in-house ${unassigned.count === 1 ? "booking has" : "bookings have"} no room assigned`, href: "/front-desk" });
+    alerts.push({
+      text: `${unassigned.count} arriving or in-house ${unassigned.count === 1 ? "booking has" : "bookings have"} no room assigned`,
+      href: "/front-desk",
+    });
   }
   if ((tentative.count ?? 0) > 0) {
-    alerts.push({ text: `${tentative.count} tentative ${tentative.count === 1 ? "booking" : "bookings"} waiting to be confirmed`, href: "/bookings?status=tentative" });
+    alerts.push({
+      text: `${tentative.count} tentative ${tentative.count === 1 ? "booking" : "bookings"} waiting to be confirmed`,
+      href: "/bookings?status=tentative",
+    });
   }
   if ((waitlisted.count ?? 0) > 0) {
-    alerts.push({ text: `${waitlisted.count} ${waitlisted.count === 1 ? "guest" : "guests"} on the waitlist`, href: "/bookings?status=waitlisted" });
+    alerts.push({
+      text: `${waitlisted.count} ${waitlisted.count === 1 ? "guest" : "guests"} on the waitlist`,
+      href: "/bookings?status=waitlisted",
+    });
   }
-  const hkTasks = (hkOpen.data ?? []) as { status: string; started_at: string | null; target_minutes: number }[];
+  const hkTasks = (hkOpen.data ?? []) as {
+    status: string;
+    started_at: string | null;
+    target_minutes: number;
+  }[];
   const toInspect = hkTasks.filter((t) => t.status === "cleaned").length;
   const overdue = hkTasks.filter(
-    (t) => t.status === "in_progress" && t.started_at && minutesSince(t.started_at) > t.target_minutes,
+    (t) =>
+      t.status === "in_progress" &&
+      t.started_at &&
+      minutesSince(t.started_at) > t.target_minutes,
   ).length;
   if (overdue > 0 && can(session, "housekeeping.assign")) {
-    alerts.push({ text: `${plural(overdue, "room clean")} over the turnaround target`, href: "/housekeeping" });
+    alerts.push({
+      text: `${plural(overdue, "room clean")} over the turnaround target`,
+      href: "/housekeeping",
+    });
   }
   if (toInspect > 0 && can(session, "housekeeping.inspect")) {
-    alerts.push({ text: `${plural(toInspect, "room")} waiting for inspection`, href: "/housekeeping" });
+    alerts.push({
+      text: `${plural(toInspect, "room")} waiting for inspection`,
+      href: "/housekeeping",
+    });
   }
   if ((openRequests.count ?? 0) > 0) {
-    alerts.push({ text: `${plural(openRequests.count ?? 0, "open guest request")}`, href: "/front-desk" });
+    alerts.push({
+      text: `${plural(openRequests.count ?? 0, "open guest request")}`,
+      href: "/front-desk",
+    });
   }
   if (can(session, "guests.view")) {
     const { data: inHouseGuests } = await supabase
@@ -211,35 +304,69 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .not("guest_id", "is", null);
     const md = today.slice(5);
     const celebrating = (inHouseGuests ?? []).filter((b) => {
-      const g = b.guests as unknown as { date_of_birth: string | null; anniversary: string | null } | null;
-      return g?.date_of_birth?.slice(5) === md || g?.anniversary?.slice(5) === md;
+      const g = b.guests as unknown as {
+        date_of_birth: string | null;
+        anniversary: string | null;
+      } | null;
+      return (
+        g?.date_of_birth?.slice(5) === md || g?.anniversary?.slice(5) === md
+      );
     }).length;
     if (celebrating) {
-      alerts.push({ text: `${plural(celebrating, "in-house guest")} celebrating a birthday or anniversary today`, href: "/guests/occasions" });
+      alerts.push({
+        text: `${plural(celebrating, "in-house guest")} celebrating a birthday or anniversary today`,
+        href: "/guests/occasions",
+      });
     }
   }
-  const tickets = (mtOpen.data ?? []) as { priority: string; due_at: string; assigned_to: string | null }[];
+  const tickets = (mtOpen.data ?? []) as {
+    priority: string;
+    due_at: string;
+    assigned_to: string | null;
+  }[];
   if (can(session, "maintenance.manage") || can(session, "maintenance.work")) {
     const urgent = tickets.filter((t) => t.priority === "urgent").length;
     const late = tickets.filter((t) => minutesSince(t.due_at) > 0).length;
-    const mine = tickets.filter((t) => t.assigned_to === session.staff.id).length;
-    if (urgent) alerts.push({ text: `${plural(urgent, "urgent maintenance ticket")} open`, href: "/maintenance?priority=urgent" });
-    if (late) alerts.push({ text: `${plural(late, "maintenance ticket")} past the resolution target`, href: "/maintenance" });
+    const mine = tickets.filter(
+      (t) => t.assigned_to === session.staff.id,
+    ).length;
+    if (urgent)
+      alerts.push({
+        text: `${plural(urgent, "urgent maintenance ticket")} open`,
+        href: "/maintenance?priority=urgent",
+      });
+    if (late)
+      alerts.push({
+        text: `${plural(late, "maintenance ticket")} past the resolution target`,
+        href: "/maintenance",
+      });
     if (mine && !can(session, "maintenance.manage")) {
-      alerts.push({ text: `${plural(mine, "maintenance ticket")} assigned to you`, href: "/maintenance/mine" });
+      alerts.push({
+        text: `${plural(mine, "maintenance ticket")} assigned to you`,
+        href: "/maintenance/mine",
+      });
     }
   }
   if (can(session, "hr.approve_leave") && leavePending.data?.length) {
-    alerts.push({ text: `${leavePending.data.length} leave ${leavePending.data.length === 1 ? "request" : "requests"} waiting for approval`, href: "/hr/leave" });
+    alerts.push({
+      text: `${leavePending.data.length} leave ${leavePending.data.length === 1 ? "request" : "requests"} waiting for approval`,
+      href: "/hr/leave",
+    });
   }
 
   const canFrontDesk = can(session, "frontdesk.view");
 
   return (
     <>
-      <LiveRefresh tables={["bookings", "rooms", "guest_requests", "maintenance_tickets"]} />
+      <LiveRefresh
+        tables={["bookings", "rooms", "guest_requests", "maintenance_tickets"]}
+      />
       <PageHeader
-        title={new Date(today + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        title={new Date(today + "T00:00:00").toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })}
         description={`Business date ${fmtDate(settings.business_date)}`}
         // One summary chip: the items themselves are listed in "Needs
         // attention" right below, so repeating each one here said it twice.
@@ -279,13 +406,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         stats={
           seesBookings
             ? [
-                { label: "Arriving today", value: arrivalList.length, icon: <LogIn />, href: "/front-desk" },
-                { label: "Departing today", value: departureList.length, icon: <LogOut />, href: "/front-desk" },
-                { label: "In house", value: inHouse.count ?? 0, icon: <BedDouble />, href: "/front-desk" },
+                {
+                  label: "To arrive",
+                  value: arrivalList.length,
+                  icon: <LogIn />,
+                  href: "/front-desk",
+                },
+                {
+                  label: "To depart",
+                  value: departureList.length,
+                  icon: <LogOut />,
+                  href: "/front-desk",
+                },
+                {
+                  label: "In house",
+                  value: inHouse.count ?? 0,
+                  icon: <BedDouble />,
+                  href: "/front-desk",
+                },
                 {
                   label: "Occupancy tonight",
                   value: occupancy === null ? "—" : `${occupancy}%`,
-                  hint: sellable ? `${committed} of ${sellable} rooms` : "Add rooms to inventory",
+                  hint: sellable
+                    ? `${committed} of ${sellable} rooms`
+                    : "Add rooms to inventory",
                   icon: <Gauge />,
                   href: "/rooms",
                 },
@@ -294,7 +438,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }
         progress={
           seesBookings && occupancy !== null
-            ? { value: occupancy, label: <><strong className="font-semibold text-white">{occupancy}%</strong> occupied tonight · {committed} of {sellable} rooms</> }
+            ? {
+                value: occupancy,
+                label: (
+                  <>
+                    <strong className="font-semibold text-white">
+                      {occupancy}%
+                    </strong>{" "}
+                    occupied tonight · {committed} of {sellable} rooms
+                  </>
+                ),
+              }
             : undefined
         }
       />
@@ -309,7 +463,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {alerts.length > 0 ? (
         <Card className="mb-6">
           <div id="attention" className="scroll-mt-24">
-            <CardHeader icon={<AlertTriangle />} title="Needs attention" count={alerts.length} />
+            <CardHeader
+              icon={<AlertTriangle />}
+              title="Needs attention"
+              count={alerts.length}
+            />
           </div>
           <div className="divide-y divide-slate-100">
             {alerts.map((a) => {
@@ -318,17 +476,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <span className="w-7 h-7 rounded-lg bg-amber-100 ring-1 ring-amber-200/70 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
                   </span>
-                  <span className="group-hover:text-slate-900 transition-colors duration-150">{a.text}</span>
+                  <span className="group-hover:text-slate-900 transition-colors duration-150">
+                    {a.text}
+                  </span>
                 </>
               );
               // An alert links only to a page this person can open (0043).
               return canOpen(session, a.href) ? (
-                <Link key={a.text} href={a.href} className="group flex items-center gap-3 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150">
+                <Link
+                  key={a.text}
+                  href={a.href}
+                  className="group flex items-center gap-3 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors duration-150"
+                >
                   {inner}
                   <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-300 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-slate-500" />
                 </Link>
               ) : (
-                <div key={a.text} className="flex items-center gap-3 px-5 py-3 text-sm text-slate-700">
+                <div
+                  key={a.text}
+                  className="flex items-center gap-3 px-5 py-3 text-sm text-slate-700"
+                >
                   {inner}
                 </div>
               );
@@ -341,7 +508,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <CircleCheck className="w-[18px] h-[18px]" />
           </span>
           <p className="text-sm text-slate-600">
-            <strong className="font-semibold text-slate-900">You&apos;re all clear.</strong> Nothing is waiting on you.
+            <strong className="font-semibold text-slate-900">
+              You&apos;re all clear.
+            </strong>{" "}
+            Nothing is waiting on you.
           </p>
         </Card>
       )}
@@ -373,7 +543,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <StatCard
             label={`GOPPAR · ${fmtDate(kpiDay)}`}
             value={todayKpis.goppar === null ? "—" : fmtMoney(todayKpis.goppar)}
-            hint={todayKpis.goppar === null ? "Set a monthly operating cost" : "After operating cost"}
+            hint={
+              todayKpis.goppar === null
+                ? "Set a monthly operating cost"
+                : "After operating cost"
+            }
             href="/reports"
             icon={<TrendingUp />}
           />
@@ -383,7 +557,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {((seesBookings && todayKpis) || roomList.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {seesBookings && todayKpis && (
-            <Card className={roomList.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
+            <Card
+              className={
+                roomList.length > 0 ? "lg:col-span-2" : "lg:col-span-3"
+              }
+            >
               <CardHeader
                 icon={<ChartColumn />}
                 title="Occupancy & revenue"
@@ -393,10 +571,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 action={
                   <div className="hidden sm:flex items-center gap-4 text-xs text-slate-600 mr-2">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ background: OCCUPANCY_COLOR }} /> Occupancy
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: OCCUPANCY_COLOR }}
+                      />{" "}
+                      Occupancy
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ background: REVENUE_COLOR }} /> Revenue
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: REVENUE_COLOR }}
+                      />{" "}
+                      Revenue
                     </span>
                   </div>
                 }
@@ -408,7 +594,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           )}
           {roomList.length > 0 && (
             <Card className={seesBookings && todayKpis ? "" : "lg:col-span-3"}>
-              <CardHeader icon={<BedDouble />} title="Room status" href="/rooms" linkLabel="Room board" />
+              <CardHeader
+                icon={<BedDouble />}
+                title="Room status"
+                href="/rooms"
+                linkLabel="Room board"
+              />
               <div className="px-5 py-4">
                 <RoomStatusDonut
                   data={Object.keys(BOARD_TONE).map((label) => ({
@@ -426,13 +617,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {seesBookings && (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <MovementList title="Arrivals" icon={<LogIn />} bookings={arrivalList} empty="No arrivals today" />
-            <MovementList title="Departures" icon={<LogOut />} bookings={departureList} empty="No departures today" />
+            <MovementList
+              title="To arrive"
+              icon={<LogIn />}
+              bookings={arrivalList}
+              empty="Nobody left to arrive today"
+            />
+            <MovementList
+              title="To depart"
+              icon={<LogOut />}
+              bookings={departureList}
+              empty="Nobody left to depart today"
+            />
           </div>
 
           {(tapeRooms.data?.length ?? 0) > 0 && (
             <Card className="mb-6 overflow-hidden">
-              <CardHeader icon={<GanttChart />} title="Tape chart" href="/tape-chart" linkLabel="Full tape chart" />
+              <CardHeader
+                icon={<GanttChart />}
+                title="Tape chart"
+                href="/tape-chart"
+                linkLabel="Full tape chart"
+              />
               <div className="px-5 pt-4">
                 <TapeChartLegend />
               </div>
@@ -469,29 +675,43 @@ function MovementList({
 }) {
   return (
     <Card>
-      <CardHeader icon={icon} title={title} count={bookings.length} href="/front-desk" />
+      <CardHeader
+        icon={icon}
+        title={title}
+        count={bookings.length}
+        href="/front-desk"
+      />
       {bookings.length === 0 ? (
         <EmptyState icon={icon} message={empty} />
       ) : (
         <ul className="divide-y divide-slate-100">
           {bookings.map((b) => (
             <li key={b.id}>
-              <Link href={`/bookings/${b.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors duration-150">
+              <Link
+                href={`/bookings/${b.id}`}
+                className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors duration-150"
+              >
                 <Avatar name={b.guests?.full_name || b.contact_name} />
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-medium text-slate-900 truncate">
                     {b.guests?.full_name || b.contact_name || "Unnamed guest"}
                   </span>
                   <span className="block text-xs text-slate-500">
-                    {plural(b.adults + b.children, "guest")} · {plural(b.rooms_count, "room")}
+                    {plural(b.adults + b.children, "guest")} ·{" "}
+                    {plural(b.rooms_count, "room")}
                   </span>
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-xs font-medium tabular-nums ${
-                    b.rooms?.room_number ? "bg-slate-100 text-slate-700" : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                    b.rooms?.room_number
+                      ? "bg-slate-100 text-slate-700"
+                      : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
                   }`}
                 >
-                  <BedDouble aria-hidden="true" className="w-3 h-3 opacity-60" />
+                  <BedDouble
+                    aria-hidden="true"
+                    className="w-3 h-3 opacity-60"
+                  />
                   {b.rooms?.room_number ?? "No room"}
                 </span>
                 <StatusPill status={b.status} />

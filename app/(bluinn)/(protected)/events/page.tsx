@@ -70,7 +70,7 @@ export default async function EventsPage({
 }: {
   searchParams: Promise<{ show?: string; page?: string }>;
 }) {
-  const session = await requireAnyPermission(["events.view", "events.book"]);
+  const session = await requireAnyPermission(["events.view", "events.book", "events.quote", "events.approve", "events.bill"]);
   const { show, page: pageRaw } = await searchParams;
   const requestedPage = pageParam(pageRaw);
   const supabase = await createClient();

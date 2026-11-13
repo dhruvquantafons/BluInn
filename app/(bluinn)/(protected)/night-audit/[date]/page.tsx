@@ -5,15 +5,47 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { can } from "../../../../lib/permissions";
-import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "../../../../lib/types";
-import { Card, SectionTitle, StatCard, Tag, fmtDate, fmtDateTime, fmtMoney } from "../../../components/ui";
+import {
+  PAYMENT_METHOD_LABELS,
+  type PaymentMethod,
+} from "../../../../lib/types";
+import { FLASH_DEPARTMENTS } from "../../../../lib/reports";
+import { REVENUE_DEPT_LABELS } from "../../../../lib/gst";
+import {
+  Card,
+  SectionTitle,
+  StatCard,
+  Tag,
+  fmtDate,
+  fmtDateTime,
+  fmtMoney,
+} from "../../../components/ui";
 import PrintButton from "../../../components/PrintButton";
 
 interface Report {
   rooms: { available: number; sold: number; occupancy_percent: number };
-  revenue: { room: number; fees: number; extras: number; penalties: number; tax: number; total: number };
+  /**
+   * Since 0044: room, other, net (before tax), tax, total (with tax) and
+   * by_dept, on the definition every report uses. Days closed earlier stored
+   * room, fees, extras, penalties, tax and total.
+   */
+  revenue: {
+    room: number;
+    tax: number;
+    total: number;
+    net?: number;
+    other?: number;
+    by_dept?: Record<string, number>;
+    fees?: number;
+    extras?: number;
+    penalties?: number;
+  };
   kpis: { adr: number; revpar: number };
-  payments: { by_method: Record<string, number>; by_cashier: Record<string, number>; total: number };
+  payments: {
+    by_method: Record<string, number>;
+    by_cashier: Record<string, number>;
+    total: number;
+  };
   movements: {
     arrivals: number;
     departures: number;
@@ -25,21 +57,44 @@ interface Report {
     event_rooms_released?: { event: string; rooms: number }[];
   };
   exceptions: {
-    overstays: { reference: string; guest: string; room: string; due_out: string; extended_to?: string | null }[];
+    overstays: {
+      reference: string;
+      guest: string;
+      room: string;
+      due_out: string;
+      extended_to?: string | null;
+    }[];
     /** Since 0040: split stays handed over, and stays waiting for a GST invoice. */
     handovers?: { reference: string; next: string }[];
     to_invoice?: { reference: string; guest: string; reason: string }[];
   };
-  housekeeping: { room_statuses_updated: number; room_statuses_failed?: string[]; tasks_created?: number };
+  housekeeping: {
+    room_statuses_updated: number;
+    room_statuses_failed?: string[];
+    tasks_created?: number;
+  };
   maintenance?: { preventive_created: number; escalated: number };
   compliance: { id_documents_purged: number };
   loyalty?: { points_expired: number; tiers_reviewed: number };
-  outlets?: { bills: number; total: number; by_outlet: Record<string, number>; by_method: Record<string, number> };
+  outlets?: {
+    bills: number;
+    total: number;
+    tips?: number;
+    by_outlet: Record<string, number>;
+    by_method: Record<string, number>;
+  };
   posted_room_charges: number;
 }
 
-export default async function NightAuditReportPage({ params }: { params: Promise<{ date: string }> }) {
-  const session = await requireAnyPermission(["frontdesk.night_audit", "folio.view"]);
+export default async function NightAuditReportPage({
+  params,
+}: {
+  params: Promise<{ date: string }>;
+}) {
+  const session = await requireAnyPermission([
+    "frontdesk.night_audit",
+    "folio.view",
+  ]);
   const { date } = await params;
   const supabase = await createClient();
   const settings = await getSettings();
@@ -48,21 +103,31 @@ export default async function NightAuditReportPage({ params }: { params: Promise
     .from("night_audits")
     .select("*, staff:started_by(full_name, email)")
     .eq("business_date", date)
+    // One hotel's audit: someone who works at two would otherwise match both.
+    .eq("property_id", settings.id ?? "")
     .maybeSingle();
   if (!data) notFound();
 
   const r = data.report as Report;
-  const who = (data.staff as { full_name: string; email: string } | null)?.full_name || "—";
+  const who =
+    (data.staff as { full_name: string; email: string } | null)?.full_name ||
+    "—";
 
   return (
     <>
       <div className="flex justify-between items-center mb-4 print:hidden">
-        <Link href="/night-audit" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
+        <Link
+          href="/night-audit"
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
+        >
           <ArrowLeft className="w-3.5 h-3.5" /> Night audit
         </Link>
         <span className="flex items-center gap-4">
           {can(session, "reports.financial") && (
-            <Link href={`/reports/flash?date=${date}`} className="text-xs text-brand-700 hover:underline">
+            <Link
+              href={`/reports/flash?date=${date}`}
+              className="text-xs text-brand-700 hover:underline"
+            >
               Flash report for this day
             </Link>
           )}
@@ -70,42 +135,86 @@ export default async function NightAuditReportPage({ params }: { params: Promise
         </span>
       </div>
 
-      <h1 className="text-xl font-semibold tracking-tight text-slate-900">Daily report · {fmtDate(date)}</h1>
+      <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+        Daily report · {fmtDate(date)}
+      </h1>
       <p className="text-xs text-slate-500 mt-1 mb-6">
         {settings.name} · run by {who}
-        {data.completed_at ? ` · closed ${fmtDateTime(data.completed_at)}` : ""} ·{" "}
-        <Tag tone={data.status === "completed" ? "green" : "red"}>{data.status}</Tag>
+        {data.completed_at
+          ? ` · closed ${fmtDateTime(data.completed_at)}`
+          : ""}{" "}
+        ·{" "}
+        <Tag tone={data.status === "completed" ? "green" : "red"}>
+          {data.status}
+        </Tag>
       </p>
 
       {!r?.rooms ? (
-        <p className="text-sm text-rose-800">This audit did not complete. {data.error}</p>
+        <p className="text-sm text-rose-800">
+          This audit did not complete. {data.error}
+        </p>
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Occupancy" value={`${r.rooms.occupancy_percent}%`} hint={`${r.rooms.sold} of ${r.rooms.available} rooms`} />
-            <StatCard label="ADR" value={fmtMoney(r.kpis.adr)} hint="Room revenue ÷ rooms sold" />
-            <StatCard label="RevPAR" value={fmtMoney(r.kpis.revpar)} hint="Room revenue ÷ rooms available" />
-            <StatCard label="Total revenue" value={fmtMoney(r.revenue.total)} hint={`incl. ${settings.tax_label} ${fmtMoney(r.revenue.tax)}`} />
+            <StatCard
+              label="Occupancy"
+              value={`${r.rooms.occupancy_percent}%`}
+              hint={`${r.rooms.sold} of ${r.rooms.available} rooms`}
+            />
+            <StatCard
+              label="ADR"
+              value={fmtMoney(r.kpis.adr)}
+              hint="Room revenue ÷ rooms sold"
+            />
+            <StatCard
+              label="RevPAR"
+              value={fmtMoney(r.kpis.revpar)}
+              hint="Room revenue ÷ rooms available"
+            />
+            <StatCard
+              label="Revenue"
+              value={fmtMoney(r.revenue.net ?? r.revenue.total - r.revenue.tax)}
+              hint={`Before ${settings.tax_label} of ${fmtMoney(r.revenue.tax)}`}
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-5">
               <SectionTitle>Revenue</SectionTitle>
+              {!r.revenue.by_dept && (
+                <p className="text-[11px] text-slate-500 -mt-2 mb-3">
+                  Closed before 13 Nov 2026, on the earlier basis: paid-outs and room-charged tips counted as revenue, and
+                  outlet bills paid at the outlet, events billed on their own, allowances and credit notes did not. The
+                  reports show this day on the current definition, so their revenue can differ from this page.
+                </p>
+              )}
               <dl className="text-sm space-y-1.5">
-                {[
-                  ["Rooms (net)", r.revenue.room],
-                  ["Fees", r.revenue.fees],
-                  ["Extras", r.revenue.extras],
-                  ["Penalties", r.revenue.penalties],
-                  [settings.tax_label, r.revenue.tax],
-                ].map(([k, v]) => (
+                {(r.revenue.by_dept
+                  ? [
+                      ...FLASH_DEPARTMENTS.filter(
+                        (d) => Number(r.revenue.by_dept?.[d] ?? 0) !== 0,
+                      ).map((d) => [
+                        REVENUE_DEPT_LABELS[d] ?? d,
+                        Number(r.revenue.by_dept?.[d] ?? 0),
+                      ]),
+                      ["Revenue before tax", r.revenue.net ?? 0],
+                      [settings.tax_label, r.revenue.tax],
+                    ]
+                  : [
+                      ["Rooms (net)", r.revenue.room],
+                      ["Fees", r.revenue.fees ?? 0],
+                      ["Extras", r.revenue.extras ?? 0],
+                      ["Penalties", r.revenue.penalties ?? 0],
+                      [settings.tax_label, r.revenue.tax],
+                    ]
+                ).map(([k, v]) => (
                   <div key={k as string} className="flex justify-between">
                     <dt className="text-slate-700">{k}</dt>
                     <dd>{fmtMoney(v as number)}</dd>
                   </div>
                 ))}
                 <div className="flex justify-between border-t border-slate-200 pt-1.5 font-medium">
-                  <dt>Total</dt>
+                  <dt>Total with {settings.tax_label}</dt>
                   <dd>{fmtMoney(r.revenue.total)}</dd>
                 </div>
               </dl>
@@ -119,7 +228,9 @@ export default async function NightAuditReportPage({ params }: { params: Promise
                 <dl className="text-sm space-y-1.5">
                   {Object.entries(r.payments.by_method).map(([m, v]) => (
                     <div key={m} className="flex justify-between">
-                      <dt className="text-slate-700">{PAYMENT_METHOD_LABELS[m as PaymentMethod] ?? m}</dt>
+                      <dt className="text-slate-700">
+                        {PAYMENT_METHOD_LABELS[m as PaymentMethod] ?? m}
+                      </dt>
                       <dd>{fmtMoney(v)}</dd>
                     </div>
                   ))}
@@ -142,31 +253,45 @@ export default async function NightAuditReportPage({ params }: { params: Promise
           <Card className="p-5">
             <SectionTitle>Movements</SectionTitle>
             <p className="text-sm text-slate-700">
-              {r.movements.arrivals} arrival(s) · {r.movements.departures} departure(s) · {r.movements.cancellations}{" "}
-              cancellation(s) · {r.movements.no_shows.length} no-show(s) · {r.movements.expired_holds.length} expired
-              hold(s) · {r.posted_room_charges} room charge(s) posted
+              {r.movements.arrivals} arrival(s) · {r.movements.departures}{" "}
+              departure(s) · {r.movements.cancellations} cancellation(s) ·{" "}
+              {r.movements.no_shows.length} no-show(s) ·{" "}
+              {r.movements.expired_holds.length} expired hold(s) ·{" "}
+              {r.posted_room_charges} room charge(s) posted
             </p>
             {r.movements.no_shows.length > 0 && (
               <p className="text-xs text-slate-600 mt-2">
                 No-shows:{" "}
-                {r.movements.no_shows.map((n) => `${n.reference} ${n.guest}${n.penalty ? ` (${fmtMoney(n.penalty)})` : ""}`).join(", ")}
+                {r.movements.no_shows
+                  .map(
+                    (n) =>
+                      `${n.reference} ${n.guest}${n.penalty ? ` (${fmtMoney(n.penalty)})` : ""}`,
+                  )
+                  .join(", ")}
               </p>
             )}
             {r.movements.expired_holds.length > 0 && (
               <p className="text-xs text-slate-600 mt-1">
-                Holds released: {r.movements.expired_holds.map((n) => `${n.reference} ${n.guest}`).join(", ")}
+                Holds released:{" "}
+                {r.movements.expired_holds
+                  .map((n) => `${n.reference} ${n.guest}`)
+                  .join(", ")}
               </p>
             )}
             {(r.movements.event_rooms_released ?? []).length > 0 && (
               <p className="text-xs text-slate-600 mt-1">
                 Unsold event rooms released at their cut-off:{" "}
-                {(r.movements.event_rooms_released ?? []).map((e) => `${e.event} (${e.rooms})`).join(", ")}
+                {(r.movements.event_rooms_released ?? [])
+                  .map((e) => `${e.event} (${e.rooms})`)
+                  .join(", ")}
               </p>
             )}
             {r.movements.pending_arrivals_left.length > 0 && (
               <p className="text-xs text-amber-800 mt-1">
                 Carried forward (not marked no-show):{" "}
-                {r.movements.pending_arrivals_left.map((n) => `${n.reference} ${n.guest}`).join(", ")}
+                {r.movements.pending_arrivals_left
+                  .map((n) => `${n.reference} ${n.guest}`)
+                  .join(", ")}
               </p>
             )}
             {r.exceptions.overstays.length > 0 && (
@@ -183,32 +308,39 @@ export default async function NightAuditReportPage({ params }: { params: Promise
             {(r.exceptions.handovers ?? []).length > 0 && (
               <p className="text-xs text-slate-600 mt-1">
                 Split stays handed over:{" "}
-                {(r.exceptions.handovers ?? []).map((h) => `${h.reference} → ${h.next}`).join(", ")}
+                {(r.exceptions.handovers ?? [])
+                  .map((h) => `${h.reference} → ${h.next}`)
+                  .join(", ")}
               </p>
             )}
             {(r.exceptions.to_invoice ?? []).length > 0 && (
               <p className="text-xs text-amber-800 mt-1">
                 Needs a GST invoice (issue it from the booking&apos;s folio):{" "}
-                {(r.exceptions.to_invoice ?? []).map((t) => `${t.reference} ${t.guest} (${t.reason})`).join(", ")}
+                {(r.exceptions.to_invoice ?? [])
+                  .map((t) => `${t.reference} ${t.guest} (${t.reason})`)
+                  .join(", ")}
               </p>
             )}
             {(r.housekeeping.room_statuses_failed ?? []).length > 0 && (
               <p className="text-xs text-amber-800 mt-3">
-                Room status not synced with its block, so check it on the Rooms page:{" "}
-                {(r.housekeeping.room_statuses_failed ?? []).join(", ")}
+                Room status not synced with its block, so check it on the Rooms
+                page: {(r.housekeeping.room_statuses_failed ?? []).join(", ")}
               </p>
             )}
             <p className="text-[11px] text-slate-500 mt-3">
-              {r.housekeeping.room_statuses_updated} room status(es) synced with blocks ·{" "}
-              {r.housekeeping.tasks_created ?? 0} housekeeping task(s) created for the next day ·{" "}
-              {r.maintenance && `${r.maintenance.preventive_created} preventive maintenance ticket(s) raised, ${r.maintenance.escalated} overdue ticket(s) escalated · `}
+              {r.housekeeping.room_statuses_updated} room status(es) synced with
+              blocks · {r.housekeeping.tasks_created ?? 0} housekeeping task(s)
+              created for the next day ·{" "}
+              {r.maintenance &&
+                `${r.maintenance.preventive_created} preventive maintenance ticket(s) raised, ${r.maintenance.escalated} overdue ticket(s) escalated · `}
               {r.outlets &&
                 r.outlets.bills > 0 &&
-                `${r.outlets.bills} outlet bill(s) settled for ${fmtMoney(r.outlets.total)} · `}
+                `${r.outlets.bills} outlet bill(s) settled at the outlet for ${fmtMoney(r.outlets.total)}${r.outlets.tips ? `, plus ${fmtMoney(r.outlets.tips)} in tips` : ""} · `}
               {r.loyalty &&
                 `${r.loyalty.points_expired} loyalty point(s) expired, ${r.loyalty.tiers_reviewed} member tier(s) reviewed · `}
-              {r.compliance.id_documents_purged} identity
-              document(s) purged under the {settings.id_document_retention_days}-day retention policy.
+              {r.compliance.id_documents_purged} identity document(s) purged
+              under the {settings.id_document_retention_days}-day retention
+              policy.
             </p>
           </Card>
         </div>

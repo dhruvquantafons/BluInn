@@ -42,7 +42,7 @@ export default async function EventsDiaryPage({
 }: {
   searchParams: Promise<{ month?: string; space?: string }>;
 }) {
-  await requireAnyPermission(["events.view", "events.book"]);
+  await requireAnyPermission(["events.view", "events.book", "events.quote", "events.approve", "events.bill"]);
   const { month: monthParam, space: spaceParam } = await searchParams;
   const supabase = await createClient();
   const settings = await getSettings();

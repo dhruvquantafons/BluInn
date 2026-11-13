@@ -742,6 +742,8 @@ export interface InvoiceLine {
   /** GST invoices (0036) only. Absent on invoices issued before. */
   sac?: string;
   dept?: RevenueDept | null;
+  /** A paid-out or tip (0044): billed to the guest, but not a supply. */
+  reimbursement?: boolean;
   cgst?: number;
   sgst?: number;
   igst?: number;
@@ -764,7 +766,8 @@ export interface TaxBand {
 export type TaxRegime = "gst" | "simple";
 
 /** Where a charge's revenue belongs (folio_entries.revenue_dept, 0036). */
-export type RevenueDept = "rooms" | "fnb" | "laundry" | "spa" | "events" | "other" | "paid_out";
+/** paid_out and tip (0044) are on the bill but are not supplies: no tax, no revenue. */
+export type RevenueDept = "rooms" | "fnb" | "laundry" | "spa" | "events" | "other" | "paid_out" | "tip";
 
 export type CreditNoteReason = "deficiency" | "discount" | "cancellation" | "billing_error" | "other";
 

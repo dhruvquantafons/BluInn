@@ -1,16 +1,32 @@
 import Link from "next/link";
 import { requirePermission } from "../../../lib/auth";
 import { LANGUAGES } from "../../../lib/types";
-import { getSettings, hhmm, taxSlabsOf } from "../../../lib/settings";
+import {
+  getGroupLockout,
+  getSettings,
+  hhmm,
+  taxSlabsOf,
+} from "../../../lib/settings";
 import { emailConfigured, smsConfigured } from "../../../lib/integrations";
 import { saveSettings } from "../../actions";
 import { GST_STATES, stateLabel } from "../../../lib/gst";
-import { PageHeader, Card, Field, Check, Notice, Tag, SectionTitle, inputClass, fmtDate } from "../../components/ui";
+import {
+  PageHeader,
+  Card,
+  Field,
+  Check,
+  Notice,
+  Tag,
+  SectionTitle,
+  inputClass,
+  fmtDate,
+} from "../../components/ui";
 import ActionForm from "../../components/ActionForm";
 
 export default async function SettingsPage() {
   await requirePermission("settings.manage");
   const s = await getSettings();
+  const lockout = await getGroupLockout();
   const slabs = taxSlabsOf(s)
     .map((x) => `${x.up_to ?? "*"} ${x.rate}`)
     .join("\n");
@@ -29,34 +45,71 @@ export default async function SettingsPage() {
         title="Settings"
         description="Property details, policies, tax and security. Business date is moved only by night audit."
         action={
-          <Link href="/settings/status" className="text-xs text-brand-700 hover:underline">
+          <Link
+            href="/settings/status"
+            className="text-xs text-brand-700 hover:underline"
+          >
             System status
           </Link>
         }
       />
-      <ActionForm action={saveSettings} submitLabel="Save settings" className="space-y-6">
+      <ActionForm
+        action={saveSettings}
+        submitLabel="Save settings"
+        className="space-y-6"
+      >
         <Card className="p-5 space-y-4">
           <SectionTitle>Property</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Hotel name">
-              <input name="name" defaultValue={s.name} required className={inputClass} />
+              <input
+                name="name"
+                defaultValue={s.name}
+                required
+                className={inputClass}
+              />
             </Field>
             <Field label="Legal name">
-              <input name="legal_name" defaultValue={s.legal_name} className={inputClass} />
+              <input
+                name="legal_name"
+                defaultValue={s.legal_name}
+                className={inputClass}
+              />
             </Field>
-            <Field label="GSTIN" hint={s.gst_state_code ? `GST state ${stateLabel(s.gst_state_code)}` : "Printed on every GST invoice."}>
-              <input name="gstin" defaultValue={s.gstin} maxLength={15} className={`${inputClass} font-mono uppercase`} />
+            <Field
+              label="GSTIN"
+              hint={
+                s.gst_state_code
+                  ? `GST state ${stateLabel(s.gst_state_code)}`
+                  : "Printed on every GST invoice."
+              }
+            >
+              <input
+                name="gstin"
+                defaultValue={s.gstin}
+                maxLength={15}
+                className={`${inputClass} font-mono uppercase`}
+              />
             </Field>
           </div>
           <Field label="Address">
-            <input name="address" defaultValue={s.address} className={inputClass} />
+            <input
+              name="address"
+              defaultValue={s.address}
+              className={inputClass}
+            />
           </Field>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Field label="City">
               <input name="city" defaultValue={s.city} className={inputClass} />
             </Field>
             <Field label="State">
-              <input name="state" defaultValue={s.state} list="gst-states" className={inputClass} />
+              <input
+                name="state"
+                defaultValue={s.state}
+                list="gst-states"
+                className={inputClass}
+              />
               <datalist id="gst-states">
                 {GST_STATES.map((st) => (
                   <option key={st.code} value={st.name} />
@@ -64,56 +117,139 @@ export default async function SettingsPage() {
               </datalist>
             </Field>
             <Field label="Country">
-              <input name="country" defaultValue={s.country} className={inputClass} />
+              <input
+                name="country"
+                defaultValue={s.country}
+                className={inputClass}
+              />
             </Field>
             <Field label="PIN code">
-              <input name="postcode" defaultValue={s.postcode} className={inputClass} />
+              <input
+                name="postcode"
+                defaultValue={s.postcode}
+                className={inputClass}
+              />
             </Field>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Field label="Phone">
-              <input name="phone" defaultValue={s.phone} className={inputClass} />
+              <input
+                name="phone"
+                defaultValue={s.phone}
+                className={inputClass}
+              />
             </Field>
             <Field label="Email">
-              <input name="email" type="email" defaultValue={s.email} className={inputClass} />
+              <input
+                name="email"
+                type="email"
+                defaultValue={s.email}
+                className={inputClass}
+              />
             </Field>
             <Field label="Currency">
-              <input name="currency" defaultValue={s.currency} maxLength={3} className={`${inputClass} uppercase`} />
+              <input
+                name="currency"
+                defaultValue={s.currency}
+                maxLength={3}
+                className={`${inputClass} uppercase`}
+              />
             </Field>
             <Field label="Timezone">
-              <input name="timezone" defaultValue={s.timezone} className={inputClass} />
+              <input
+                name="timezone"
+                defaultValue={s.timezone}
+                className={inputClass}
+              />
             </Field>
           </div>
-          <p className="text-xs text-slate-600">Business date: {fmtDate(s.business_date)}</p>
+          <p className="text-xs text-slate-600">
+            Business date: {fmtDate(s.business_date)}
+          </p>
         </Card>
 
         <Card className="p-5 space-y-4">
           <SectionTitle>Front desk policy</SectionTitle>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <Field label="Check-in from">
-              <input type="time" name="check_in_time" defaultValue={hhmm(s.check_in_time)} className={inputClass} />
+              <input
+                type="time"
+                name="check_in_time"
+                defaultValue={hhmm(s.check_in_time)}
+                className={inputClass}
+              />
             </Field>
             <Field label="Check-out by">
-              <input type="time" name="check_out_time" defaultValue={hhmm(s.check_out_time)} className={inputClass} />
+              <input
+                type="time"
+                name="check_out_time"
+                defaultValue={hhmm(s.check_out_time)}
+                className={inputClass}
+              />
             </Field>
-            <Field label="Tentative hold (hours)" hint="Night audit releases unconfirmed holds after this.">
-              <input type="number" name="hold_hours" min={1} max={720} defaultValue={s.hold_hours} className={inputClass} />
+            <Field
+              label="Tentative hold (hours)"
+              hint="Night audit releases unconfirmed holds after this."
+            >
+              <input
+                type="number"
+                name="hold_hours"
+                min={1}
+                max={720}
+                defaultValue={s.hold_hours}
+                className={inputClass}
+              />
             </Field>
-            <Field label="Cleaning target (minutes)" hint="Default turnaround per room; room types can override.">
-              <input type="number" name="hk_default_minutes" min={5} max={480} defaultValue={s.hk_default_minutes} className={inputClass} />
+            <Field
+              label="Cleaning target (minutes)"
+              hint="Default turnaround per room; room types can override."
+            >
+              <input
+                type="number"
+                name="hk_default_minutes"
+                min={5}
+                max={480}
+                defaultValue={s.hk_default_minutes}
+                className={inputClass}
+              />
             </Field>
             <Field label="Deep clean every (days)">
-              <input type="number" name="hk_deep_clean_days" min={1} max={365} defaultValue={s.hk_deep_clean_days} className={inputClass} />
+              <input
+                type="number"
+                name="hk_deep_clean_days"
+                min={1}
+                max={365}
+                defaultValue={s.hk_deep_clean_days}
+                className={inputClass}
+              />
             </Field>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Field label="Early check-in fee">{feeSelect("early_checkin_fee_type", s.early_checkin_fee_type)}</Field>
-            <Field label="Value">
-              <input type="number" name="early_checkin_fee_value" min={0} step="0.01" defaultValue={s.early_checkin_fee_value} className={inputClass} />
+            <Field label="Early check-in fee">
+              {feeSelect("early_checkin_fee_type", s.early_checkin_fee_type)}
             </Field>
-            <Field label="Late check-out fee">{feeSelect("late_checkout_fee_type", s.late_checkout_fee_type)}</Field>
             <Field label="Value">
-              <input type="number" name="late_checkout_fee_value" min={0} step="0.01" defaultValue={s.late_checkout_fee_value} className={inputClass} />
+              <input
+                type="number"
+                name="early_checkin_fee_value"
+                min={0}
+                step="0.01"
+                defaultValue={s.early_checkin_fee_value}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Late check-out fee">
+              {feeSelect("late_checkout_fee_type", s.late_checkout_fee_type)}
+            </Field>
+            <Field label="Value">
+              <input
+                type="number"
+                name="late_checkout_fee_value"
+                min={0}
+                step="0.01"
+                defaultValue={s.late_checkout_fee_value}
+                className={inputClass}
+              />
             </Field>
           </div>
           <Check
@@ -128,54 +264,135 @@ export default async function SettingsPage() {
           <SectionTitle>Tax</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Tax name">
-              <input name="tax_label" defaultValue={s.tax_label} className={inputClass} />
+              <input
+                name="tax_label"
+                defaultValue={s.tax_label}
+                className={inputClass}
+              />
             </Field>
-            <Field label="Room tax slabs" hint='One per line: "ceiling rate". Last line "* rate". Per room per night.'>
-              <textarea name="tax_slabs" rows={3} defaultValue={slabs} className={`${inputClass} font-mono`} />
+            <Field
+              label="Room tax slabs"
+              hint='One per line: "ceiling rate". Last line "* rate". Per room per night.'
+            >
+              <textarea
+                name="tax_slabs"
+                rows={3}
+                defaultValue={slabs}
+                className={`${inputClass} font-mono`}
+              />
             </Field>
             <div className="pt-6">
-              <Check name="tax_inclusive" defaultChecked={s.tax_inclusive} label="Published rates include tax" />
+              <Check
+                name="tax_inclusive"
+                defaultChecked={s.tax_inclusive}
+                label="Published rates include tax"
+              />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Invoice format" hint="GST invoices carry SAC codes, CGST/SGST and the buyer's GSTIN.">
-              <select name="tax_regime" defaultValue={s.tax_regime} className={inputClass}>
+            <Field
+              label="Invoice format"
+              hint="GST invoices carry SAC codes, CGST/SGST and the buyer's GSTIN."
+            >
+              <select
+                name="tax_regime"
+                defaultValue={s.tax_regime}
+                className={inputClass}
+              >
                 <option value="gst">GST tax invoice (India)</option>
                 <option value="simple">Plain invoice, one tax line</option>
               </select>
             </Field>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Field label="SAC — rooms" hint="Also cancellation and no-show fees.">
-              <input name="sac_room" defaultValue={s.sac_room} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            <Field
+              label="SAC — rooms"
+              hint="Also cancellation and no-show fees."
+            >
+              <input
+                name="sac_room"
+                defaultValue={s.sac_room}
+                maxLength={8}
+                inputMode="numeric"
+                className={`${inputClass} font-mono`}
+              />
             </Field>
-            <Field label="SAC — food & beverage" hint="Outlets can set their own under POS.">
-              <input name="sac_fnb" defaultValue={s.sac_fnb} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+            <Field
+              label="SAC — food & beverage"
+              hint="Outlets can set their own under POS."
+            >
+              <input
+                name="sac_fnb"
+                defaultValue={s.sac_fnb}
+                maxLength={8}
+                inputMode="numeric"
+                className={`${inputClass} font-mono`}
+              />
             </Field>
             <Field label="SAC — events">
-              <input name="sac_event" defaultValue={s.sac_event} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+              <input
+                name="sac_event"
+                defaultValue={s.sac_event}
+                maxLength={8}
+                inputMode="numeric"
+                className={`${inputClass} font-mono`}
+              />
             </Field>
             <Field label="SAC — other charges">
-              <input name="sac_other" defaultValue={s.sac_other} maxLength={8} inputMode="numeric" className={`${inputClass} font-mono`} />
+              <input
+                name="sac_other"
+                defaultValue={s.sac_other}
+                maxLength={8}
+                inputMode="numeric"
+                className={`${inputClass} font-mono`}
+              />
             </Field>
           </div>
           <Notice tone="warn">
-            Seeded with India&apos;s accommodation GST from 22 September 2025 (5% up to ₹7,500, 18% above) and the usual SAC
-            codes (996311 rooms, 996331 restaurant, 996334 event catering). Confirm both with the hotel&apos;s accountant.
+            Seeded with India&apos;s accommodation GST from 22 September 2025
+            (5% up to ₹7,500, 18% above) and the usual SAC codes (996311 rooms,
+            996331 restaurant, 996334 event catering). Confirm both with the
+            hotel&apos;s accountant.
           </Notice>
         </Card>
 
         <Card className="p-5 space-y-4">
           <SectionTitle>Billing &amp; invoicing</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Invoice number prefix" hint="Numbers read PREFIX/2026-27/0001. Up to 3 letters for GST.">
-              <input name="invoice_prefix" defaultValue={s.invoice_prefix} maxLength={10} className={`${inputClass} uppercase`} />
+            <Field
+              label="Invoice number prefix"
+              hint="Numbers read PREFIX/2026-27/0001. Up to 3 letters for GST."
+            >
+              <input
+                name="invoice_prefix"
+                defaultValue={s.invoice_prefix}
+                maxLength={10}
+                className={`${inputClass} uppercase`}
+              />
             </Field>
-            <Field label="Credit note prefix" hint="Its own series: CN/2026-27/0001.">
-              <input name="credit_note_prefix" defaultValue={s.credit_note_prefix} maxLength={6} className={`${inputClass} uppercase`} />
+            <Field
+              label="Credit note prefix"
+              hint="Its own series: CN/2026-27/0001."
+            >
+              <input
+                name="credit_note_prefix"
+                defaultValue={s.credit_note_prefix}
+                maxLength={6}
+                className={`${inputClass} uppercase`}
+              />
             </Field>
-            <Field label="Refund approval above (₹)" hint="0 = every refund needs approval.">
-              <input type="number" name="refund_approval_threshold" min={0} step="0.01" defaultValue={s.refund_approval_threshold} className={inputClass} />
+            <Field
+              label="Refund approval above (₹)"
+              hint="0 = every refund needs approval."
+            >
+              <input
+                type="number"
+                name="refund_approval_threshold"
+                min={0}
+                step="0.01"
+                defaultValue={s.refund_approval_threshold}
+                className={inputClass}
+              />
             </Field>
             <div className="pt-6">
               <Check
@@ -186,7 +403,10 @@ export default async function SettingsPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Outlet charges per stay (₹)" hint="Most a stay may carry unpaid from the outlets. 0 = no limit.">
+            <Field
+              label="Outlet charges per stay (₹)"
+              hint="Most a stay may carry unpaid from the outlets. 0 = no limit."
+            >
               <input
                 type="number"
                 name="pos_room_charge_limit"
@@ -224,19 +444,31 @@ export default async function SettingsPage() {
               className={inputClass}
             />
           </Field>
-          <Field label="Invoice terms" hint="Printed at the foot of every invoice.">
-            <textarea name="invoice_terms" rows={2} defaultValue={s.invoice_terms} className={inputClass} />
+          <Field
+            label="Invoice terms"
+            hint="Printed at the foot of every invoice."
+          >
+            <textarea
+              name="invoice_terms"
+              rows={2}
+              defaultValue={s.invoice_terms}
+              className={inputClass}
+            />
           </Field>
           <Notice tone="warn">
-            Invoice numbers are sequential per financial year and are never reused. Changing the prefix starts a new
-            series; it does not renumber invoices already issued.
+            Invoice numbers are sequential per financial year and are never
+            reused. Changing the prefix starts a new series; it does not
+            renumber invoices already issued.
           </Notice>
         </Card>
 
         <Card className="p-5 space-y-4">
           <SectionTitle>Notifications</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Pre-arrival reminder (days before)" hint="0 = do not send it.">
+            <Field
+              label="Pre-arrival reminder (days before)"
+              hint="0 = do not send it."
+            >
               <input
                 type="number"
                 name="notify_pre_arrival_days"
@@ -246,7 +478,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Check-in instructions (days before)" hint="Times, ID needed, how to reach us. 0 = off.">
+            <Field
+              label="Check-in instructions (days before)"
+              hint="Times, ID needed, how to reach us. 0 = off."
+            >
               <input
                 type="number"
                 name="notify_checkin_days"
@@ -256,7 +491,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Thank-you & feedback (days after)" hint="Sent after departure to thank the guest. 0 = off.">
+            <Field
+              label="Thank-you & feedback (days after)"
+              hint="Sent after departure to thank the guest. 0 = off."
+            >
               <input
                 type="number"
                 name="notify_post_stay_days"
@@ -285,14 +523,19 @@ export default async function SettingsPage() {
             />
           </div>
           <Notice>
-            The three timed guest messages go out from the nightly job, which needs{" "}
-            <span className="font-mono">CRON_SECRET</span> set. Wording for every message is edited under{" "}
-            <Link href="/settings/templates" className="text-brand-700 underline">
+            The three timed guest messages go out from the nightly job, which
+            needs <span className="font-mono">CRON_SECRET</span> set. Wording
+            for every message is edited under{" "}
+            <Link
+              href="/settings/templates"
+              className="text-brand-700 underline"
+            >
               Templates
             </Link>
-            , per language. Email needs <span className="font-mono">RESEND_API_KEY</span> and SMS needs the Twilio
-            keys; without them each attempt is still recorded as &ldquo;not configured&rdquo; so nothing is lost
-            silently.
+            , per language. Email needs{" "}
+            <span className="font-mono">RESEND_API_KEY</span> and SMS needs the
+            Twilio keys; without them each attempt is still recorded as
+            &ldquo;not configured&rdquo; so nothing is lost silently.
           </Notice>
         </Card>
 
@@ -313,7 +556,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Forecast horizon (nights)" hint="How far ahead the forecast looks and the rules price.">
+            <Field
+              label="Forecast horizon (nights)"
+              hint="How far ahead the forecast looks and the rules price."
+            >
               <input
                 type="number"
                 name="revenue_forecast_days"
@@ -323,7 +569,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Never sell below (₹)" hint="Holds every pricing rule above this. 0 = no floor.">
+            <Field
+              label="Never sell below (₹)"
+              hint="Holds every pricing rule above this. 0 = no floor."
+            >
               <input
                 type="number"
                 name="revenue_floor_rate"
@@ -333,7 +582,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Never sell above (₹)" hint="Holds every pricing rule below this. 0 = no ceiling.">
+            <Field
+              label="Never sell above (₹)"
+              hint="Holds every pricing rule below this. 0 = no ceiling."
+            >
               <input
                 type="number"
                 name="revenue_ceiling_rate"
@@ -345,9 +597,11 @@ export default async function SettingsPage() {
             </Field>
           </div>
           <Notice>
-            The floor and ceiling are the last word on any rule&apos;s output, so a mistyped rule can embarrass the
-            hotel by a little rather than by a lot. Each waiting change is judged against the threshold that was in
-            force when the rules ran, so raising it here does not approve what is already in the queue.
+            The floor and ceiling are the last word on any rule&apos;s output,
+            so a mistyped rule can embarrass the hotel by a little rather than
+            by a lot. Each waiting change is judged against the threshold that
+            was in force when the rules ran, so raising it here does not approve
+            what is already in the queue.
           </Notice>
         </Card>
 
@@ -367,7 +621,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Service charge (%)" hint="Added to every event and taxed at the hall's own rate. 0 = none.">
+            <Field
+              label="Service charge (%)"
+              hint="Added to every event and taxed at the hall's own rate. 0 = none."
+            >
               <input
                 type="number"
                 name="event_service_charge_percent"
@@ -378,7 +635,10 @@ export default async function SettingsPage() {
                 className={inputClass}
               />
             </Field>
-            <Field label="Deposit asked for (%)" hint="Shown on the quotation and the contract as what holds the date.">
+            <Field
+              label="Deposit asked for (%)"
+              hint="Shown on the quotation and the contract as what holds the date."
+            >
               <input
                 type="number"
                 name="event_advance_percent"
@@ -394,11 +654,18 @@ export default async function SettingsPage() {
             label="Function contract terms"
             hint="Printed on every function contract: cancellation terms, the head-count deadline, what damage is charged for."
           >
-            <textarea name="event_terms" rows={4} defaultValue={s.event_terms} className={inputClass} />
+            <textarea
+              name="event_terms"
+              rows={4}
+              defaultValue={s.event_terms}
+              className={inputClass}
+            />
           </Field>
           <Notice tone="info">
-            The hall&apos;s own rates, its seating plans, the per-head catering packages and the equipment list are
-            maintained under <strong>Events &amp; banquets → Hall &amp; packages</strong>, not here.
+            The hall&apos;s own rates, its seating plans, the per-head catering
+            packages and the equipment list are maintained under{" "}
+            <strong>Events &amp; banquets → Hall &amp; packages</strong>, not
+            here.
           </Notice>
         </Card>
 
@@ -406,22 +673,99 @@ export default async function SettingsPage() {
           <SectionTitle>Security &amp; data</SectionTitle>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Field label="Sign out after idle (minutes)">
-              <input type="number" name="session_timeout_minutes" min={5} max={720} defaultValue={s.session_timeout_minutes} className={inputClass} />
+              <input
+                type="number"
+                name="session_timeout_minutes"
+                min={5}
+                max={720}
+                defaultValue={s.session_timeout_minutes}
+                className={inputClass}
+              />
             </Field>
             <Field label="Minimum password length">
-              <input type="number" name="password_min_length" min={8} max={128} defaultValue={s.password_min_length} className={inputClass} />
+              <input
+                type="number"
+                name="password_min_length"
+                min={8}
+                max={128}
+                defaultValue={s.password_min_length}
+                className={inputClass}
+              />
             </Field>
             <Field label="Password expiry (days)" hint="0 = never.">
-              <input type="number" name="password_max_age_days" min={0} max={3650} defaultValue={s.password_max_age_days} className={inputClass} />
+              <input
+                type="number"
+                name="password_max_age_days"
+                min={0}
+                max={3650}
+                defaultValue={s.password_max_age_days}
+                className={inputClass}
+              />
             </Field>
-            <Field label="Lock after failed sign-ins">
-              <input type="number" name="max_failed_logins" min={3} max={50} defaultValue={s.max_failed_logins} className={inputClass} />
+            {/* One rule for the whole group, set on the default hotel (0044). */}
+            <Field
+              label="Lock after failed sign-ins"
+              hint={
+                lockout.isHere
+                  ? "Applies to every hotel in the group."
+                  : `Set on ${lockout.hotel} for the whole group.`
+              }
+            >
+              {lockout.isHere ? (
+                <input
+                  type="number"
+                  name="max_failed_logins"
+                  min={3}
+                  max={50}
+                  defaultValue={lockout.max_failed_logins}
+                  className={inputClass}
+                />
+              ) : (
+                <input
+                  type="number"
+                  value={lockout.max_failed_logins}
+                  disabled
+                  readOnly
+                  className={inputClass}
+                />
+              )}
             </Field>
-            <Field label="Lockout (minutes)">
-              <input type="number" name="lockout_minutes" min={1} max={1440} defaultValue={s.lockout_minutes} className={inputClass} />
+            <Field
+              label="Lockout (minutes)"
+              hint={
+                lockout.isHere
+                  ? "Applies to every hotel in the group."
+                  : `Set on ${lockout.hotel} for the whole group.`
+              }
+            >
+              {lockout.isHere ? (
+                <input
+                  type="number"
+                  name="lockout_minutes"
+                  min={1}
+                  max={1440}
+                  defaultValue={lockout.lockout_minutes}
+                  className={inputClass}
+                />
+              ) : (
+                <input
+                  type="number"
+                  value={lockout.lockout_minutes}
+                  disabled
+                  readOnly
+                  className={inputClass}
+                />
+              )}
             </Field>
             <Field label="Keep ID scans (days)" hint="Purged at night audit.">
-              <input type="number" name="id_document_retention_days" min={30} max={3650} defaultValue={s.id_document_retention_days} className={inputClass} />
+              <input
+                type="number"
+                name="id_document_retention_days"
+                min={30}
+                max={3650}
+                defaultValue={s.id_document_retention_days}
+                className={inputClass}
+              />
             </Field>
           </div>
         </Card>
@@ -429,7 +773,10 @@ export default async function SettingsPage() {
         <Card className="p-5 space-y-4">
           <SectionTitle
             action={
-              <Link href="/settings/templates" className="text-xs text-brand-800 hover:text-brand-900">
+              <Link
+                href="/settings/templates"
+                className="text-xs text-brand-800 hover:text-brand-900"
+              >
                 Edit message templates →
               </Link>
             }
@@ -437,8 +784,15 @@ export default async function SettingsPage() {
             Languages
           </SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Field label="Default language" hint="Used for guests whose language has no template.">
-              <select name="default_language" defaultValue={s.default_language} className={inputClass}>
+            <Field
+              label="Default language"
+              hint="Used for guests whose language has no template."
+            >
+              <select
+                name="default_language"
+                defaultValue={s.default_language}
+                className={inputClass}
+              >
                 {Object.entries(LANGUAGES).map(([code, name]) => (
                   <option key={code} value={code}>
                     {name}
@@ -447,29 +801,59 @@ export default async function SettingsPage() {
               </select>
             </Field>
             <div className="sm:col-span-2">
-              <p className="text-xs font-medium text-slate-700 mb-2">Languages for guest messages</p>
+              <p className="text-xs font-medium text-slate-700 mb-2">
+                Languages for guest messages
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {Object.entries(LANGUAGES).map(([code, name]) => (
-                  <Check key={code} name="languages" value={code} label={name} defaultChecked={s.languages.includes(code)} />
+                  <Check
+                    key={code}
+                    name="languages"
+                    value={code}
+                    label={name}
+                    defaultChecked={s.languages.includes(code)}
+                  />
                 ))}
               </div>
             </div>
           </div>
           <p className="text-[11px] text-slate-500">
-            Each enabled language gets its own version of every message template. The staff panel itself is in English.
+            Each enabled language gets its own version of every message
+            template. The staff panel itself is in English.
           </p>
         </Card>
 
         <Card className="p-5">
           <SectionTitle>Integrations</SectionTitle>
           <p className="text-sm text-slate-700 space-x-3">
-            <span>Email {emailConfigured() ? <Tag tone="green">connected</Tag> : <Tag>not set</Tag>}</span>
-            <span>SMS {smsConfigured() ? <Tag tone="green">connected</Tag> : <Tag>not set</Tag>}</span>
             <span>
-              Door locks {process.env.DOOR_LOCK_WEBHOOK_URL ? <Tag tone="green">connected</Tag> : <Tag>not set</Tag>}
+              Email{" "}
+              {emailConfigured() ? (
+                <Tag tone="green">connected</Tag>
+              ) : (
+                <Tag>not set</Tag>
+              )}
+            </span>
+            <span>
+              SMS{" "}
+              {smsConfigured() ? (
+                <Tag tone="green">connected</Tag>
+              ) : (
+                <Tag>not set</Tag>
+              )}
+            </span>
+            <span>
+              Door locks{" "}
+              {process.env.DOOR_LOCK_WEBHOOK_URL ? (
+                <Tag tone="green">connected</Tag>
+              ) : (
+                <Tag>not set</Tag>
+              )}
             </span>
           </p>
-          <p className="text-[11px] text-slate-500 mt-2">Configured with environment variables; see README.</p>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Configured with environment variables; see README.
+          </p>
         </Card>
       </ActionForm>
     </>

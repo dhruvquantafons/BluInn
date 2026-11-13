@@ -5,7 +5,7 @@ import { createClient } from "../../../../lib/supabase/server";
 import { requireAnyPermission } from "../../../../lib/auth";
 import { can } from "../../../../lib/permissions";
 import { getSettings } from "../../../../lib/settings";
-import { todayIn, zonedTime } from "../../../../lib/dates";
+import { addDays, todayIn, zonedTime } from "../../../../lib/dates";
 import type { Booking, Outlet, PosCategory, PosItem, PosOrder, Room } from "../../../../lib/types";
 import { OUTLET_KIND_LABELS, POS_ORDER_STATUS_LABELS } from "../../../../lib/types";
 import { openOrder } from "../../../pos-actions";
@@ -43,7 +43,8 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
   const outlet = outletRow as Outlet;
   const order = can(session, "pos.order");
 
-  const [{ data: catRows }, { data: itemRows }, { data: orderRows }, { data: inHouseRows }, { data: roomRows }] =
+  const until = zonedTime(addDays(today, 1), "00:00", settings.timezone).toISOString();
+  const [{ data: catRows }, { data: itemRows }, { data: orderRows }, { data: inHouseRows }, { data: roomRows }, { data: settledRows }] =
     await Promise.all([
       supabase.from("pos_categories").select("*").eq("outlet_id", outletId).order("sort_order"),
       supabase.from("pos_items").select("*").eq("outlet_id", outletId).eq("is_active", true).order("sort_order"),
@@ -61,6 +62,14 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
         .eq("status", "checked_in")
         .order("check_in"),
       supabase.from("rooms").select("id, room_number").order("room_number"),
+      // Today's takings, by when each bill was settled and without a cap (0044).
+      supabase
+        .from("pos_orders")
+        .select("grand_total")
+        .eq("outlet_id", outletId)
+        .eq("status", "settled")
+        .gte("closed_at", since)
+        .lt("closed_at", until),
     ]);
 
   const categories = (catRows ?? []) as PosCategory[];
@@ -72,7 +81,7 @@ export default async function OutletTillPage({ params }: { params: Promise<{ out
   const rooms = (roomRows ?? []) as Pick<Room, "id" | "room_number">[];
 
   const open = orders.filter((o) => o.status === "open" || o.status === "billed");
-  const settled = orders.filter((o) => o.status === "settled");
+  const settled = (settledRows ?? []) as { grand_total: number }[];
   const takings = settled.reduce((s, o) => s + Number(o.grand_total), 0);
   const uncategorised = items.filter((i) => !i.category_id);
 

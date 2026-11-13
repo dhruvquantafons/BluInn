@@ -4,7 +4,7 @@ import { requireAnyPermission } from "../../../lib/auth";
 import { canOpen } from "../../../lib/page-access";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
-import { todayIn, zonedTime } from "../../../lib/dates";
+import { addDays, todayIn, zonedTime } from "../../../lib/dates";
 import { outletSummary } from "../../../lib/pos";
 import type { Outlet, PosOrder } from "../../../lib/types";
 import { OUTLET_KIND_LABELS, POS_ORDER_STATUS_LABELS } from "../../../lib/types";
@@ -40,7 +40,8 @@ export default async function PosPage({ searchParams }: { searchParams: Promise<
   const today = todayIn(settings.timezone);
   const since = zonedTime(today, "00:00", settings.timezone).toISOString();
 
-  const [{ data: outletRows }, { data: orderRows }] = await Promise.all([
+  const until = zonedTime(addDays(today, 1), "00:00", settings.timezone).toISOString();
+  const [{ data: outletRows }, { data: orderRows }, { data: settledRows }] = await Promise.all([
     supabase.from("pos_outlets").select("*").order("sort_order"),
     supabase
       .from("pos_orders")
@@ -48,6 +49,15 @@ export default async function PosPage({ searchParams }: { searchParams: Promise<
       .or(`status.in.(open,billed),opened_at.gte.${since}`)
       .order("opened_at", { ascending: false })
       .limit(200),
+    // Today's takings: every bill settled today, by when it was settled, as
+    // the reports count them (0044). The list above is capped and keyed on
+    // when a bill was opened, so a bill opened yesterday was missed.
+    supabase
+      .from("pos_orders")
+      .select("outlet_id, status, grand_total")
+      .eq("status", "settled")
+      .gte("closed_at", since)
+      .lt("closed_at", until),
   ]);
 
   const outlets = (outletRows ?? []) as Outlet[];
@@ -57,7 +67,10 @@ export default async function PosPage({ searchParams }: { searchParams: Promise<
   const page = clampPage(requestedPage, open.length);
   const [from, to] = pageRange(page);
   const openPage = open.slice(from, to + 1);
-  const summary = outletSummary(outlets, orders);
+  const summary = outletSummary(outlets, [
+    ...orders.filter((o) => o.status === "open" || o.status === "billed"),
+    ...((settledRows ?? []) as Pick<PosOrder, "outlet_id" | "status" | "grand_total">[]),
+  ]);
   const takings = summary.reduce((s, r) => s + r.takings, 0);
   const openValue = summary.reduce((s, r) => s + r.openValue, 0);
   const order = can(session, "pos.order");

@@ -4,6 +4,7 @@ import {
   flashKpis,
   FLASH_DEPARTMENTS,
   kpisFrom,
+  lastClosedDay,
   reportByKind,
   resolveRange,
   scheduleNeedsFinancial,
@@ -82,9 +83,7 @@ async function buildReportBody(db: SupabaseClient, schedule: ReportSchedule): Pr
   // The flash report (0037): the last day night audit closed, with month and
   // year to date, as the screen shows it. Frequency does not change it.
   if (schedule.report === "flash") {
-    const day = settings.business_date
-      ? new Date(new Date(`${settings.business_date}T00:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10)
-      : today;
+    const day = settings.business_date ? lastClosedDay(settings.business_date) : today;
     const { data, error } = await db.rpc("report_flash", { p_date: day });
     if (error || !data) return { subject: "", html: "", text: "", error: error?.message ?? "The flash report could not be built." };
     const report = data as FlashReport;

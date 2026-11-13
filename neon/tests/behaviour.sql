@@ -795,7 +795,7 @@ select distinct source from report_daily(current_date - 2, current_date);
 insert into night_audits (business_date, status, completed_at, report)
 values (
   current_date - 1, 'completed', now(),
-  '{"rooms": {"available": 99, "sold": 7}, "revenue": {"room": 70000, "fees": 0, "extras": 0, "penalties": 0, "tax": 3500, "total": 73500}}'::jsonb
+  '{"rooms": {"available": 99, "sold": 7}, "revenue": {"room": 70000, "other": 0, "net": 70000, "tax": 3500, "total": 73500, "by_dept": {"rooms": 70000}}}'::jsonb
 )
 on conflict (property_id, business_date) do update set status = 'completed', report = excluded.report;
 select source, rooms_available, rooms_sold, round(room_revenue) as room_rev, round(total_revenue) as total

@@ -214,3 +214,18 @@ export function ancillaryCharge(
   const split = ancillaryTax(amount, nightly, taxSlabsOf(settings as PropertySettings), settings.tax_inclusive);
   return { amount: split.net, tax_amount: split.tax, tax_rate: split.rate };
 }
+
+/**
+ * What a fee or penalty will cost the guest once posted, tax included (0044):
+ * the figure a preview or a confirmation should show, since the folio posts
+ * the amount plus GST when prices are before tax.
+ */
+export function chargeWithTax(
+  amount: number,
+  booking: Pick<Booking, "check_in" | "quoted_rate" | "rate_breakdown">,
+  settings: Pick<PropertySettings, "tax_inclusive" | "tax_slabs">,
+  night: string = booking.check_in,
+): number {
+  const c = ancillaryCharge(amount, booking, settings, night);
+  return Math.round((c.amount + c.tax_amount) * 100) / 100;
+}

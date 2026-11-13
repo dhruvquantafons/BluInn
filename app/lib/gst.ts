@@ -170,6 +170,7 @@ export const REVENUE_DEPT_LABELS: Record<string, string> = {
   events: "Events & banquets",
   other: "Other income",
   paid_out: "Paid out",
+  tip: "Tips",
 };
 
 export interface BillToInput {

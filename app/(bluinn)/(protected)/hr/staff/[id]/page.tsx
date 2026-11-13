@@ -7,14 +7,33 @@ import { can } from "../../../../../lib/permissions";
 import { getSettings } from "../../../../../lib/settings";
 import { addDays, todayIn, zonedTime } from "../../../../../lib/dates";
 import { payrollSummary, shiftLabel } from "../../../../../lib/hr";
-import type { AttendanceRecord, Department, LeaveRequest, ShiftType, StaffFeedback, StaffShift } from "../../../../../lib/types";
+import type {
+  AttendanceRecord,
+  Department,
+  LeaveRequest,
+  ShiftType,
+  StaffFeedback,
+  StaffShift,
+} from "../../../../../lib/types";
 import { BLOOD_GROUPS } from "../../../../../lib/types";
 import { WEEKDAY_LABELS } from "../../../../../lib/types";
 import { addFeedback, saveHrProfile } from "../../../../hr-actions";
-import { Card, EmptyState, Field, SectionTitle, Stat, inputClass, fmtDateTime } from "../../../../components/ui";
+import {
+  Card,
+  EmptyState,
+  Field,
+  SectionTitle,
+  Stat,
+  inputClass,
+  fmtDateTime,
+} from "../../../../components/ui";
 import ActionForm from "../../../../components/ActionForm";
 
-export default async function HrStaffMemberPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HrStaffMemberPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const session = await requireAnyPermission(["hr.view", "hr.manage"]);
   const edit = can(session, "hr.manage");
   const { id } = await params;
@@ -24,7 +43,11 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
   const from = addDays(today, -29);
   const since = zonedTime(from, "00:00", settings.timezone).toISOString();
 
-  const { data: person } = await supabase.from("staff").select("*").eq("id", id).maybeSingle();
+  const { data: person } = await supabase
+    .from("staff")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
   if (!person) notFound();
 
   const [
@@ -34,22 +57,47 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
     { data: shifts },
     { data: leave },
     { data: hk },
-    { data: mt },
     { data: fb },
   ] = await Promise.all([
     supabase.from("departments").select("*").order("sort_order"),
     supabase.from("shift_types").select("*").order("sort_order"),
-    supabase.from("attendance").select("*").eq("staff_id", id).gte("work_date", from),
-    supabase.from("staff_shifts").select("*").eq("staff_id", id).gte("shift_date", from),
-    supabase.from("leave_requests").select("*").eq("staff_id", id).eq("status", "approved").gte("end_date", from),
-    supabase.from("housekeeping_tasks").select("status, failed_count").eq("completed_by", id).gte("completed_at", since),
-    supabase.from("maintenance_tickets").select("resolved_at, due_at").eq("resolved_by", id).eq("status", "resolved").gte("resolved_at", since),
-    supabase.from("staff_feedback").select("*").eq("staff_id", id).order("created_at", { ascending: false }).limit(30),
+    supabase
+      .from("attendance")
+      .select("*")
+      .eq("staff_id", id)
+      .gte("work_date", from),
+    supabase
+      .from("staff_shifts")
+      .select("*")
+      .eq("staff_id", id)
+      .gte("shift_date", from),
+    supabase
+      .from("leave_requests")
+      .select("*")
+      .eq("staff_id", id)
+      .eq("status", "approved")
+      .gte("end_date", from),
+    // Counted in the database (0044), so an HR viewer without housekeeping or
+    // maintenance access sees the real figures rather than 0.
+    supabase.rpc("staff_task_counts", { p_since: since }),
+    supabase
+      .from("staff_feedback")
+      .select("*")
+      .eq("staff_id", id)
+      .order("created_at", { ascending: false })
+      .limit(30),
   ]);
   const departments = (depts ?? []) as Department[];
   const shiftTypes = (types ?? []) as ShiftType[];
   const [summary] = payrollSummary({
-    staff: [{ id, full_name: person.full_name, job_title: person.job_title, employee_code: person.employee_code }],
+    staff: [
+      {
+        id,
+        full_name: person.full_name,
+        job_title: person.job_title,
+        employee_code: person.employee_code,
+      },
+    ],
     from,
     to: today,
     today,
@@ -60,18 +108,45 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
     shiftTypes,
     leave: (leave ?? []) as LeaveRequest[],
   });
-  const cleans = hk ?? [];
-  const fixes = mt ?? [];
+  const tasks = (
+    (hk ?? []) as {
+      staff_id: string;
+      hk_done: number;
+      hk_first_time: number;
+      mt_resolved: number;
+      mt_on_time: number;
+    }[]
+  ).find((t) => t.staff_id === id) ?? {
+    hk_done: 0,
+    hk_first_time: 0,
+    mt_resolved: 0,
+    mt_on_time: 0,
+  };
   const feedback = (fb ?? []) as StaffFeedback[];
-  const avg = feedback.length ? (feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1) : null;
+  const avg = feedback.length
+    ? (feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1)
+    : null;
 
   const profile = (
-    <fieldset disabled={!edit} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <fieldset
+      disabled={!edit}
+      className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+    >
       <Field label="Employee ID">
-        <input name="employee_code" defaultValue={person.employee_code ?? ""} maxLength={30} placeholder="EMP-001" className={inputClass} />
+        <input
+          name="employee_code"
+          defaultValue={person.employee_code ?? ""}
+          maxLength={30}
+          placeholder="EMP-001"
+          className={inputClass}
+        />
       </Field>
       <Field label="Department">
-        <select name="department_id" defaultValue={person.department_id ?? ""} className={inputClass}>
+        <select
+          name="department_id"
+          defaultValue={person.department_id ?? ""}
+          className={inputClass}
+        >
           <option value="">—</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>
@@ -81,13 +156,27 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
         </select>
       </Field>
       <Field label="Designation">
-        <input name="job_title" defaultValue={person.job_title} maxLength={100} className={inputClass} />
+        <input
+          name="job_title"
+          defaultValue={person.job_title}
+          maxLength={100}
+          className={inputClass}
+        />
       </Field>
       <Field label="Joining date">
-        <input type="date" name="joining_date" defaultValue={person.joining_date ?? ""} className={inputClass} />
+        <input
+          type="date"
+          name="joining_date"
+          defaultValue={person.joining_date ?? ""}
+          className={inputClass}
+        />
       </Field>
       <Field label="Usual shift" hint="Used to fill the roster.">
-        <select name="default_shift_id" defaultValue={person.default_shift_id ?? ""} className={inputClass}>
+        <select
+          name="default_shift_id"
+          defaultValue={person.default_shift_id ?? ""}
+          className={inputClass}
+        >
           <option value="">—</option>
           {shiftTypes.map((t) => (
             <option key={t.id} value={t.id}>
@@ -97,7 +186,11 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
         </select>
       </Field>
       <Field label="Weekly day off">
-        <select name="weekly_off" defaultValue={person.weekly_off ?? ""} className={inputClass}>
+        <select
+          name="weekly_off"
+          defaultValue={person.weekly_off ?? ""}
+          className={inputClass}
+        >
           <option value="">—</option>
           {WEEKDAY_LABELS.map((d, i) => (
             <option key={d} value={i}>
@@ -107,19 +200,38 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
         </select>
       </Field>
       <Field label="Phone">
-        <input name="phone" type="tel" defaultValue={person.phone} className={inputClass} />
+        <input
+          name="phone"
+          type="tel"
+          defaultValue={person.phone}
+          className={inputClass}
+        />
       </Field>
       <Field label="Emergency contact">
-        <input name="emergency_contact" defaultValue={person.emergency_contact ?? ""} placeholder="Name, relation, number" className={inputClass} />
+        <input
+          name="emergency_contact"
+          defaultValue={person.emergency_contact ?? ""}
+          placeholder="Name, relation, number"
+          className={inputClass}
+        />
       </Field>
       <Field label="Email">
         <input value={person.email} disabled className={inputClass} />
       </Field>
       <Field label="Date of birth">
-        <input type="date" name="date_of_birth" defaultValue={person.date_of_birth ?? ""} className={inputClass} />
+        <input
+          type="date"
+          name="date_of_birth"
+          defaultValue={person.date_of_birth ?? ""}
+          className={inputClass}
+        />
       </Field>
       <Field label="Blood group">
-        <select name="blood_group" defaultValue={person.blood_group ?? ""} className={inputClass}>
+        <select
+          name="blood_group"
+          defaultValue={person.blood_group ?? ""}
+          className={inputClass}
+        >
           <option value="">Not given</option>
           {BLOOD_GROUPS.map((g) => (
             <option key={g} value={g}>
@@ -130,7 +242,12 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
       </Field>
       <div className="sm:col-span-3">
         <Field label="Address">
-          <textarea name="address" rows={2} defaultValue={person.address ?? ""} className={inputClass} />
+          <textarea
+            name="address"
+            rows={2}
+            defaultValue={person.address ?? ""}
+            className={inputClass}
+          />
         </Field>
       </div>
     </fieldset>
@@ -138,13 +255,24 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Link href="/hr/staff" className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700">
+      <Link
+        href="/hr/staff"
+        className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-brand-700"
+      >
         <ArrowLeft className="w-3.5 h-3.5" /> Staff
       </Link>
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">{person.full_name || person.email}</h2>
+        <h2 className="text-lg font-semibold text-slate-900">
+          {person.full_name || person.email}
+        </h2>
         <p className="text-sm text-slate-500">
-          {[person.employee_code, person.job_title, departments.find((d) => d.id === person.department_id)?.name].filter(Boolean).join(" · ")}
+          {[
+            person.employee_code,
+            person.job_title,
+            departments.find((d) => d.id === person.department_id)?.name,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </div>
 
@@ -158,30 +286,38 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
             {summary.late_arrivals} / {summary.absent_days}
           </Stat>
           <Stat label="Rooms cleaned">
-            {cleans.length}
-            {cleans.length > 0 && (
+            {tasks.hk_done}
+            {tasks.hk_done > 0 && (
               <span className="block text-xs text-slate-500">
-                {cleans.filter((c) => c.status === "inspected" && c.failed_count === 0).length} passed first time
+                {tasks.hk_first_time} passed first time
               </span>
             )}
           </Stat>
           <Stat label="Tickets resolved">
-            {fixes.length}
-            {fixes.length > 0 && (
+            {tasks.mt_resolved}
+            {tasks.mt_resolved > 0 && (
               <span className="block text-xs text-slate-500">
-                {fixes.filter((f) => f.resolved_at! <= f.due_at).length} within target
+                {tasks.mt_on_time} within target
               </span>
             )}
           </Stat>
-          <Stat label="Guest rating">{avg ? `${avg} ★ from ${feedback.length}` : "—"}</Stat>
-          <Stat label="Leave taken">{Object.values(summary.leave).reduce((a, b) => a + b, 0)} days</Stat>
+          <Stat label="Guest rating">
+            {avg ? `${avg} ★ from ${feedback.length}` : "—"}
+          </Stat>
+          <Stat label="Leave taken">
+            {Object.values(summary.leave).reduce((a, b) => a + b, 0)} days
+          </Stat>
         </dl>
       </Card>
 
       <Card className="p-5">
         <SectionTitle>HR profile</SectionTitle>
         {edit ? (
-          <ActionForm action={saveHrProfile} submitLabel="Save profile" className="space-y-3">
+          <ActionForm
+            action={saveHrProfile}
+            submitLabel="Save profile"
+            className="space-y-3"
+          >
             <input type="hidden" name="staff_id" value={id} />
             {profile}
           </ActionForm>
@@ -193,11 +329,19 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
       <Card className="p-5 space-y-4">
         <SectionTitle>Feedback</SectionTitle>
         {(edit || can(session, "frontdesk.requests")) && (
-          <ActionForm action={addFeedback} submitLabel="Record feedback" className="space-y-3">
+          <ActionForm
+            action={addFeedback}
+            submitLabel="Record feedback"
+            className="space-y-3"
+          >
             <input type="hidden" name="staff_id" value={id} />
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <Field label="From">
-                <select name="source" defaultValue="guest" className={inputClass}>
+                <select
+                  name="source"
+                  defaultValue="guest"
+                  className={inputClass}
+                >
                   <option value="guest">Guest</option>
                   <option value="manager">Manager</option>
                 </select>
@@ -213,7 +357,11 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Comment">
-                  <input name="comment" maxLength={1000} className={inputClass} />
+                  <input
+                    name="comment"
+                    maxLength={1000}
+                    className={inputClass}
+                  />
                 </Field>
               </div>
             </div>
@@ -226,11 +374,16 @@ export default async function HrStaffMemberPage({ params }: { params: Promise<{ 
             {feedback.map((f) => (
               <li key={f.id} className="py-2.5 text-sm">
                 <span className="text-brand-600">{"★".repeat(f.rating)}</span>
-                <span className="text-slate-300">{"★".repeat(5 - f.rating)}</span>{" "}
+                <span className="text-slate-300">
+                  {"★".repeat(5 - f.rating)}
+                </span>{" "}
                 <span className="text-xs text-slate-500">
-                  {f.source === "guest" ? "Guest" : "Manager"} · {fmtDateTime(f.created_at)}
+                  {f.source === "guest" ? "Guest" : "Manager"} ·{" "}
+                  {fmtDateTime(f.created_at)}
                 </span>
-                {f.comment && <p className="text-slate-700 mt-0.5">{f.comment}</p>}
+                {f.comment && (
+                  <p className="text-slate-700 mt-0.5">{f.comment}</p>
+                )}
               </li>
             ))}
           </ul>

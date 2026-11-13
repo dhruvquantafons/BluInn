@@ -1,8 +1,10 @@
 # BluInn module interconnection audit — 12 November 2026
 
-Where BluInn's modules stand on 12 November 2026:
+Updated 13 November 2026 for migration `0044` (sections 5 and 6).
+
+Where BluInn's modules stand on 13 November 2026:
 - What the 7 November audit found, and what has been fixed since.
-- The decisions taken on 12 November.
+- The decisions taken on 12 and 13 November.
 - Every gap that is still open.
 
 This report replaces the 7 November version, which is in git history (commit `e9ae199`).
@@ -11,7 +13,7 @@ Paths are relative to the `bluinn` repo. `M/` means `neon/migrations/`, `P/` mea
 
 ## Summary
 
-The 7 November audit found that the modules were mostly well connected at the database level but broken in the money chain (folio → invoice → GST), in stock, and around room moves, events and staff. Four migrations since then have fixed the gaps in sections 1–4:
+The 7 November audit found that the modules were mostly well connected at the database level but broken in the money chain (folio → invoice → GST), in stock, and around room moves, events and staff. Five migrations since then have fixed the gaps in sections 1–6:
 
 | Migration | What it fixed |
 |---|---|
@@ -19,23 +21,24 @@ The 7 November audit found that the modules were mostly well connected at the da
 | `0041_data_flow.sql` | 34 of the 41 "data that doesn't flow" items |
 | `0042_event_rooms_and_till_stock.sql` | Event room blocks and tills stopping at zero stock (your 12 November decisions) |
 | `0043_validations_and_links.sql` | Broken links, missing validations and dead buttons (sections 1, 3 and 4), with the app changes that go with them |
+| `0044_numbers.sql` | Orphan pages and inconsistent numbers (sections 5 and 6): one definition of revenue, occupancy and arrivals everywhere, plus two items from section 9 |
 
-All four are applied to the hosted Neon database. **The app code that goes with them is not yet committed or deployed**; see [Deployment](#deployment).
+All five are applied to the hosted Neon database. **The app code that goes with them is not yet committed or deployed**; see [Deployment](#deployment).
 
-| Area | Found 7 Nov | Status 12 Nov |
+| Area | Found 7 Nov | Status 13 Nov |
 |---|---|---|
 | Fix these first | 13 | **All fixed** (0040) |
 | 1. Broken links and routing | 18 | **Fixed** (0043 and app) |
 | 2. Data that doesn't flow between modules | 41 | **37 fixed** (34 by 0041, 2 by 0040, 1 by 0042); 4 not fixed, by decision |
 | 3. Missing validations | 32 | **Fixed** (0043 and app) |
 | 4. Dead buttons and silent failures | 14 (plus 10 places that discard errors) | **Fixed**; one toggle relabelled instead of removed (see below) |
-| 5. Orphan pages | 0 | None |
-| 6. Inconsistent numbers | 19 definitions | 2 fixed, 2 partly fixed, 15 open |
+| 5. Orphan pages | 3 pages some roles could reach only by URL | **Fixed** (0044 and app) |
+| 6. Inconsistent numbers | 19 definitions | **Fixed** (0044 and app); two differences kept on purpose and labelled |
 | 7. Security (deferred pass) | 9 | 1 fixed (0040); 8 deferred |
 | 8. Integrations | — | Pending, by your decision |
-| 9. Found while loading demo data | 5 | 1 fixed (0040); 4 open |
+| 9. Found while loading demo data | 5 | 3 fixed (0040, 0044); 2 open |
 
-Four more problems turned up while fixing and are fixed too (see [Also found and fixed](#also-found-and-fixed)).
+Five more problems turned up while fixing and are fixed too (see [Also found and fixed](#also-found-and-fixed)).
 
 ## How this was checked
 
@@ -52,7 +55,7 @@ Four more problems turned up while fixing and are fixed too (see [Also found and
   8. Multi-property
 - **A read-only page check** of 67 pages on the hosted app.
 
-**The fixes, 7–12 November** (0040–0042; 0043 is described under [Links, validations and dead buttons](#links-validations-and-dead-buttons-0043)):
+**The fixes, 7–12 November** (0040–0042; 0043 and 0044 are each described in their own section below):
 - **Database checks:** every fix has an assertion in the local database tests, run against all 42 migrations. There are 36 new checks (10 for 0040, 18 for 0041, 8 for 0042). Each failed before its fix and passes after it, and the existing behaviour tests are otherwise unchanged.
 - **Unit tests:** 430 pass. The type check and lint are clean.
 - **In the app:** the main fixes were exercised against a local copy of the demo database.
@@ -185,49 +188,84 @@ Decisions taken for this round, 12 November:
 - **In the app**, on a local copy of the demo data: the five role crawls above; a second desk refused during a check-out; a cancelled booking's folio offering only a penalty; an overlapping attendance record refused; approved leave withdrawn by the employee; a schedule's fields loading for editing.
 - **Rehearsal** on the demo data, then applied to Neon on 12 November.
 
+### Orphan pages and inconsistent numbers (0044)
+
+Decisions taken for this round, 13 November:
+- **Revenue** is the flash report's definition on every screen:
+  - before tax
+  - outlet bills paid at the outlet and events billed on their own count
+  - allowances and credit notes come off
+  - paid-outs and tips are not revenue
+- **Paid-outs and tips charged to a room** stay on the guest's bill and invoice, in their own "Reimbursements and tips" block. They are not supplies: no taxable value, no GST register, no revenue, no loyalty points.
+- **Occupancy** follows USALI. Out-of-order rooms leave the rooms available; out-of-service rooms stay in. Each night counts its own blocks.
+- **Lockout after failed sign-ins** is one rule for the group, set on the default hotel. Password length and expiry stay per hotel.
+
+**5. Orphan pages**
+- **Cash shifts** are in the menu for anyone with `reports.financial`, and the financial reports page links to them.
+- **Night audit** opens for anyone with `folio.view`, such as the POS cashier. They see the closed days, but no checklist and no Run button. A day's report now reads only the hotel being worked in.
+- **Events:**
+  - The events list and diary open for anyone with an events permission (`events.quote`, `events.approve` and `events.bill` included).
+  - A new read rule lets those roles see the events. Before, a role holding only `events.bill` was let into an empty page.
+  - On an event, the Quotation, Contract, Event order and invoice buttons show only to those who can open them.
+- **A new unit test** checks that every permission on a menu item opens one of its pages. It caught a fourth case the audit had missed: `events.approve` alone.
+
+**6. Inconsistent numbers**
+
+| Metric | Now |
+|---|---|
+| **Total revenue** | One SQL definition, `revenue_lines()`. The daily report (so the dashboard, reports overview and KPI email), the flash report, the tax summary, the group comparison and night audit all read it. For any day, net revenue = room + other = flash total = tax summary net. |
+| **Room revenue / ADR** | Room-night lines, net of allowances and credit notes against them. The flash "Rooms" row is still the whole rooms department (room nights plus fees and penalties), by design; the flash footnote says ADR and RevPAR use room-night revenue only. |
+| **Daily report dating** | Every column uses the date the charge belongs to, so Revenue = Room + Other on every day. |
+| **Paid-outs and tips** | Classed `paid_out` and `tip` (existing tip lines were reclassified). Left out of every revenue figure, the tax summary and, on invoices from now on, taxable value, tax bands, the GST register and loyalty points. They print in their own block, and the guest still pays them. Invoices issued earlier keep their lines. |
+| **GST** | The tax summary uses the same lines as revenue, so its net always equals revenue, with IGST carried where a credit note has it. It is dated by supply, while the GST register is dated by invoice issue. The two are different documents, and the financial reports page says so. |
+| **Night-audit outlet takings** | Bills charged to a room are no longer counted a second time. Tips are shown on their own. |
+| **Occupancy** | `sellable_rooms(day)`: every room less those out of order that night. Used by the dashboard, night audit (counted before it moves room statuses on to tomorrow), the daily and flash reports, the week ahead and the group comparison. Night audit's RevPAR is fixed with it (section 9). |
+| **Arrivals and departures** | Two figures, one for each question. The dashboard and front desk show "To arrive" and "To depart": what is still to do today, late arrivals and overstays included. Night audit and flash count what happened on a closed day, the same way; a guest who came and left the same day counts as both. |
+| **Business vs calendar date** | The dashboard's 30-day chart ends on the last closed day, as its tiles do, and the flash page and email share `lastClosedDay`. Kept on purpose: early and late fees are dated to the calendar day the guest arrived or left, invoice numbers use the calendar date (the legal issue date), and the housekeeping board already shows unfinished tasks from earlier days. |
+| **Invoice page totals** | Summed in the database (`invoice_year_totals`), net of the year's credit notes, with no row cap. |
+| **Event balance** | The page takes credit notes off, as the database does. |
+| **Penalty previews** | Show what the folio will post, GST included, and so do the cancel and no-show messages. |
+| **"Paid" at check-out** | Money received (payments less refunds). Allowances are shown on their own, and "Posted so far" no longer counts refunds as charges. |
+| **POS "Settled today"** | Bills settled today, by when they were settled, with no cap. |
+| **Staff** | Screens about now list active staff; reports over a period include anyone with attendance in it. Hours show to 2 decimals everywhere. "Tasks done" is counted in the database (`staff_task_counts`), so an HR viewer without housekeeping access sees the real figures. |
+| **Password rules** | Lockout is the group's rule, editable on the default hotel and shown read-only, with a note, elsewhere. The staff activity badge uses the same limit sign-in does. |
+
+**Closed days.** A day night audit closes from now on freezes its revenue on the new definition (with its department split). Every report then reads that day exactly as frozen. Days closed before 0044 keep their rooms and room revenue. Their other revenue and tax are read from the lines, which can no longer change on a closed day. Their night audit page and history line still show what was frozen then, marked "earlier basis". So for those days the audit page and the reports can differ, and the page says why.
+
+**How 0044 was checked**
+- **Database:** 8 new assertions (`neon/tests/fixes_0044.sql`), each failing before 0044 and passing after it. They cover:
+  - room + other = total on every day
+  - the daily report, flash report and tax summary agree
+  - a paid-out and a room-charged tip are in none of them, and an outlet-paid bill is in all of them
+  - a tip is classed as a tip
+  - only out-of-order rooms leave the count
+  - the invoice year totals net credit notes
+  - an HR viewer sees tasks done
+  - `events.bill` alone can read events
+
+  The behaviour output changes only in formatting (hours and one figure now show 2 decimals). The sample closed-day snapshot in `behaviour.sql` moved to the new format, so it is still used exactly as frozen.
+- **Unit tests:** 525 pass, 70 of them new (`tests/numbers.test.ts`, including the menu reachability check). Two older tests changed with intended behaviour: invoice totals now carry `reimbursements`, and `events.quote` now reaches events. The type check and lint are clean.
+- **In the app**, on a local copy of the demo data:
+  - the dashboard, flash report and night audit agree for the closed days 11 and 12 November (revenue, ADR, RevPAR, occupancy)
+  - night audit was run on the copy with the new code
+  - the POS cashier opens night audits without the Run button and sees Cash shifts
+  - the invoices, GST register, HR staff, POS, financial reports, properties and settings pages render without errors
+- **Over 30 closed days:**
+  - the local demo copy: daily report, flash, tax summary and room + other all came to ₹66,27,754.54
+  - Neon after the apply: all four came to ₹65,30,396.94
+- **Rehearsal** on the demo data, then applied to Neon on 13 November.
+
 ### Also found and fixed
 
 - **`is_service_role()` on Neon** checked only the database role, so every nightly job was refused by functions that allow the service role. Scheduled reports would have failed the first time one was due.
 - **Same-day turnover:** a room another checked-in guest is in is no longer freed at check-out.
 - **Stale page numbers:** an out-of-range `?page=` now goes back to page 1 on every list.
 - **The till could not add anything.** Its quantity field (`min=0.001`, `step=1`) made the browser refuse every whole number, including the default 1.
+- **The flash report's total could include paid-outs.** Paid-outs were left out of charges but not out of allowances and credit notes, so a `paid_out` amount reached the total with no row of its own (0044).
 
 ## Still open
 
-Sections 1 (broken links and routing), 3 (missing validations) and 4 (dead buttons and silent failures) are fixed by 0043; see [above](#links-validations-and-dead-buttons-0043). Section 2's four open items were not fixed, by decision (see [Not fixed, by decision](#not-fixed-by-decision)).
-
-### 5. Orphan pages
-
-**None.** All pages have an inbound link, tab or redirect. Some are reachable only by typing the URL for certain roles:
-- `/night-audit/[date]` for `folio.view`-only users, such as the POS cashier
-- `/front-desk/shifts` for `reports.financial`-only users
-- `/events/[id]` for `events.bill`-only users
-
-### 6. Inconsistent numbers
-
-On 7 November one day's figures disagreed across screens. Room revenue read ₹26,821 where the day's real nights came to ₹8,050, and tax read ₹5,752 on most screens but ₹4,412 on the flash report. The room revenue and ADR part is fixed. The definitions below still differ.
-
-| Metric | Status | How it differs |
-|---|---|---|
-| **Room revenue / ADR** | **Fixed (0040)** | Night audit now closes only the day's own lines. The flash "Rooms" row is still department-based (fees and penalties in, allowances and credit notes netted). |
-| **Stock** | **Fixed (0041, 0042)** | Below zero shows "Short: count it". Tills can't sell past zero; the minibar and cleaning still can. |
-| **Total revenue** | Partly fixed | Now net of tax everywhere. Dashboard and overview still exclude outlet-paid bills and events, include paid-outs, and don't net allowances or credit notes. The flash report does the opposite. |
-| **GST** | Partly fixed | Penalties (0040) and events (0041) are now invoiced, so their tax reaches the GST register. Still open: the tax summary uses the stay date and CGST/SGST only; the register uses the issue date. |
-| **Daily report dating** | Open | `report_daily` dates other revenue by the day it was created, but tax and total by stay date, so Revenue ≠ Room + Other. **SQL.** `M/0031` |
-| **Paid-outs** | Open | Revenue in the daily report and night audit, excluded in flash and the tax summary. As invoice lines they go into GSTR-1 as 0% supplies with SAC "—" and earn loyalty points. |
-| **Tips** | Open | F&B when charged to a room (and a 0% invoice line), excluded when settled at the outlet. |
-| **Night-audit outlet takings** | Open | Room-charged POS bills are counted twice. `night-audit-actions.ts` |
-| **Occupancy** | Open | The dashboard excludes out-of-order rooms; night audit excludes only out-of-service, and counts "available" after applying tomorrow's blocks. |
-| **Arrivals and departures** | Open | Four definitions: dashboard (still due), front desk (incl. late), night audit (checked in only), flash (checked in plus checked out). |
-| **Business vs calendar date** | Open | No-shows and night audit use the business date; check-in/out fees, housekeeping, invoices and the dashboard chart use the calendar date. KPI tiles read business date − 1, the 30-day chart is anchored to today. |
-| **Invoice page totals** | Open | Don't net credit notes, and read every invoice without paging, so they undercount past about 1,000 a year (PostgREST cap). `billing/invoices/page.tsx` |
-| **Event balance on the page** | Open | Ignores credit notes, which the database counts, so the page can offer a payment the database refuses. `lib/events.ts` (`eventBalance`) |
-| **Penalty previews** | Open | Show the net amount; the folio posts net plus GST. `bookings/[id]/page.tsx` |
-| **"Paid" at check-out** | Open | Includes allowances. |
-| **POS "settled today"** | Open | Selected by when the bill was opened, capped at 200 bills; reports select by when it was closed. |
-| **Staff counts and hours** | Open | Inactive staff on some screens and not others; hours round to 1 decimal in one place and 2 in another; "Tasks done" depends on the viewer's permissions. |
-| **Password rules** | Open | Length and expiry come from the hotel being viewed; lockout limits from the default hotel. |
-| **Night audit occupancy and RevPAR** | Open | Out-of-order rooms count as available (found while loading demo data). `night-audit-actions.ts` |
+Sections 1, 3 and 4 are fixed by 0043, and sections 5 and 6 by 0044; see [above](#orphan-pages-and-inconsistent-numbers-0044). Section 2's four open items were not fixed, by decision (see [Not fixed, by decision](#not-fixed-by-decision)).
 
 ### 7. Security (deferred pass)
 
@@ -255,12 +293,13 @@ Until they are, each attempt is logged as "not configured". Nothing above depend
 
 ### 9. Found while loading demo data
 
-- **Company-billed invoices earn the guest loyalty points.** Folio invoices are saved without `company_id`, so the company check in `loyalty_award_for_invoice` never fires. `lib/invoice-issue.ts`
-- **Night audit counts out-of-order rooms as available,** which skews occupancy and RevPAR (also listed under section 6). `night-audit-actions.ts`
 - **Some pages are slow.** In local dev against the hosted database, the flash report took about 44 s and the dashboard about 10 s. This needs measuring on the deployed app.
 - **The flash report's "last year" columns show 0** with no label saying there is no comparison data.
 
-Fixed: same-day room turnover left the room marked available (0040).
+Fixed:
+- same-day room turnover left the room marked available (0040)
+- company-billed invoices earned the guest loyalty points: folio invoices now carry the folio's company (0044)
+- night audit counted out-of-order rooms as available (0044)
 
 ### Not fixed, by decision
 
@@ -298,14 +337,13 @@ Fixed: same-day room turnover left the room marked available (0040).
 
 | | State |
 |---|---|
-| Hosted database (Neon) | **Up to date.** 43 migrations (`0001`–`0043`); demo data intact and removable with `neon/demo/remove_demo.sql` |
-| App code for 0040–0043 | **In the working tree, not committed.** It has to be committed and deployed for the app-side fixes to go live. |
+| Hosted database (Neon) | **Up to date.** 44 migrations (`0001`–`0044`); demo data intact and removable with `neon/demo/remove_demo.sql` |
+| App code for 0040–0044 | **In the working tree, not committed.** It has to be committed and deployed for the app-side fixes to go live. |
 | Nightly jobs | Four in `vercel.json`: reports, maintenance, notifications, pricing |
-| Until the code is deployed | The live app runs the old code against the new database. That works, and the database rules (closed bookings, settled bills, timesheet hours, refund and credit-note caps, promo limits) already apply. Not live yet: the menu and link changes, the check-out claim, penalties posted before the status change, the new messages, schedule editing, and the new screens from 0040–0042 (event rooms, the till's "n left", lost & found, cancelling tasks, the bill-to pre-fill, the nightly pricing job). |
+| Until the code is deployed | The live app runs the old code against the new database. That works, and the database rules (closed bookings, settled bills, timesheet hours, refund and credit-note caps, promo limits) already apply. With 0044 the reports already agree with each other, but the old night audit code still saves a closed day in the old format, and the dashboard tiles and check-out figures are the old ones. Not live yet: the 0044 screens (night audit and invoices on the new definition, the reimbursements block, the dashboard's arrivals and occupancy, Paid at check-out, the penalty previews, the HR, POS and invoice-page totals, the group lockout), the menu and link changes, the check-out claim, penalties posted before the status change, the new messages, schedule editing, and the new screens from 0040–0042 (event rooms, the till's "n left", lost & found, cancelling tasks, the bill-to pre-fill, the nightly pricing job). |
 
 ## Suggested next steps
 
-1. **Deploy** the 0040–0043 code.
-2. **Section 9** (found while loading demo data): the four items still open.
-3. **Section 6's definitions.** Agree one definition each for total revenue, occupancy and arrivals, then use it everywhere.
-4. **The security pass.**
+1. **Deploy** the 0040–0044 code. Deploy soon: until then, each night audit on the old code saves its day in the old format.
+2. **Section 9:** the two items still open (slow pages, measured on the deployed app; a label for missing last-year figures on the flash report).
+3. **The security pass.**

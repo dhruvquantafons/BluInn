@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "../../../../lib/supabase/server";
 import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
@@ -60,10 +61,24 @@ export default async function FinancialReportsPage({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label={`${settings.tax_label} charged`} value={fmtMoney(taxTotal)} hint="In this period" />
-        <StatCard label="Outlet takings" value={fmtMoney(outletTotal)} hint={`${outletRows.rows.length} outlet(s)`} />
+        <StatCard
+          label="Outlet takings"
+          value={fmtMoney(outletTotal)}
+          hint={`Every settled bill, charged to a room or not, tips included · ${outletRows.rows.length} outlet(s)`}
+        />
         <StatCard label="Event revenue" value={fmtMoney(eventTotal)} hint={`${eventCount} function(s)`} />
         <StatCard label="Owed by guests" value={fmtMoney(guestOwed)} hint={`${owedRows.rows.length} stay(s)`} />
       </div>
+
+      <p className="text-xs text-slate-600">
+        Tax here is by the date each supply was made, on the same lines as revenue. The GST register lists invoices by the
+        date they were issued, so the two differ until a stay is invoiced. Drawer counts and variances by cashier are
+        under{" "}
+        <Link href="/front-desk/shifts" className="text-brand-700 hover:underline">
+          Cash shifts
+        </Link>
+        .
+      </p>
 
       <ReportTable definition={tax} rows={taxRows.rows} from={range.from} to={range.to} error={taxRows.error} />
       <ReportTable definition={payments} rows={payRows.rows} from={range.from} to={range.to} error={payRows.error} />

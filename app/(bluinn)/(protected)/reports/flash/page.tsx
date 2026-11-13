@@ -3,7 +3,7 @@ import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { addDays, isIsoDate } from "../../../../lib/dates";
 import { REVENUE_DEPT_LABELS } from "../../../../lib/gst";
-import { FLASH_DEPARTMENTS, flashKpis, variancePct, type FlashPeriod, type FlashReport } from "../../../../lib/reports";
+import { FLASH_DEPARTMENTS, flashKpis, lastClosedDay, variancePct, type FlashPeriod, type FlashReport } from "../../../../lib/reports";
 import { Card, Notice, SectionTitle, StatCard, fmtDate, fmtMoney, inputClass, secondaryButtonClass, tableHeadClass } from "../../../components/ui";
 import PrintButton from "../../../components/PrintButton";
 
@@ -97,7 +97,7 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
   const supabase = await createClient();
   const { date: dateParam } = await searchParams;
   // The last day night audit closed.
-  const lastClosed = addDays(settings.business_date, -1);
+  const lastClosed = lastClosedDay(settings.business_date);
   const date = dateParam && isIsoDate(dateParam) ? dateParam : lastClosed;
 
   const { data, error } = await supabase.rpc("report_flash", { p_date: date });

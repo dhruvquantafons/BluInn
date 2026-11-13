@@ -191,7 +191,7 @@ describe("GST invoice lines", () => {
     const lines = invoiceLines([room, dinner, allowance, payment], { regime: "gst" });
     expect(lines.map((l) => l.kind)).toEqual(["room", "extra", "allowance"]);
     expect(lines[2]).toMatchObject({ net: -1000, tax: -50, cgst: -25, sgst: -25, total: -1050, sac: "996311" });
-    expect(invoiceTotals(lines)).toEqual({ net: 4000, tax: 200, grand: 4200 });
+    expect(invoiceTotals(lines)).toEqual({ net: 4000, tax: 200, reimbursements: 0, grand: 4200 });
     expect(gstTotals(lines)).toEqual({ cgst: 100, sgst: 100, igst: 0 });
   });
 

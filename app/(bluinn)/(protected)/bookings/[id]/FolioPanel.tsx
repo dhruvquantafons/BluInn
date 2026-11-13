@@ -1,6 +1,7 @@
 import type { FolioEntry, FolioKind } from "../../../../lib/types";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_CHOICES } from "../../../../lib/types";
 import type { FolioTotals } from "../../../../lib/policies";
+import { isReimbursement } from "../../../../lib/invoices";
 import { recordPayment, postCharge, postAdjustment, voidFolioEntry } from "../../../booking-actions";
 import {
   Card,
@@ -136,6 +137,10 @@ export default function FolioPanel({
                     <td className="py-2 pr-3">
                       <Tag tone={credit ? "green" : e.kind === "penalty" ? "red" : "neutral"}>{KIND_LABEL[e.kind]}</Tag>{" "}
                       {e.description}
+                      {/* Billed at cost, not a supply: no tax, no revenue (0044). */}
+                      {isReimbursement(e.revenue_dept) && e.kind !== "adjustment" && (
+                        <span className="text-[10px] text-slate-500 no-underline"> · reimbursement, not taxed</span>
+                      )}
                       {e.method && ` · ${PAYMENT_METHOD_LABELS[e.method]}`}
                       {e.reference && ` · ${e.reference}`}
                       {e.voided_at && <span className="no-underline"> (void: {e.void_reason})</span>}

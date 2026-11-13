@@ -7,10 +7,19 @@ import { requirePermission } from "../lib/auth";
 import { getSettings } from "../lib/settings";
 import { getCurrentProperty } from "../lib/properties";
 import { friendlyDbError } from "../lib/db-errors";
-import { passwordProblems, describePasswordProblems } from "../lib/password-policy";
+import {
+  passwordProblems,
+  describePasswordProblems,
+} from "../lib/password-policy";
 import { ALL_PERMISSIONS, isPermission } from "../lib/permissions";
 import { parseTaxSlabs } from "../lib/tax";
-import { MAX_GST_PREFIX_LENGTH, gstinError, normaliseGstin, stateCodeFor, stateFromGstin } from "../lib/gst";
+import {
+  MAX_GST_PREFIX_LENGTH,
+  gstinError,
+  normaliseGstin,
+  stateCodeFor,
+  stateFromGstin,
+} from "../lib/gst";
 import { LANGUAGES } from "../lib/types";
 import { isDemoTwoFactor, clearDemoVerified } from "../lib/two-factor";
 import { type ActionState, str, num, int, bool, oneOf } from "./form-utils";
@@ -20,7 +29,11 @@ import { hasServiceAccess } from "../lib/supabase/config";
 
 async function roleExists(key: string) {
   const supabase = await createClient();
-  const { data } = await supabase.from("roles").select("key").eq("key", key).maybeSingle();
+  const { data } = await supabase
+    .from("roles")
+    .select("key")
+    .eq("key", key)
+    .maybeSingle();
   return Boolean(data);
 }
 
@@ -32,7 +45,10 @@ async function roleExists(key: string) {
  * this. The account is confirmed immediately, and must change the temporary
  * password at first sign-in.
  */
-export async function createStaffMember(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function createStaffMember(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("staff.manage");
   const settings = await getSettings();
 
@@ -42,26 +58,40 @@ export async function createStaffMember(_prev: ActionState, fd: FormData): Promi
   const role = str(fd, "role", 40);
 
   if (!fullName) return { error: "Enter the person's name." };
-  if (!email || !email.includes("@")) return { error: "Enter a valid email address." };
-  const problems = passwordProblems(password, { minLength: settings.password_min_length, maxAgeDays: 0 }, email);
+  if (!email || !email.includes("@"))
+    return { error: "Enter a valid email address." };
+  const problems = passwordProblems(
+    password,
+    { minLength: settings.password_min_length, maxAgeDays: 0 },
+    email,
+  );
   if (problems.length) return { error: describePasswordProblems(problems) };
   if (!(await roleExists(role))) return { error: "Choose a role." };
 
   if (!hasServiceAccess()) {
-    return { error: "SUPABASE_SERVICE_ROLE_KEY is not set, so accounts cannot be created from here." };
+    return {
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not set, so accounts cannot be created from here.",
+    };
   }
 
   const admin = createAdminClient();
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName },
-  });
+  const { data: created, error: createError } =
+    await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
 
   if (createError) {
-    const alreadyExists = createError.status === 422 || /already/i.test(createError.message);
-    return { error: alreadyExists ? `An account already exists for ${email}.` : createError.message };
+    const alreadyExists =
+      createError.status === 422 || /already/i.test(createError.message);
+    return {
+      error: alreadyExists
+        ? `An account already exists for ${email}.`
+        : createError.message,
+    };
   }
 
   // Which hotel this person works at (Module 14). Written explicitly because
@@ -71,7 +101,9 @@ export async function createStaffMember(_prev: ActionState, fd: FormData): Promi
   // the wrong hotel.
   const property = await getCurrentProperty();
   const chosen = str(fd, "property_id", 36);
-  const propertyId = /^[0-9a-f-]{36}$/i.test(chosen) ? chosen : (property?.id ?? null);
+  const propertyId = /^[0-9a-f-]{36}$/i.test(chosen)
+    ? chosen
+    : (property?.id ?? null);
 
   // The staff row is written here rather than by a sign-up trigger. Since
   // 0021 that trigger only bootstraps the very first account: guest logins
@@ -99,14 +131,20 @@ export async function createStaffMember(_prev: ActionState, fd: FormData): Promi
   }
 
   revalidatePath("/staff");
-  return { success: `${fullName} can now sign in with ${email}, and will be asked to choose a new password.` };
+  return {
+    success: `${fullName} can now sign in with ${email}, and will be asked to choose a new password.`,
+  };
 }
 
-export async function deleteStaffMember(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function deleteStaffMember(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   const session = await requirePermission("staff.manage");
   const id = str(fd, "id");
 
-  if (id === session.staff.id) return { error: "You cannot delete your own account." };
+  if (id === session.staff.id)
+    return { error: "You cannot delete your own account." };
 
   // Someone with any history (a folio line, a cash shift, attendance…) is
   // deactivated and signed out rather than deleted, so their name stays on
@@ -126,45 +164,72 @@ export async function deleteStaffMember(_prev: ActionState, fd: FormData): Promi
 }
 
 /** Sets a temporary password for someone who has lost theirs. */
-export async function resetStaffPassword(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function resetStaffPassword(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("staff.manage");
   const settings = await getSettings();
   const id = str(fd, "id");
   const password = str(fd, "password", 200);
 
-  const problems = passwordProblems(password, { minLength: settings.password_min_length, maxAgeDays: 0 });
+  const problems = passwordProblems(password, {
+    minLength: settings.password_min_length,
+    maxAgeDays: 0,
+  });
   if (problems.length) return { error: describePasswordProblems(problems) };
-  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
+  if (!hasServiceAccess())
+    return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(id, { password });
   if (error) return { error: error.message };
-  const { error: flagError } = await admin.from("staff").update({ must_change_password: true }).eq("id", id);
+  const { error: flagError } = await admin
+    .from("staff")
+    .update({ must_change_password: true })
+    .eq("id", id);
   if (flagError) {
     return {
       error: `The temporary password is set, but they will not be asked to change it: ${friendlyDbError(flagError.message)} Tell them to change it themselves.`,
     };
   }
 
-  return { success: "Temporary password set. They will choose their own at next sign-in." };
+  return {
+    success:
+      "Temporary password set. They will choose their own at next sign-in.",
+  };
 }
 
 /** Removes a lost authenticator so the person can enrol a new one. */
-export async function resetStaffTwoFactor(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function resetStaffTwoFactor(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("staff.manage");
   const id = str(fd, "id");
-  if (!hasServiceAccess()) return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
+  if (!hasServiceAccess())
+    return { error: "SUPABASE_SERVICE_ROLE_KEY is not set." };
 
   const admin = createAdminClient();
   if (isDemoTwoFactor()) {
-    const { error } = await admin.auth.admin.updateUserById(id, { user_metadata: { demo_2fa: false } });
+    const { error } = await admin.auth.admin.updateUserById(id, {
+      user_metadata: { demo_2fa: false },
+    });
     if (error) return { error: error.message };
   } else {
-    const { data, error } = await admin.auth.admin.mfa.listFactors({ userId: id });
+    const { data, error } = await admin.auth.admin.mfa.listFactors({
+      userId: id,
+    });
     if (error) return { error: error.message };
     for (const factor of data.factors) {
-      const { error: removeError } = await admin.auth.admin.mfa.deleteFactor({ userId: id, id: factor.id });
-      if (removeError) return { error: `The authenticator could not be removed: ${removeError.message}` };
+      const { error: removeError } = await admin.auth.admin.mfa.deleteFactor({
+        userId: id,
+        id: factor.id,
+      });
+      if (removeError)
+        return {
+          error: `The authenticator could not be removed: ${removeError.message}`,
+        };
     }
   }
 
@@ -177,10 +242,16 @@ export async function resetStaffTwoFactor(_prev: ActionState, fd: FormData): Pro
   });
 
   revalidatePath("/staff");
-  return { success: "Two-factor authentication removed. They will be asked to set it up again if their role needs it." };
+  return {
+    success:
+      "Two-factor authentication removed. They will be asked to set it up again if their role needs it.",
+  };
 }
 
-export async function updateStaffMember(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function updateStaffMember(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   const session = await requirePermission("staff.manage");
   const supabase = await createClient();
   const id = str(fd, "id");
@@ -216,10 +287,20 @@ export async function updateStaffMember(_prev: ActionState, fd: FormData): Promi
   // for any hotel other than the one the caller is working in (0041).
   const property = str(fd, "property_id", 36);
   if (id !== session.staff.id && /^[0-9a-f-]{36}$/i.test(property)) {
-    const { data: current } = await supabase.from("staff").select("property_id").eq("id", id).maybeSingle();
+    const { data: current } = await supabase
+      .from("staff")
+      .select("property_id")
+      .eq("id", id)
+      .maybeSingle();
     if (current && current.property_id !== property) {
-      const { error: moveError } = await supabase.rpc("staff_move_property", { p_staff: id, p_property: property });
-      if (moveError) return { error: `Saved, but not moved to the other hotel: ${friendlyDbError(moveError.message)}` };
+      const { error: moveError } = await supabase.rpc("staff_move_property", {
+        p_staff: id,
+        p_property: property,
+      });
+      if (moveError)
+        return {
+          error: `Saved, but not moved to the other hotel: ${friendlyDbError(moveError.message)}`,
+        };
     }
   }
 
@@ -229,7 +310,10 @@ export async function updateStaffMember(_prev: ActionState, fd: FormData): Promi
 
 // ── Roles ──────────────────────────────────────────────────────────────────
 
-export async function saveRole(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function saveRole(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("roles.manage");
   const supabase = await createClient();
 
@@ -239,13 +323,22 @@ export async function saveRole(_prev: ActionState, fd: FormData): Promise<Action
   if (!name) return { error: "Name the role." };
 
   const key = isNew
-    ? name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40)
+    ? name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 40)
     : existingKey;
-  if (!/^[a-z][a-z0-9_]{1,39}$/.test(key)) return { error: "Start the name with a letter." };
+  if (!/^[a-z][a-z0-9_]{1,39}$/.test(key))
+    return { error: "Start the name with a letter." };
 
   const permissions = fd.getAll("permissions").map(String).filter(isPermission);
 
-  const { data: current } = await supabase.from("roles").select("is_superuser").eq("key", key).maybeSingle();
+  const { data: current } = await supabase
+    .from("roles")
+    .select("is_superuser")
+    .eq("key", key)
+    .maybeSingle();
   if (!isNew && !current) return { error: "Role not found." };
 
   const payload = {
@@ -258,7 +351,12 @@ export async function saveRole(_prev: ActionState, fd: FormData): Promise<Action
     ? await supabase.from("roles").insert({ key, ...payload, sort_order: 100 })
     : await supabase.from("roles").update(payload).eq("key", key);
   if (error) {
-    return { error: error.code === "23505" ? "A role with that name already exists." : friendlyDbError(error.message) };
+    return {
+      error:
+        error.code === "23505"
+          ? "A role with that name already exists."
+          : friendlyDbError(error.message),
+    };
   }
 
   // The superuser role holds everything by definition; its list is not edited.
@@ -275,34 +373,55 @@ export async function saveRole(_prev: ActionState, fd: FormData): Promise<Action
     if (permissions.length) {
       const { error: permError } = await supabase
         .from("role_permissions")
-        .insert(permissions.map((permission) => ({ role_key: key, permission })));
+        .insert(
+          permissions.map((permission) => ({ role_key: key, permission })),
+        );
       if (permError) return { error: friendlyDbError(permError.message) };
     }
   }
 
   revalidatePath("/roles");
   revalidatePath("/staff");
-  return { success: isNew ? `${name} created.` : `${name} saved. Changes apply on each person's next page load.` };
+  return {
+    success: isNew
+      ? `${name} created.`
+      : `${name} saved. Changes apply on each person's next page load.`,
+  };
 }
 
-export async function deleteRole(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function deleteRole(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("roles.manage");
   const supabase = await createClient();
   const key = str(fd, "key", 40);
 
-  const { data: role } = await supabase.from("roles").select("is_system, name").eq("key", key).maybeSingle();
+  const { data: role } = await supabase
+    .from("roles")
+    .select("is_system, name")
+    .eq("key", key)
+    .maybeSingle();
   if (!role) return { error: "Role not found." };
-  if (role.is_system) return { error: "Built-in roles cannot be deleted; edit their permissions instead." };
+  if (role.is_system)
+    return {
+      error:
+        "Built-in roles cannot be deleted; edit their permissions instead.",
+    };
 
   // Counted across every hotel (0043): the staff list only shows this one,
   // so a role in use elsewhere used to fail with a raw foreign-key error.
-  const { data: usage, error: usageError } = await supabase.rpc("role_usage", { p_role: key });
+  const { data: usage, error: usageError } = await supabase.rpc("role_usage", {
+    p_role: key,
+  });
   if (usageError) return { error: friendlyDbError(usageError.message) };
   const used = (usage ?? []) as { property: string; staff: number }[];
   const total = used.reduce((t, u) => t + Number(u.staff), 0);
   if (total > 0) {
     const where = used.map((u) => `${u.property} (${u.staff})`).join(", ");
-    return { error: `${total} staff member(s) still have this role: ${where}. Give them another role first.` };
+    return {
+      error: `${total} staff member(s) still have this role: ${where}. Give them another role first.`,
+    };
   }
 
   const { error } = await supabase.from("roles").delete().eq("key", key);
@@ -314,7 +433,10 @@ export async function deleteRole(_prev: ActionState, fd: FormData): Promise<Acti
 
 // ── Property settings ─────────────────────────────────────────────────────
 
-export async function saveSettings(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function saveSettings(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   await requirePermission("settings.manage");
   const supabase = await createClient();
 
@@ -334,11 +456,23 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
       return { up_to: upTo === "*" ? null : Number(upTo), rate: Number(rate) };
     });
   const parsed = parseTaxSlabs(slabs);
-  if (parsed.length !== slabs.length || parsed.some((s) => !Number.isFinite(s.rate) || (s.up_to !== null && !Number.isFinite(s.up_to)))) {
-    return { error: 'Tax slabs: one per line as "ceiling rate", e.g. "7500 5", ending with "* 18".' };
+  if (
+    parsed.length !== slabs.length ||
+    parsed.some(
+      (s) =>
+        !Number.isFinite(s.rate) ||
+        (s.up_to !== null && !Number.isFinite(s.up_to)),
+    )
+  ) {
+    return {
+      error:
+        'Tax slabs: one per line as "ceiling rate", e.g. "7500 5", ending with "* 18".',
+    };
   }
   if (parsed.length && parsed[parsed.length - 1].up_to !== null) {
-    return { error: 'The last tax slab must be "* rate" to cover everything above.' };
+    return {
+      error: 'The last tax slab must be "* rate" to cover everything above.',
+    };
   }
 
   const timezone = str(fd, "timezone", 60) || "Asia/Kolkata";
@@ -349,9 +483,11 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
   }
 
   const currency = str(fd, "currency", 3).toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) return { error: "Currency is a 3-letter code such as INR." };
+  if (!/^[A-Z]{3}$/.test(currency))
+    return { error: "Currency is a 3-letter code such as INR." };
 
-  const fee = (key: string) => oneOf(fd, key, ["none", "percent", "flat"] as const, "percent");
+  const fee = (key: string) =>
+    oneOf(fd, key, ["none", "percent", "flat"] as const, "percent");
 
   // GST (0036). The hotel's own GSTIN is checked here so a typo is caught
   // before it is printed on every invoice; its first two digits are the state.
@@ -363,33 +499,67 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
   }
   // Without a GSTIN yet, the state's name gives the code; invoices are
   // refused until the GSTIN is entered (invoiceTaxFields).
-  const gstStateCode = gstin ? stateFromGstin(gstin) : stateCodeFor(str(fd, "state", 100));
-  const invoicePrefix = str(fd, "invoice_prefix", 10).toUpperCase().replace(/[^A-Z0-9]/g, "") || "INV";
-  const creditNotePrefix = str(fd, "credit_note_prefix", 6).toUpperCase().replace(/[^A-Z0-9]/g, "") || "CN";
+  const gstStateCode = gstin
+    ? stateFromGstin(gstin)
+    : stateCodeFor(str(fd, "state", 100));
+  const invoicePrefix =
+    str(fd, "invoice_prefix", 10)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "") || "INV";
+  const creditNotePrefix =
+    str(fd, "credit_note_prefix", 6)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "") || "CN";
   if (taxRegime === "gst" && invoicePrefix.length > MAX_GST_PREFIX_LENGTH) {
-    return { error: `A GST invoice number is at most 16 characters, so the prefix can be ${MAX_GST_PREFIX_LENGTH} at most.` };
+    return {
+      error: `A GST invoice number is at most 16 characters, so the prefix can be ${MAX_GST_PREFIX_LENGTH} at most.`,
+    };
   }
   if (taxRegime === "gst" && creditNotePrefix.length > MAX_GST_PREFIX_LENGTH) {
-    return { error: `The credit-note prefix can be ${MAX_GST_PREFIX_LENGTH} characters at most.` };
+    return {
+      error: `The credit-note prefix can be ${MAX_GST_PREFIX_LENGTH} characters at most.`,
+    };
   }
   if (creditNotePrefix === invoicePrefix) {
-    return { error: "Credit notes need their own series: choose a prefix different from the invoice prefix." };
+    return {
+      error:
+        "Credit notes need their own series: choose a prefix different from the invoice prefix.",
+    };
   }
   const sac = (key: string, fallback: string) => {
     const v = str(fd, key, 8).replace(/\D/g, "");
     return v || fallback;
   };
 
-  const defaultLanguage = str(fd, "default_language", 2) in LANGUAGES ? str(fd, "default_language", 2) : "en";
+  const defaultLanguage =
+    str(fd, "default_language", 2) in LANGUAGES
+      ? str(fd, "default_language", 2)
+      : "en";
   const languages = [
-    ...new Set([defaultLanguage, ...fd.getAll("languages").map(String).filter((l) => l in LANGUAGES)]),
+    ...new Set([
+      defaultLanguage,
+      ...fd
+        .getAll("languages")
+        .map(String)
+        .filter((l) => l in LANGUAGES),
+    ]),
   ];
 
   // Since 0024 property_settings is a view onto the one property this request
   // is about, and its id is that property's uuid rather than the old
   // singleton `true`. Reading it back keeps the update aimed at one row.
-  const { data: current } = await supabase.from("property_settings").select("id").maybeSingle();
+  const { data: current } = await supabase
+    .from("property_settings")
+    .select("id, is_default")
+    .maybeSingle();
   if (!current) return { error: "Property settings are not set up yet." };
+  // Lockout is one rule for the group, set on the default hotel (0044).
+  const lockout = current.is_default
+    ? {
+        max_failed_logins: int(fd, "max_failed_logins", 5, 3, 50),
+        lockout_minutes: int(fd, "lockout_minutes", 15, 1, 1440),
+      }
+    : {};
 
   const { error } = await supabase
     .from("property_settings")
@@ -419,16 +589,27 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
       tax_slabs: parsed,
       tax_label: str(fd, "tax_label", 20) || "Tax",
       early_checkin_fee_type: fee("early_checkin_fee_type"),
-      early_checkin_fee_value: Math.max(0, num(fd, "early_checkin_fee_value") ?? 0),
+      early_checkin_fee_value: Math.max(
+        0,
+        num(fd, "early_checkin_fee_value") ?? 0,
+      ),
       late_checkout_fee_type: fee("late_checkout_fee_type"),
-      late_checkout_fee_value: Math.max(0, num(fd, "late_checkout_fee_value") ?? 0),
+      late_checkout_fee_value: Math.max(
+        0,
+        num(fd, "late_checkout_fee_value") ?? 0,
+      ),
       hold_hours: int(fd, "hold_hours", 24, 1, 720),
       session_timeout_minutes: int(fd, "session_timeout_minutes", 30, 5, 720),
       password_min_length: int(fd, "password_min_length", 10, 8, 128),
       password_max_age_days: int(fd, "password_max_age_days", 90, 0, 3650),
-      max_failed_logins: int(fd, "max_failed_logins", 5, 3, 50),
-      lockout_minutes: int(fd, "lockout_minutes", 15, 1, 1440),
-      id_document_retention_days: int(fd, "id_document_retention_days", 365, 30, 3650),
+      ...lockout,
+      id_document_retention_days: int(
+        fd,
+        "id_document_retention_days",
+        365,
+        30,
+        3650,
+      ),
       hk_default_minutes: int(fd, "hk_default_minutes", 30, 5, 480),
       hk_deep_clean_days: int(fd, "hk_deep_clean_days", 30, 1, 365),
       hk_stayover_enabled: bool(fd, "hk_stayover_enabled"),
@@ -438,23 +619,41 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
       // digits: "INV/2026-27/0001".
       invoice_prefix: invoicePrefix,
       invoice_terms: str(fd, "invoice_terms", 1000),
-      refund_approval_threshold: Math.max(0, num(fd, "refund_approval_threshold") ?? 5000),
+      refund_approval_threshold: Math.max(
+        0,
+        num(fd, "refund_approval_threshold") ?? 5000,
+      ),
       online_payments_enabled: bool(fd, "online_payments_enabled"),
       multi_currency_enabled: bool(fd, "multi_currency_enabled"),
       require_cashier_shift: bool(fd, "require_cashier_shift"),
       pos_room_charge_limit: Math.max(0, num(fd, "pos_room_charge_limit") ?? 0),
-      event_quote_approval_threshold: Math.max(0, num(fd, "event_quote_approval_threshold") ?? 100000),
-      event_service_charge_percent: Math.min(100, Math.max(0, num(fd, "event_service_charge_percent") ?? 0)),
-      event_advance_percent: Math.min(100, Math.max(0, num(fd, "event_advance_percent") ?? 25)),
+      event_quote_approval_threshold: Math.max(
+        0,
+        num(fd, "event_quote_approval_threshold") ?? 100000,
+      ),
+      event_service_charge_percent: Math.min(
+        100,
+        Math.max(0, num(fd, "event_service_charge_percent") ?? 0),
+      ),
+      event_advance_percent: Math.min(
+        100,
+        Math.max(0, num(fd, "event_advance_percent") ?? 25),
+      ),
       event_terms: str(fd, "event_terms", 4000),
-      monthly_operating_cost: Math.max(0, num(fd, "monthly_operating_cost") ?? 0),
+      monthly_operating_cost: Math.max(
+        0,
+        num(fd, "monthly_operating_cost") ?? 0,
+      ),
       notify_pre_arrival_days: int(fd, "notify_pre_arrival_days", 3, 0, 30),
       notify_checkin_days: int(fd, "notify_checkin_days", 1, 0, 30),
       notify_post_stay_days: int(fd, "notify_post_stay_days", 1, 0, 30),
       notify_staff_new_booking: bool(fd, "notify_staff_new_booking"),
       notify_staff_vip_arrival: bool(fd, "notify_staff_vip_arrival"),
       notify_staff_ticket_assigned: bool(fd, "notify_staff_ticket_assigned"),
-      revenue_auto_approve_percent: Math.min(100, Math.max(0, num(fd, "revenue_auto_approve_percent") ?? 10)),
+      revenue_auto_approve_percent: Math.min(
+        100,
+        Math.max(0, num(fd, "revenue_auto_approve_percent") ?? 10),
+      ),
       revenue_forecast_days: int(fd, "revenue_forecast_days", 60, 7, 365),
       revenue_floor_rate: Math.max(0, num(fd, "revenue_floor_rate") ?? 0),
       revenue_ceiling_rate: Math.max(0, num(fd, "revenue_ceiling_rate") ?? 0),
@@ -470,11 +669,15 @@ export async function saveSettings(_prev: ActionState, fd: FormData): Promise<Ac
  * Ends every session a staff member has open (Module 15: session
  * management). Their next page load signs them out; signing in again works.
  */
-export async function endStaffSessions(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function endStaffSessions(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   const session = await requirePermission("staff.manage");
   const id = str(fd, "id", 36);
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Staff member not found." };
-  if (id === session.staff.id) return { error: "Use Sign out to end your own session." };
+  if (id === session.staff.id)
+    return { error: "Use Sign out to end your own session." };
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("staff")
@@ -490,7 +693,9 @@ export async function endStaffSessions(_prev: ActionState, fd: FormData): Promis
     p_summary: `Ended the sessions of ${data.full_name || data.email}`,
   });
   revalidatePath("/staff/activity");
-  return { success: `${data.full_name || data.email} is signed out everywhere.` };
+  return {
+    success: `${data.full_name || data.email} is signed out everywhere.`,
+  };
 }
 
 // ── Session ─────────────────────────────────────────────────────────────────

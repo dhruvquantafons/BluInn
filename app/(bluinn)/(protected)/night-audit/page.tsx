@@ -1,8 +1,8 @@
-import { } from "lucide-react";
+import {} from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "../../../lib/supabase/server";
-import { requirePermission } from "../../../lib/auth";
+import { requireAnyPermission } from "../../../lib/auth";
 import { can } from "../../../lib/permissions";
 import { getSettings } from "../../../lib/settings";
 import { todayIn } from "../../../lib/dates";
@@ -29,8 +29,18 @@ import {
 const HISTORY_PAGE = 20;
 import ActionForm from "../../components/ActionForm";
 
-export default async function NightAuditPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  const session = await requirePermission("frontdesk.night_audit");
+export default async function NightAuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  // Anyone who can read folios can read the closed days (0044); only the night
+  // auditor sees the checklist and runs the audit.
+  const session = await requireAnyPermission([
+    "frontdesk.night_audit",
+    "folio.view",
+  ]);
+  const runs = can(session, "frontdesk.night_audit");
   const page = pageParam((await searchParams).page);
   const supabase = await createClient();
   const settings = await getSettings();
@@ -46,35 +56,45 @@ export default async function NightAuditPage({ searchParams }: { searchParams: P
     { data: current },
     { data: openShifts },
     discrepancies,
-  ] =
-    await Promise.all([
-      supabase
-        .from("bookings")
-        .select("id, reference, contact_name, status")
-        .in("status", ["tentative", "confirmed"])
-        .lte("check_in", day),
-      supabase.from("bookings").select("id, reference, contact_name, check_out").eq("status", "checked_in").lte("check_out", day),
-      supabase
-        .from("bookings")
-        .select("id, reference, contact_name")
-        .eq("status", "checked_in")
-        .is("room_id", null),
-      supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "checked_in"),
-      supabase
-        .from("night_audits")
-        .select("business_date, status, completed_at, report", { count: "exact" })
-        .order("business_date", { ascending: false })
-        .range(...pageRange(page, HISTORY_PAGE)),
-      supabase.from("night_audits").select("status, error").eq("business_date", day).maybeSingle(),
-      // Drawers still open. Visible in full to anyone who audits shifts;
-      // a cashier sees only their own.
-      supabase
-        .from("cashier_shifts")
-        .select("id, opened_at, staff:staff_id(full_name, email)")
-        .is("closed_at", null)
-        .order("opened_at"),
-      loadDiscrepancies(supabase),
-    ]);
+  ] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select("id, reference, contact_name, status")
+      .in("status", ["tentative", "confirmed"])
+      .lte("check_in", day),
+    supabase
+      .from("bookings")
+      .select("id, reference, contact_name, check_out")
+      .eq("status", "checked_in")
+      .lte("check_out", day),
+    supabase
+      .from("bookings")
+      .select("id, reference, contact_name")
+      .eq("status", "checked_in")
+      .is("room_id", null),
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "checked_in"),
+    supabase
+      .from("night_audits")
+      .select("business_date, status, completed_at, report", { count: "exact" })
+      .order("business_date", { ascending: false })
+      .range(...pageRange(page, HISTORY_PAGE)),
+    supabase
+      .from("night_audits")
+      .select("status, error")
+      .eq("business_date", day)
+      .maybeSingle(),
+    // Drawers still open. Visible in full to anyone who audits shifts;
+    // a cashier sees only their own.
+    supabase
+      .from("cashier_shifts")
+      .select("id, opened_at, staff:staff_id(full_name, email)")
+      .is("closed_at", null)
+      .order("opened_at"),
+    loadDiscrepancies(supabase),
+  ]);
 
   if (outOfRange(historyError)) redirect(pageHref("/night-audit", {}, 1));
   const pending = due ?? [];
@@ -87,102 +107,146 @@ export default async function NightAuditPage({ searchParams }: { searchParams: P
       />
 
       <div className="space-y-6">
-        <Card className="p-5">
-          <SectionTitle>Close {fmtDate(day)}</SectionTitle>
+        {runs && (
+          <Card className="p-5">
+            <SectionTitle>Close {fmtDate(day)}</SectionTitle>
 
-          {day > today && (
-            <div className="mb-4">
-              <Notice tone="warn">
-                The business date is ahead of the calendar date — {fmtDate(day)} has not started yet. Run the audit after
-                the day ends.
-              </Notice>
-            </div>
-          )}
-          {current?.status === "failed" && (
-            <div className="mb-4">
-              <Notice tone="error">The last attempt stopped: {current.error}. It is safe to run again.</Notice>
-            </div>
-          )}
-
-          <ul className="space-y-2 text-sm mb-5">
-            <li>
-              <strong className="font-medium">{inHouse ?? 0}</strong> in-house booking(s) will be charged for the night of{" "}
-              {fmtDate(day)}.
-            </li>
-            <li className={pending.length ? "text-amber-800" : ""}>
-              <strong className="font-medium">{pending.length}</strong> expected arrival(s) have not checked in
-              {pending.length > 0 && (
-                <span className="block text-xs text-slate-600">
-                  {pending.map((b) => (
-                    <Link key={b.id} href={`/bookings/${b.id}`} className="mr-2 text-brand-700">
-                      {b.reference} {b.contact_name}
-                    </Link>
-                  ))}
-                </span>
-              )}
-            </li>
-            <li className={(overstays ?? []).length ? "text-rose-800" : ""}>
-              <strong className="font-medium">{(overstays ?? []).length}</strong> guest(s) were due out and are still
-              checked in
-              {(overstays ?? []).length > 0 && (
-                <span className="block text-xs text-slate-600">
-                  {(overstays ?? []).map((b) => (
-                    <Link key={b.id} href={`/bookings/${b.id}`} className="mr-2 text-brand-700">
-                      {b.reference} {b.contact_name}
-                    </Link>
-                  ))}
-                  — check them out or extend their stay first, or they will not be charged for tonight.
-                </span>
-              )}
-            </li>
-            {(unassigned ?? []).length > 0 && (
-              <li className="text-rose-800">{(unassigned ?? []).length} in-house booking(s) have no room.</li>
+            {day > today && (
+              <div className="mb-4">
+                <Notice tone="warn">
+                  The business date is ahead of the calendar date —{" "}
+                  {fmtDate(day)} has not started yet. Run the audit after the
+                  day ends.
+                </Notice>
+              </div>
             )}
-            {discrepancies.length > 0 && (
-              <li className="text-rose-800">
-                <strong className="font-medium">{discrepancies.length}</strong> room(s) where housekeeping disagrees with
-                the front desk
-                <span className="block text-xs text-slate-600">
-                  {discrepancies.map((d) => (
-                    <span key={d.room_id} className="mr-2">
-                      {d.room_number} {d.kind === "skip" ? "(skip — in house, found empty)" : "(sleeper — vacant, found in use)"}
-                    </span>
-                  ))}
-                  — resolve a skip before charging the night.
-                </span>
+            {current?.status === "failed" && (
+              <div className="mb-4">
+                <Notice tone="error">
+                  The last attempt stopped: {current.error}. It is safe to run
+                  again.
+                </Notice>
+              </div>
+            )}
+
+            <ul className="space-y-2 text-sm mb-5">
+              <li>
+                <strong className="font-medium">{inHouse ?? 0}</strong> in-house
+                booking(s) will be charged for the night of {fmtDate(day)}.
               </li>
-            )}
-            {(openShifts ?? []).length > 0 && (
-              <li className="text-amber-800">
-                <strong className="font-medium">{(openShifts ?? []).length}</strong> cash shift(s) are still open. The audit
-                does not close them: each cashier counts and closes their own drawer.
-                <span className="block text-xs text-slate-600">
-                  {(openShifts ?? []).map((s) => {
-                    const who = s.staff as unknown as { full_name: string; email: string } | null;
-                    return (
-                      <Link key={s.id} href={`/front-desk/shifts/${s.id}`} className="mr-2 text-brand-700">
-                        {who?.full_name || who?.email} (since {fmtDateTime(s.opened_at)})
+              <li className={pending.length ? "text-amber-800" : ""}>
+                <strong className="font-medium">{pending.length}</strong>{" "}
+                expected arrival(s) have not checked in
+                {pending.length > 0 && (
+                  <span className="block text-xs text-slate-600">
+                    {pending.map((b) => (
+                      <Link
+                        key={b.id}
+                        href={`/bookings/${b.id}`}
+                        className="mr-2 text-brand-700"
+                      >
+                        {b.reference} {b.contact_name}
                       </Link>
-                    );
-                  })}
-                  — close them so the day&apos;s cash is counted, or carry them into tomorrow.
-                </span>
+                    ))}
+                  </span>
+                )}
               </li>
-            )}
-          </ul>
+              <li className={(overstays ?? []).length ? "text-rose-800" : ""}>
+                <strong className="font-medium">
+                  {(overstays ?? []).length}
+                </strong>{" "}
+                guest(s) were due out and are still checked in
+                {(overstays ?? []).length > 0 && (
+                  <span className="block text-xs text-slate-600">
+                    {(overstays ?? []).map((b) => (
+                      <Link
+                        key={b.id}
+                        href={`/bookings/${b.id}`}
+                        className="mr-2 text-brand-700"
+                      >
+                        {b.reference} {b.contact_name}
+                      </Link>
+                    ))}
+                    — check them out or extend their stay first, or they will
+                    not be charged for tonight.
+                  </span>
+                )}
+              </li>
+              {(unassigned ?? []).length > 0 && (
+                <li className="text-rose-800">
+                  {(unassigned ?? []).length} in-house booking(s) have no room.
+                </li>
+              )}
+              {discrepancies.length > 0 && (
+                <li className="text-rose-800">
+                  <strong className="font-medium">
+                    {discrepancies.length}
+                  </strong>{" "}
+                  room(s) where housekeeping disagrees with the front desk
+                  <span className="block text-xs text-slate-600">
+                    {discrepancies.map((d) => (
+                      <span key={d.room_id} className="mr-2">
+                        {d.room_number}{" "}
+                        {d.kind === "skip"
+                          ? "(skip — in house, found empty)"
+                          : "(sleeper — vacant, found in use)"}
+                      </span>
+                    ))}
+                    — resolve a skip before charging the night.
+                  </span>
+                </li>
+              )}
+              {(openShifts ?? []).length > 0 && (
+                <li className="text-amber-800">
+                  <strong className="font-medium">
+                    {(openShifts ?? []).length}
+                  </strong>{" "}
+                  cash shift(s) are still open. The audit does not close them:
+                  each cashier counts and closes their own drawer.
+                  <span className="block text-xs text-slate-600">
+                    {(openShifts ?? []).map((s) => {
+                      const who = s.staff as unknown as {
+                        full_name: string;
+                        email: string;
+                      } | null;
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/front-desk/shifts/${s.id}`}
+                          className="mr-2 text-brand-700"
+                        >
+                          {who?.full_name || who?.email} (since{" "}
+                          {fmtDateTime(s.opened_at)})
+                        </Link>
+                      );
+                    })}
+                    — close them so the day&apos;s cash is counted, or carry
+                    them into tomorrow.
+                  </span>
+                </li>
+              )}
+            </ul>
 
-          <ActionForm action={runNightAudit} submitLabel={`Run night audit for ${fmtDate(day)}`} pendingLabel="Running…">
-            {can(session, "bookings.cancel") && (
+            <ActionForm
+              action={runNightAudit}
+              submitLabel={`Run night audit for ${fmtDate(day)}`}
+              pendingLabel="Running…"
+            >
+              {can(session, "bookings.cancel") && (
+                <Check
+                  name="mark_no_shows"
+                  defaultChecked={pending.length > 0}
+                  label="Mark arrivals who did not come as no-shows and post their no-show charge"
+                  hint="Untick to carry them into tomorrow (e.g. a confirmed late arrival)."
+                />
+              )}
               <Check
-                name="mark_no_shows"
-                defaultChecked={pending.length > 0}
-                label="Mark arrivals who did not come as no-shows and post their no-show charge"
-                hint="Untick to carry them into tomorrow (e.g. a confirmed late arrival)."
+                name="confirm"
+                label={`I have reviewed the day and want to close ${fmtDate(day)}. The business date will move to the next day.`}
               />
-            )}
-            <Check name="confirm" label={`I have reviewed the day and want to close ${fmtDate(day)}. The business date will move to the next day.`} />
-          </ActionForm>
-        </Card>
+            </ActionForm>
+          </Card>
+        )}
 
         <Card className="p-5">
           <SectionTitle>Recent audits</SectionTitle>
@@ -191,15 +255,57 @@ export default async function NightAuditPage({ searchParams }: { searchParams: P
           ) : (
             <ul className="divide-y divide-slate-100">
               {(history ?? []).map((a) => {
-                const r = a.report as { revenue?: { total?: number }; rooms?: { occupancy_percent?: number } };
+                const r = a.report as {
+                  revenue?: { net?: number; total?: number; tax?: number };
+                  rooms?: { occupancy_percent?: number };
+                };
+                // Revenue before tax, as every other screen shows it (0044);
+                // days closed before 0044 stored only the total with tax.
+                const net = r.revenue
+                  ? (r.revenue.net ??
+                    (r.revenue.total ?? 0) - (r.revenue.tax ?? 0))
+                  : 0;
                 return (
                   <li key={a.business_date}>
-                    <Link href={`/night-audit/${a.business_date}`} className="flex flex-wrap items-center gap-3 py-2.5 hover:bg-slate-50 text-sm">
-                      <span className="w-32 font-medium">{fmtDate(a.business_date)}</span>
-                      <Tag tone={a.status === "completed" ? "green" : a.status === "failed" ? "red" : "amber"}>{a.status}</Tag>
-                      {r.rooms && <span className="text-slate-700">{r.rooms.occupancy_percent}% occupancy</span>}
-                      {r.revenue && <span className="text-slate-700">{fmtMoney(r.revenue.total ?? 0)} revenue</span>}
-                      {a.completed_at && <span className="ml-auto text-[11px] text-slate-500">{fmtDateTime(a.completed_at)}</span>}
+                    <Link
+                      href={`/night-audit/${a.business_date}`}
+                      className="flex flex-wrap items-center gap-3 py-2.5 hover:bg-slate-50 text-sm"
+                    >
+                      <span className="w-32 font-medium">
+                        {fmtDate(a.business_date)}
+                      </span>
+                      <Tag
+                        tone={
+                          a.status === "completed"
+                            ? "green"
+                            : a.status === "failed"
+                              ? "red"
+                              : "amber"
+                        }
+                      >
+                        {a.status}
+                      </Tag>
+                      {r.rooms && (
+                        <span className="text-slate-700">
+                          {r.rooms.occupancy_percent}% occupancy
+                        </span>
+                      )}
+                      {r.revenue && (
+                        <span className="text-slate-700">
+                          {fmtMoney(net)} revenue
+                          {r.revenue.net === undefined && (
+                            <span className="text-slate-500" title="Closed before 13 Nov 2026: paid-outs and room-charged tips counted as revenue, and outlet bills paid at the outlet, own-bill events, allowances and credit notes did not. Reports show this day on the current definition.">
+                              {" "}
+                              (earlier basis)
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {a.completed_at && (
+                        <span className="ml-auto text-[11px] text-slate-500">
+                          {fmtDateTime(a.completed_at)}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

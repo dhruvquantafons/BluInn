@@ -12,7 +12,7 @@ import { quoteStay, flatBreakdown } from "../lib/pricing";
 import { discountNights, nightsTotal } from "../lib/revenue";
 import { cancellationPenalty, noShowPenalty, describePenalty } from "../lib/policies";
 import { friendlyDbError, isOverbooked } from "../lib/db-errors";
-import { ancillaryCharge, insertFolioEntries } from "../lib/folio";
+import { ancillaryCharge, chargeWithTax, insertFolioEntries } from "../lib/folio";
 import { propertyInvoiceProblem } from "../lib/checkout";
 import { issueOutstandingInvoices, lastBillTo } from "../lib/invoice-issue";
 import { sendBookingMessage, describeSend, type Template } from "../lib/notifications";
@@ -561,7 +561,7 @@ export async function cancelBooking(_prev: ActionState, fd: FormData): Promise<A
 
   revalidateBooking(booking.id);
   return {
-    success: `Cancelled. ${charge > 0 ? `Penalty of ₹${charge.toLocaleString("en-IN")} posted to the folio.${invoiceNote}` : waive && penalty.amount > 0 ? "Penalty waived." : "No penalty."}${sent}`,
+    success: `Cancelled. ${charge > 0 ? `Penalty of ₹${chargeWithTax(charge, booking, settings).toLocaleString("en-IN")} posted to the folio, tax included.${invoiceNote}` : waive && penalty.amount > 0 ? "Penalty waived." : "No penalty."}${sent}`,
   };
 }
 
@@ -605,7 +605,7 @@ export async function markNoShow(_prev: ActionState, fd: FormData): Promise<Acti
   const invoiceNote = charge > 0 ? await invoicePenalty(supabase, session, settings, booking) : "";
 
   revalidateBooking(booking.id);
-  return { success: `Marked as no-show.${charge > 0 ? ` ₹${charge.toLocaleString("en-IN")} posted to the folio.${invoiceNote}` : ""}` };
+  return { success: `Marked as no-show.${charge > 0 ? ` ₹${chargeWithTax(charge, booking, settings).toLocaleString("en-IN")} posted to the folio, tax included.${invoiceNote}` : ""}` };
 }
 
 /**

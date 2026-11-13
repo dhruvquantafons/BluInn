@@ -95,8 +95,48 @@ export const DEFAULT_SETTINGS: PropertySettings = {
 /** Property settings for the signed-in staff member's request. */
 export const getSettings = cache(async (): Promise<PropertySettings> => {
   const supabase = await createClient();
-  const { data } = await supabase.from("property_settings").select("*").maybeSingle();
-  return data ? ({ ...DEFAULT_SETTINGS, ...data } as PropertySettings) : DEFAULT_SETTINGS;
+  const { data } = await supabase
+    .from("property_settings")
+    .select("*")
+    .maybeSingle();
+  return data
+    ? ({ ...DEFAULT_SETTINGS, ...data } as PropertySettings)
+    : DEFAULT_SETTINGS;
+});
+
+export interface GroupLockout {
+  /** The hotel the rule is set on: the group's default hotel. */
+  hotel: string;
+  isHere: boolean;
+  max_failed_logins: number;
+  lockout_minutes: number;
+}
+
+/**
+ * Lockout after failed sign-ins is one rule for the whole group (0044): sign-in
+ * happens before anyone has picked a hotel, so it has always read the default
+ * hotel's limits. Every screen that shows them reads them from there too.
+ */
+export const getGroupLockout = cache(async (): Promise<GroupLockout> => {
+  const here = await getSettings();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("properties")
+    .select("id, name, max_failed_logins, lockout_minutes")
+    .eq("is_default", true)
+    .maybeSingle();
+  const source = data ?? {
+    id: here.id,
+    name: here.name,
+    max_failed_logins: here.max_failed_logins,
+    lockout_minutes: here.lockout_minutes,
+  };
+  return {
+    hotel: source.name,
+    isHere: !here.id || source.id === here.id,
+    max_failed_logins: Number(source.max_failed_logins),
+    lockout_minutes: Number(source.lockout_minutes),
+  };
 });
 
 export function taxSlabsOf(settings: PropertySettings): TaxSlab[] {

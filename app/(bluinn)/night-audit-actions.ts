@@ -40,7 +40,10 @@ import { type ActionState, bool } from "./form-utils";
 /** How long a "running" audit blocks another attempt before it is presumed dead. */
 const RUNNING_LEASE_MS = 5 * 60 * 1000;
 
-export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function runNightAudit(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
   const session = await requirePermission("frontdesk.night_audit");
   const supabase = await createClient();
   const settings = await getSettings();
@@ -48,7 +51,8 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   const nextDay = addDays(day, 1);
   const staffId = session.staff.id;
 
-  if (!bool(fd, "confirm")) return { error: `Tick the box to confirm closing ${day}.` };
+  if (!bool(fd, "confirm"))
+    return { error: `Tick the box to confirm closing ${day}.` };
 
   // Each property closes its own day, so every lookup here is keyed by both
   // (the primary key became (property_id, business_date) in 0024). Without the
@@ -60,7 +64,9 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   // (many hotels close at 23:00); closing a date that is still ahead of the
   // calendar would charge a night nobody has slept yet.
   if (day > todayIn(settings.timezone)) {
-    return { error: `The business date ${day} has not started yet. Run night audit once it has.` };
+    return {
+      error: `The business date ${day} has not started yet. Run night audit once it has.`,
+    };
   }
 
   const { data: existing } = await supabase
@@ -75,8 +81,14 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   // Two people pressing Run at once would both post. Every step is idempotent,
   // so this is about a clean report, not money; a run that died part-way is
   // still "running" and can be taken over after a few minutes.
-  if (existing?.status === "running" && Date.now() - Date.parse(existing.started_at) < RUNNING_LEASE_MS) {
-    return { error: "Night audit is already running for this day. Wait a minute and refresh." };
+  if (
+    existing?.status === "running" &&
+    Date.now() - Date.parse(existing.started_at) < RUNNING_LEASE_MS
+  ) {
+    return {
+      error:
+        "Night audit is already running for this day. Wait a minute and refresh.",
+    };
   }
 
   const { error: startError } = await supabase.from("night_audits").upsert(
@@ -93,40 +105,86 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   if (startError) return { error: friendlyDbError(startError.message) };
 
   const fail = async (message: string) => {
-    await supabase.from("night_audits").update({ status: "failed", error: message })
+    await supabase
+      .from("night_audits")
+      .update({ status: "failed", error: message })
       .eq("property_id", property.id)
       .eq("business_date", day);
-    return { error: `Night audit stopped: ${friendlyDbError(message)} Fix the problem and run it again.` };
+    return {
+      error: `Night audit stopped: ${friendlyDbError(message)} Fix the problem and run it again.`,
+    };
   };
 
   // Stays that need a GST invoice someone else must issue (the night auditor
   // role cannot issue invoices), listed on the report.
-  const invoicing = can(session, "folio.invoice") && !propertyInvoiceProblem(settings);
+  const invoicing =
+    can(session, "folio.invoice") && !propertyInvoiceProblem(settings);
   const toInvoice: { reference: string; guest: string; reason: string }[] = [];
-  const invoiceStay = async (b: { id: string; reference: string; contact_name: string; guest_id: string | null }, why: string) => {
+  const invoiceStay = async (
+    b: {
+      id: string;
+      reference: string;
+      contact_name: string;
+      guest_id: string | null;
+    },
+    why: string,
+  ) => {
     if (!invoicing) {
-      toInvoice.push({ reference: b.reference, guest: b.contact_name, reason: why });
+      toInvoice.push({
+        reference: b.reference,
+        guest: b.contact_name,
+        reason: why,
+      });
       return;
     }
     const billTo = await lastBillTo(supabase, b);
-    const r = await issueOutstandingInvoices(supabase, settings, b.id, billTo, staffId);
-    if (r.error) toInvoice.push({ reference: b.reference, guest: b.contact_name, reason: `${why}: ${r.error}` });
+    const r = await issueOutstandingInvoices(
+      supabase,
+      settings,
+      b.id,
+      billTo,
+      staffId,
+    );
+    if (r.error)
+      toInvoice.push({
+        reference: b.reference,
+        guest: b.contact_name,
+        reason: `${why}: ${r.error}`,
+      });
   };
 
   // ── 0. Stays due out tonight but still in house ──
   const { data: dueOutData } = await supabase
     .from("bookings")
-    .select("id, reference, contact_name, guest_id, check_in, check_out, quoted_rate, rate_breakdown, rooms_count, stay_type, total_amount, rooms(room_number)")
+    .select(
+      "id, reference, contact_name, guest_id, check_in, check_out, quoted_rate, rate_breakdown, rooms_count, stay_type, total_amount, rooms(room_number)",
+    )
     .eq("status", "checked_in")
     .lte("check_out", day);
   type DueOut = Pick<
     Booking,
-    "id" | "reference" | "contact_name" | "guest_id" | "check_in" | "check_out" | "quoted_rate" | "rate_breakdown" | "rooms_count" | "stay_type" | "total_amount"
+    | "id"
+    | "reference"
+    | "contact_name"
+    | "guest_id"
+    | "check_in"
+    | "check_out"
+    | "quoted_rate"
+    | "rate_breakdown"
+    | "rooms_count"
+    | "stay_type"
+    | "total_amount"
   > & {
     rooms: { room_number: string } | null;
   };
   const handovers: { reference: string; next: string }[] = [];
-  const overstays: { reference: string; guest: string; room: string; due_out: string; extended_to: string | null }[] = [];
+  const overstays: {
+    reference: string;
+    guest: string;
+    room: string;
+    due_out: string;
+    extended_to: string | null;
+  }[] = [];
   // Overstays whose stay could not be extended (the room is booked to someone
   // else from tonight): the guest is still in it, so tonight is charged anyway.
   const stuck: DueOut[] = [];
@@ -144,10 +202,17 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     if (next) {
       const { error } = await supabase
         .from("bookings")
-        .update({ status: "checked_out", checked_out_at: new Date().toISOString(), checked_out_by: staffId })
+        .update({
+          status: "checked_out",
+          checked_out_at: new Date().toISOString(),
+          checked_out_by: staffId,
+        })
         .eq("id", b.id)
         .eq("status", "checked_in");
-      if (error) return fail(`Split stay ${b.reference} could not hand over to ${next.reference}: ${error.message}`);
+      if (error)
+        return fail(
+          `Split stay ${b.reference} could not hand over to ${next.reference}: ${error.message}`,
+        );
       handovers.push({ reference: b.reference, next: next.reference });
       await invoiceStay(b, "split stay handed over");
       continue;
@@ -159,8 +224,12 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     let extendedTo: string | null = null;
     if (ext) {
       // The nights added are added to the booking's total too (0041).
-      const added = ext.rate_breakdown.slice((b.rate_breakdown ?? []).length).reduce((s, n) => s + Number(n.rate), 0);
-      const total = Math.round((Number(b.total_amount) + added * b.rooms_count) * 100) / 100;
+      const added = ext.rate_breakdown
+        .slice((b.rate_breakdown ?? []).length)
+        .reduce((s, n) => s + Number(n.rate), 0);
+      const total =
+        Math.round((Number(b.total_amount) + added * b.rooms_count) * 100) /
+        100;
       const { error } = await supabase
         .from("bookings")
         .update({ ...ext, total_amount: total })
@@ -181,28 +250,47 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   // ── 1. Room charges ──
   const { data: inHouseData, error: inHouseError } = await supabase
     .from("bookings")
-    .select("id, reference, check_in, check_out, rooms_count, rate_breakdown, quoted_rate, stay_type, contact_name, rooms(room_number)")
+    .select(
+      "id, reference, check_in, check_out, rooms_count, rate_breakdown, quoted_rate, stay_type, contact_name, rooms(room_number)",
+    )
     .eq("status", "checked_in")
     .lte("check_in", day)
     .gt("check_out", day);
   if (inHouseError) return fail(inHouseError.message);
 
-  const inHouse = (inHouseData ?? []) as unknown as (Booking & { rooms: { room_number: string } | null })[];
-  const charges = await postRoomCharges(supabase, [...inHouse, ...(stuck as unknown as Booking[])], () => [day], settings, staffId, day);
+  const inHouse = (inHouseData ?? []) as unknown as (Booking & {
+    rooms: { room_number: string } | null;
+  })[];
+  const charges = await postRoomCharges(
+    supabase,
+    [...inHouse, ...(stuck as unknown as Booking[])],
+    () => [day],
+    settings,
+    staffId,
+    day,
+  );
   if (charges.error) return fail(charges.error);
 
   // ── 2. No-shows ──
   const { data: dueData } = await supabase
     .from("bookings")
-    .select("id, reference, contact_name, guest_id, rooms_count, check_in, quoted_rate, rate_breakdown, rate_plans(*)")
+    .select(
+      "id, reference, contact_name, guest_id, rooms_count, check_in, quoted_rate, rate_breakdown, rate_plans(*)",
+    )
     .in("status", ["tentative", "confirmed"])
     .lte("check_in", day);
-  const due = (dueData ?? []) as unknown as (Booking & { rate_plans: RatePlan | null })[];
+  const due = (dueData ?? []) as unknown as (Booking & {
+    rate_plans: RatePlan | null;
+  })[];
 
   const noShows: { reference: string; guest: string; penalty: number }[] = [];
   if (bool(fd, "mark_no_shows") && can(session, "bookings.cancel")) {
     for (const b of due) {
-      const penalty = noShowPenalty(b.rate_plans, b.rate_breakdown ?? [], b.rooms_count);
+      const penalty = noShowPenalty(
+        b.rate_plans,
+        b.rate_breakdown ?? [],
+        b.rooms_count,
+      );
       // The penalty goes first, then the status (0043): a penalty that failed
       // after the booking was closed was lost, since a rerun no longer finds
       // the booking. A rerun after a failed status change finds this night's
@@ -231,7 +319,10 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
             })
             .select("id")
             .single();
-          if (penaltyError) return fail(`No-show penalty for ${b.reference} was not posted: ${penaltyError.message}`);
+          if (penaltyError)
+            return fail(
+              `No-show penalty for ${b.reference} was not posted: ${penaltyError.message}`,
+            );
           penaltyId = entry.id as string;
         }
       }
@@ -254,7 +345,11 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
         if (penaltyId) {
           await supabase
             .from("folio_entries")
-            .update({ voided_at: new Date().toISOString(), voided_by: staffId, void_reason: "No-show not recorded" })
+            .update({
+              voided_at: new Date().toISOString(),
+              voided_by: staffId,
+              void_reason: "No-show not recorded",
+            })
             .eq("id", penaltyId);
         }
         if (error) return fail(error.message);
@@ -264,7 +359,11 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
         // The penalty is a taxable supply: it goes on a GST invoice like a stay.
         await invoiceStay(b, "no-show penalty");
       }
-      noShows.push({ reference: b.reference, guest: b.contact_name, penalty: penalty.amount });
+      noShows.push({
+        reference: b.reference,
+        guest: b.contact_name,
+        penalty: penalty.amount,
+      });
     }
   }
 
@@ -277,11 +376,25 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     .lte("release_on", day);
   const eventRoomsReleased: { event: string; rooms: number }[] = [];
   for (const g of dueBlocks ?? []) {
-    const ev = g.event_bookings as unknown as { number: string; title: string; status: string } | null;
+    const ev = g.event_bookings as unknown as {
+      number: string;
+      title: string;
+      status: string;
+    } | null;
     if (!ev || ev.status === "cancelled" || ev.status === "completed") continue;
-    const { data: released, error } = await supabase.rpc("event_release_unsold_rooms", { p_event: g.event_id });
-    if (error) return fail(`Unsold rooms for ${ev.number} were not released: ${error.message}`);
-    if (Number(released) > 0) eventRoomsReleased.push({ event: `${ev.number} ${ev.title}`, rooms: Number(released) });
+    const { data: released, error } = await supabase.rpc(
+      "event_release_unsold_rooms",
+      { p_event: g.event_id },
+    );
+    if (error)
+      return fail(
+        `Unsold rooms for ${ev.number} were not released: ${error.message}`,
+      );
+    if (Number(released) > 0)
+      eventRoomsReleased.push({
+        event: `${ev.number} ${ev.title}`,
+        rooms: Number(released),
+      });
   }
 
   // ── 3. Expired holds ──
@@ -300,22 +413,52 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     .select("reference, contact_name");
 
   // ── 4. Close the day's folio entries ──
-  const { error: closeError } = await supabase.rpc("close_folio_day", { p_date: day });
+  const { error: closeError } = await supabase.rpc("close_folio_day", {
+    p_date: day,
+  });
   if (closeError) return fail(closeError.message);
 
   const { data: dayEntries } = await supabase
     .from("folio_entries")
-    .select("kind, amount, tax_amount, method, created_by, voided_at, staff:created_by(full_name, email)")
+    .select(
+      "kind, amount, tax_amount, method, created_by, voided_at, staff:created_by(full_name, email)",
+    )
     .eq("night_audit_date", day)
     .is("voided_at", null);
 
-  type DayEntry = Pick<FolioEntry, "kind" | "amount" | "tax_amount" | "method"> & {
+  type DayEntry = Pick<
+    FolioEntry,
+    "kind" | "amount" | "tax_amount" | "method"
+  > & {
     created_by: string | null;
     staff: { full_name: string; email: string } | null;
   };
   const entries = (dayEntries ?? []) as unknown as DayEntry[];
-  const sumKind = (kinds: string[], field: "amount" | "tax_amount" = "amount") =>
-    Math.round(entries.filter((e) => kinds.includes(e.kind)).reduce((s, e) => s + Number(e[field]), 0) * 100) / 100;
+
+  // The day's revenue on the one definition every report uses (0044): before
+  // tax, outlet bills paid at the outlet and own-bill events in, allowances and
+  // credit notes off, paid-outs and tips out.
+  const { data: revenueData, error: revenueError } = await supabase.rpc(
+    "night_audit_revenue",
+    { p_day: day },
+  );
+  if (revenueError) return fail(revenueError.message);
+  const revenue = revenueData as {
+    room: number;
+    other: number;
+    net: number;
+    tax: number;
+    total: number;
+    by_dept: Record<string, number>;
+  };
+
+  // Rooms available tonight, from tonight's out-of-order blocks (0044). Read
+  // before step 5 moves room statuses on to tomorrow's blocks.
+  const { data: sellableData, error: sellableError } = await supabase.rpc(
+    "sellable_rooms",
+    { p_day: day },
+  );
+  if (sellableError) return fail(sellableError.message);
 
   const byMethod: Record<string, number> = {};
   const byCashier: Record<string, number> = {};
@@ -323,7 +466,8 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     if (e.kind !== "payment" && e.kind !== "refund") continue;
     const signed = e.kind === "refund" ? -Number(e.amount) : Number(e.amount);
     const method = e.method ?? "other";
-    byMethod[method] = Math.round(((byMethod[method] ?? 0) + signed) * 100) / 100;
+    byMethod[method] =
+      Math.round(((byMethod[method] ?? 0) + signed) * 100) / 100;
     const who = e.staff?.full_name || e.staff?.email || "System";
     byCashier[who] = Math.round(((byCashier[who] ?? 0) + signed) * 100) / 100;
   }
@@ -351,32 +495,49 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
     const kind = activeBlock.get(room.id);
     const target = kind ?? "available";
     if (room.status !== target) {
-      const { error } = await supabase.from("rooms").update({ status: target }).eq("id", room.id);
+      const { error } = await supabase
+        .from("rooms")
+        .update({ status: target })
+        .eq("id", room.id);
       if (!error) blocksApplied += 1;
       else roomStatusFailed.push(String(room.room_number));
     }
   }
 
   // ── 5b. Tomorrow's housekeeping list: due deep cleans ──
-  const { data: hkCreated } = await supabase.rpc("hk_generate_tasks", { p_date: nextDay });
+  const { data: hkCreated } = await supabase.rpc("hk_generate_tasks", {
+    p_date: nextDay,
+  });
 
   // ── 5c. Preventive maintenance due tomorrow; tickets past their target ──
-  const { data: mtCreated } = await supabase.rpc("mt_generate_preventive", { p_date: nextDay });
+  const { data: mtCreated } = await supabase.rpc("mt_generate_preventive", {
+    p_date: nextDay,
+  });
   const mtEscalated = await escalateOverdueTickets(supabase, staffId);
 
   // ── 6. Identity document retention ──
   let purged = 0;
   if (can(session, "guests.view_id")) {
-    const cutoff = new Date(Date.now() - settings.id_document_retention_days * 86400000).toISOString();
+    const cutoff = new Date(
+      Date.now() - settings.id_document_retention_days * 86400000,
+    ).toISOString();
     const { data: old } = await supabase
       .from("guest_documents")
       .select("id, storage_path")
       .lt("uploaded_at", cutoff)
       .limit(500);
     if (old?.length) {
-      const { error } = await supabase.storage.from("guest-documents").remove(old.map((d) => d.storage_path));
+      const { error } = await supabase.storage
+        .from("guest-documents")
+        .remove(old.map((d) => d.storage_path));
       if (!error) {
-        await supabase.from("guest_documents").delete().in("id", old.map((d) => d.id));
+        await supabase
+          .from("guest_documents")
+          .delete()
+          .in(
+            "id",
+            old.map((d) => d.id),
+          );
         purged = old.length;
       }
     }
@@ -390,61 +551,110 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
   let pointsExpired = 0;
   let tiersReviewed = 0;
   if (settings.loyalty_enabled) {
-    const { data: expiredPoints } = await supabase.rpc("loyalty_expire_points", { p_date: day });
+    const { data: expiredPoints } = await supabase.rpc(
+      "loyalty_expire_points",
+      { p_date: day },
+    );
     pointsExpired = Number(expiredPoints ?? 0);
-    const { data: reviewed } = await supabase.rpc("loyalty_evaluate_all", { p_date: day });
+    const { data: reviewed } = await supabase.rpc("loyalty_evaluate_all", {
+      p_date: day,
+    });
     tiersReviewed = Number(reviewed ?? 0);
   }
 
   // ── 6c. Outlet takings ──
   //
-  // A bill charged to a room already shows up in the folio figures below, but
-  // one settled with cash at the restaurant never touches a folio. Without
-  // this the daily revenue report would quietly understate the day's trade.
+  // What the outlets took in themselves. A bill charged to a room is already
+  // in the folio figures, so it is left out here (it used to be counted
+  // twice, 0044); tips are the staff's and are shown on their own.
   const { data: posRows } = await supabase
     .from("pos_orders")
-    .select("id, grand_total, pos_outlets(name), pos_payments(kind, amount, voided_at)")
+    .select(
+      "id, grand_total, tip_amount, pos_outlets(name), pos_payments(kind, amount, voided_at)",
+    )
     .eq("status", "settled")
     .gte("closed_at", zonedTime(day, "00:00", settings.timezone).toISOString())
-    .lt("closed_at", zonedTime(nextDay, "00:00", settings.timezone).toISOString());
+    .lt(
+      "closed_at",
+      zonedTime(nextDay, "00:00", settings.timezone).toISOString(),
+    );
 
   const outletTakings: Record<string, number> = {};
   const outletByMethod: Record<string, number> = {};
   let posTotal = 0;
+  let posTips = 0;
+  let posBills = 0;
   for (const row of posRows ?? []) {
     const order = row as unknown as {
       grand_total: number;
+      tip_amount: number;
       pos_outlets: { name: string } | null;
-      pos_payments: { kind: string; amount: number; voided_at: string | null }[];
+      pos_payments: {
+        kind: string;
+        amount: number;
+        voided_at: string | null;
+      }[];
     };
+    if (
+      (order.pos_payments ?? []).some(
+        (p) => p.kind === "room_charge" && !p.voided_at,
+      )
+    )
+      continue;
+    posBills += 1;
     const name = order.pos_outlets?.name ?? "Outlet";
-    outletTakings[name] = Math.round(((outletTakings[name] ?? 0) + Number(order.grand_total)) * 100) / 100;
-    posTotal += Number(order.grand_total);
+    const takings = Number(order.grand_total) - Number(order.tip_amount ?? 0);
+    outletTakings[name] =
+      Math.round(((outletTakings[name] ?? 0) + takings) * 100) / 100;
+    posTotal += takings;
+    posTips += Number(order.tip_amount ?? 0);
     for (const p of order.pos_payments ?? []) {
       if (p.voided_at) continue;
-      outletByMethod[p.kind] = Math.round(((outletByMethod[p.kind] ?? 0) + Number(p.amount)) * 100) / 100;
+      outletByMethod[p.kind] =
+        Math.round(((outletByMethod[p.kind] ?? 0) + Number(p.amount)) * 100) /
+        100;
     }
   }
 
   // ── 7. Daily revenue report ──
-  const [{ count: sellable }, { count: arrivals }, { count: departures }, { count: cancellations }] = await Promise.all([
-    supabase.from("rooms").select("id", { count: "exact", head: true }).neq("status", "out_of_service"),
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("check_in", day).eq("status", "checked_in"),
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("check_out", day).eq("status", "checked_out"),
-    supabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "cancelled")
-      .gte("cancelled_at", zonedTime(day, "00:00", settings.timezone).toISOString())
-      .lt("cancelled_at", zonedTime(nextDay, "00:00", settings.timezone).toISOString()),
-  ]);
+  // Arrived and departed on the day, as the flash report counts them: a guest
+  // who came and left the same day is both (0044).
+  const [{ count: arrivals }, { count: departures }, { count: cancellations }] =
+    await Promise.all([
+      supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("check_in", day)
+        .in("status", ["checked_in", "checked_out"]),
+      supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("check_out", day)
+        .eq("status", "checked_out"),
+      supabase
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "cancelled")
+        .gte(
+          "cancelled_at",
+          zonedTime(day, "00:00", settings.timezone).toISOString(),
+        )
+        .lt(
+          "cancelled_at",
+          zonedTime(nextDay, "00:00", settings.timezone).toISOString(),
+        ),
+    ]);
 
   // Complimentary and house-use rooms are occupied but not sold (USALI), so
   // they stay out of occupancy, ADR and RevPAR and are reported on their own.
-  const roomsSold = inHouse.filter((b) => (b.stay_type ?? "paid") === "paid").reduce((s, b) => s + b.rooms_count, 0);
-  const roomsComp = inHouse.filter((b) => (b.stay_type ?? "paid") !== "paid").reduce((s, b) => s + b.rooms_count, 0);
-  const roomRevenue = sumKind(["room"]);
-  const available = sellable ?? 0;
+  const roomsSold = inHouse
+    .filter((b) => (b.stay_type ?? "paid") === "paid")
+    .reduce((s, b) => s + b.rooms_count, 0);
+  const roomsComp = inHouse
+    .filter((b) => (b.stay_type ?? "paid") !== "paid")
+    .reduce((s, b) => s + b.rooms_count, 0);
+  const roomRevenue = Number(revenue.room);
+  const available = Number(sellableData ?? 0);
 
   const report = {
     business_date: day,
@@ -452,15 +662,19 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
       available,
       sold: roomsSold,
       complimentary: roomsComp,
-      occupancy_percent: available ? Math.round((roomsSold / available) * 1000) / 10 : 0,
+      occupancy_percent: available
+        ? Math.round((roomsSold / available) * 1000) / 10
+        : 0,
     },
+    // Before tax except `total`; `net` marks the 0044 definition, which the
+    // daily report then uses exactly as frozen here.
     revenue: {
       room: roomRevenue,
-      fees: sumKind(["fee"]),
-      extras: sumKind(["extra"]),
-      penalties: sumKind(["penalty"]),
-      tax: sumKind(["room", "fee", "extra", "penalty"], "tax_amount"),
-      total: Math.round((sumKind(["room", "fee", "extra", "penalty"]) + sumKind(["room", "fee", "extra", "penalty"], "tax_amount")) * 100) / 100,
+      other: Number(revenue.other),
+      net: Number(revenue.net),
+      tax: Number(revenue.tax),
+      total: Number(revenue.total),
+      by_dept: revenue.by_dept,
     },
     kpis: {
       adr: roomsSold ? Math.round((roomRevenue / roomsSold) * 100) / 100 : 0,
@@ -476,9 +690,14 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
       departures: departures ?? 0,
       cancellations: cancellations ?? 0,
       no_shows: noShows,
-      expired_holds: (expired ?? []).map((b) => ({ reference: b.reference, guest: b.contact_name })),
+      expired_holds: (expired ?? []).map((b) => ({
+        reference: b.reference,
+        guest: b.contact_name,
+      })),
       event_rooms_released: eventRoomsReleased,
-      pending_arrivals_left: bool(fd, "mark_no_shows") ? [] : due.map((b) => ({ reference: b.reference, guest: b.contact_name })),
+      pending_arrivals_left: bool(fd, "mark_no_shows")
+        ? []
+        : due.map((b) => ({ reference: b.reference, guest: b.contact_name })),
     },
     exceptions: {
       overstays,
@@ -490,12 +709,16 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
       room_statuses_failed: roomStatusFailed,
       tasks_created: (hkCreated as number | null) ?? 0,
     },
-    maintenance: { preventive_created: (mtCreated as number | null) ?? 0, escalated: mtEscalated },
+    maintenance: {
+      preventive_created: (mtCreated as number | null) ?? 0,
+      escalated: mtEscalated,
+    },
     compliance: { id_documents_purged: purged },
     loyalty: { points_expired: pointsExpired, tiers_reviewed: tiersReviewed },
     outlets: {
-      bills: (posRows ?? []).length,
+      bills: posBills,
       total: Math.round(posTotal * 100) / 100,
+      tips: Math.round(posTips * 100) / 100,
       by_outlet: outletTakings,
       by_method: outletByMethod,
     },
@@ -504,12 +727,19 @@ export async function runNightAudit(_prev: ActionState, fd: FormData): Promise<A
 
   const { error: doneError } = await supabase
     .from("night_audits")
-    .update({ status: "completed", completed_at: new Date().toISOString(), report, error: "" })
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      report,
+      error: "",
+    })
     .eq("property_id", property.id)
     .eq("business_date", day);
   if (doneError) return fail(doneError.message);
 
-  const { error: rollError } = await supabase.rpc("advance_business_date", { p_closed: day });
+  const { error: rollError } = await supabase.rpc("advance_business_date", {
+    p_closed: day,
+  });
   if (rollError) return fail(rollError.message);
 
   revalidatePath("/night-audit");

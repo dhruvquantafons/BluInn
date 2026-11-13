@@ -12,6 +12,8 @@ export interface GstRow {
   sgst: number;
   igst: number;
   total: number;
+  /** A paid-out or tip (0044): billed at cost, not a supply, so no SAC or GST. */
+  reimbursement?: boolean;
 }
 
 /**
@@ -51,7 +53,14 @@ export default function GstDocument({
   interstate: boolean;
   rows: GstRow[];
   breakdown: TaxBand[];
-  totals: { net: number; cgst: number; sgst: number; igst: number; tax: number; grand: number };
+  totals: {
+    net: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    tax: number;
+    grand: number;
+  };
   /** The right-hand block under the header: the stay, the event, or the invoice credited. */
   aside?: React.ReactNode;
   banner?: React.ReactNode;
@@ -59,30 +68,44 @@ export default function GstDocument({
 }) {
   // A discount or credit reads "−₹1,000", not "₹-1,000".
   const money = (n: number) => (n < 0 ? `−${fmtMoney(-n)}` : fmtMoney(n));
+  const reimbursements = rows.filter((r) => r.reimbursement);
   return (
     <div className="text-sm text-slate-900">
       {banner}
 
       <div className="flex justify-between gap-6 border-b border-slate-200 pb-5 mb-5">
         <div>
-          <p className="text-xl font-semibold tracking-tight">{settings.legal_name || settings.name}</p>
+          <p className="text-xl font-semibold tracking-tight">
+            {settings.legal_name || settings.name}
+          </p>
           {settings.legal_name && settings.legal_name !== settings.name && (
             <p className="text-xs text-slate-600">{settings.name}</p>
           )}
           <p className="text-xs text-slate-700 mt-1 whitespace-pre-line">
-            {[settings.address, [settings.city, settings.state, settings.postcode].filter(Boolean).join(", ")]
+            {[
+              settings.address,
+              [settings.city, settings.state, settings.postcode]
+                .filter(Boolean)
+                .join(", "),
+            ]
               .filter(Boolean)
               .join("\n")}
           </p>
-          <p className="text-xs text-slate-700">{[settings.phone, settings.email].filter(Boolean).join(" · ")}</p>
+          <p className="text-xs text-slate-700">
+            {[settings.phone, settings.email].filter(Boolean).join(" · ")}
+          </p>
           <p className="text-xs font-medium mt-1">
             GSTIN {supplierGstin} · State {stateLabel(supplierStateCode)}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{title}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+            {title}
+          </p>
           <p className="font-mono text-base">{number}</p>
-          <p className="text-xs text-slate-700 mt-1">Date {fmtDateTime(issuedAt)}</p>
+          <p className="text-xs text-slate-700 mt-1">
+            Date {fmtDateTime(issuedAt)}
+          </p>
         </div>
       </div>
 
@@ -92,7 +115,9 @@ export default function GstDocument({
             {billTo.gstin ? "Billed to (registered)" : "Billed to"}
           </p>
           <p className="text-sm">{billTo.name}</p>
-          {billTo.address && <p className="whitespace-pre-line">{billTo.address}</p>}
+          {billTo.address && (
+            <p className="whitespace-pre-line">{billTo.address}</p>
+          )}
           {billTo.gstin && (
             <p>
               GSTIN {billTo.gstin}
@@ -126,32 +151,66 @@ export default function GstDocument({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-slate-100 align-top">
-                <td className="py-1.5 pr-2 whitespace-nowrap">{r.date ? fmtDate(r.date) : "—"}</td>
-                <td className="py-1.5 pr-2">{r.description}</td>
-                <td className="py-1.5 pr-2 font-mono">{r.sac || "—"}</td>
-                <td className="py-1.5 pr-2 text-right">{money(r.net)}</td>
-                <td className="py-1.5 pr-2 text-right">{r.rate}%</td>
-                {interstate ? (
-                  <td className="py-1.5 pr-2 text-right">{money(r.igst)}</td>
-                ) : (
-                  <>
-                    <td className="py-1.5 pr-2 text-right">{money(r.cgst)}</td>
-                    <td className="py-1.5 pr-2 text-right">{money(r.sgst)}</td>
-                  </>
-                )}
-                <td className="py-1.5 text-right">{money(r.total)}</td>
-              </tr>
-            ))}
+            {rows
+              .filter((r) => !r.reimbursement)
+              .map((r, i) => (
+                <tr key={i} className="border-b border-slate-100 align-top">
+                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                    {r.date ? fmtDate(r.date) : "—"}
+                  </td>
+                  <td className="py-1.5 pr-2">{r.description}</td>
+                  <td className="py-1.5 pr-2 font-mono">{r.sac || "—"}</td>
+                  <td className="py-1.5 pr-2 text-right">{money(r.net)}</td>
+                  <td className="py-1.5 pr-2 text-right">{r.rate}%</td>
+                  {interstate ? (
+                    <td className="py-1.5 pr-2 text-right">{money(r.igst)}</td>
+                  ) : (
+                    <>
+                      <td className="py-1.5 pr-2 text-right">
+                        {money(r.cgst)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {money(r.sgst)}
+                      </td>
+                    </>
+                  )}
+                  <td className="py-1.5 text-right">{money(r.total)}</td>
+                </tr>
+              ))}
           </tbody>
         </table>
+        {reimbursements.length > 0 && (
+          <table className="w-full text-xs mt-3">
+            <thead>
+              <tr className="border-b border-slate-300 text-left text-slate-600">
+                <th className="py-1.5 pr-2 font-medium" colSpan={2}>
+                  Reimbursements and tips — paid on your behalf or passed to
+                  staff; not supplies, no GST
+                </th>
+                <th className="py-1.5 text-right font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reimbursements.map((r, i) => (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                    {r.date ? fmtDate(r.date) : "—"}
+                  </td>
+                  <td className="py-1.5 pr-2">{r.description}</td>
+                  <td className="py-1.5 text-right">{money(r.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="flex flex-wrap justify-between gap-8">
         {breakdown.length > 0 && (
           <div className="text-xs overflow-x-auto">
-            <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">Tax summary by SAC</p>
+            <p className="text-slate-500 uppercase tracking-wider text-[10px] mb-1">
+              Tax summary by SAC
+            </p>
             <table>
               <thead>
                 <tr className="text-left text-slate-500">
@@ -211,6 +270,14 @@ export default function GstDocument({
               </p>
             </>
           )}
+          {reimbursements.length > 0 && (
+            <p className="flex justify-between">
+              <span className="text-slate-700">Reimbursements and tips</span>
+              <span>
+                {money(reimbursements.reduce((s, r) => s + r.total, 0))}
+              </span>
+            </p>
+          )}
           <p className="flex justify-between border-t border-slate-900 pt-2 font-semibold">
             <span>Total</span>
             <span>{money(totals.grand)}</span>
@@ -223,7 +290,9 @@ export default function GstDocument({
       <div className="mt-10 flex justify-end text-xs">
         <div className="text-center">
           <p>For {settings.legal_name || settings.name}</p>
-          <p className="mt-10 border-t border-slate-400 pt-1 text-slate-600">Authorised signatory</p>
+          <p className="mt-10 border-t border-slate-400 pt-1 text-slate-600">
+            Authorised signatory
+          </p>
         </div>
       </div>
     </div>
@@ -243,6 +312,7 @@ export function gstRows(
     sgst?: number;
     igst?: number;
     total: number;
+    reimbursement?: boolean;
   }[],
 ): GstRow[] {
   return lines.map((l) => ({
@@ -255,5 +325,6 @@ export function gstRows(
     sgst: Number(l.sgst ?? 0),
     igst: Number(l.igst ?? 0),
     total: Number(l.total),
+    ...(l.reimbursement ? { reimbursement: true } : {}),
   }));
 }

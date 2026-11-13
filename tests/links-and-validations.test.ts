@@ -34,7 +34,9 @@ describe("page access — a link is shown only to someone the page admits (secti
       .flatMap((g) => g.items)
       .find((i) => i.label === "Billing");
     expect(billing?.href).toBe("/billing/credit-notes");
-    const items = allowedGroups(role("events.quote")).flatMap((g) => g.items).map((i) => i.label);
+    // A section none of whose pages admit the person stays hidden. (Quoting
+    // events alone used to be the example; since 0044 the events pages admit it.)
+    const items = allowedGroups(role("maintenance.report")).flatMap((g) => g.items).map((i) => i.label);
     expect(items).not.toContain("Events & banquets");
   });
   it("matches a page with an id to its pattern", () => {

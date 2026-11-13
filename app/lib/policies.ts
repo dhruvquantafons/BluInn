@@ -144,7 +144,6 @@ export interface FolioTotals {
   deposits: number;
 }
 
-/** Mirrors the folio_balance() SQL function. Voided entries do not count. */
 /**
  * What the guest has actually paid towards the stay: payments less refunds
  * (0043). An allowance or credit note lowers what is owed, but is not money
@@ -160,6 +159,15 @@ export function depositReceived(entries: Pick<FolioEntry, "kind" | "amount" | "v
   return round2(paid);
 }
 
+/**
+ * Allowances and other credits on a folio (0044): they lower what is owed but
+ * are not money received, so check-out shows them apart from "Paid".
+ */
+export function folioCredits(entries: Pick<FolioEntry, "kind" | "amount" | "voided_at">[]): number {
+  return round2(entries.filter((e) => !e.voided_at && e.kind === "adjustment").reduce((s, e) => s + Number(e.amount), 0));
+}
+
+/** Mirrors the folio_balance() SQL function. Voided entries do not count. */
 export function folioTotals(entries: Pick<FolioEntry, "kind" | "amount" | "tax_amount" | "voided_at" | "is_deposit">[]): FolioTotals {
   let charges = 0;
   let tax = 0;

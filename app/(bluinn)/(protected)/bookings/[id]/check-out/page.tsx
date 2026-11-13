@@ -6,7 +6,7 @@ import { requirePermission } from "../../../../../lib/auth";
 import { can } from "../../../../../lib/permissions";
 import { getSettings, hhmm, taxSlabsOf } from "../../../../../lib/settings";
 import { ancillaryCharge, loadGuestFolio } from "../../../../../lib/folio";
-import { timingFee, isLate } from "../../../../../lib/policies";
+import { timingFee, isLate, depositReceived, folioCredits } from "../../../../../lib/policies";
 import { rateForNight } from "../../../../../lib/pricing";
 import { splitRoomTax } from "../../../../../lib/tax";
 import { todayIn, nowTimeIn, eachNight } from "../../../../../lib/dates";
@@ -85,6 +85,13 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
     : { data: null };
   const organiserPays = Boolean(group?.event_id && group.room_billing === "organiser");
   const projected = Math.round((folio.totals.balance + (organiserPays ? 0 : unpostedTotal)) * 100) / 100;
+  // Paid is money actually received, payments less refunds; allowances lower
+  // the bill but are not money, so they are shown on their own (0044).
+  // folioTotals counts a refund as a charge, so it comes off "posted" here.
+  const paid = depositReceived(folio.entries);
+  const credits = folioCredits(folio.entries);
+  const refunded = folio.entries.filter((e) => !e.voided_at && e.kind === "refund").reduce((s, e) => s + Number(e.amount), 0);
+  const postedSoFar = Math.round((folio.totals.charges + folio.totals.tax - refunded) * 100) / 100;
   const chargeFee = late && lateFee > 0 && !feeDone;
   const invoiceProblem = can(session, "folio.invoice") ? propertyInvoiceProblem(settings) : null;
   const billTo = await lastBillTo(supabase, booking);
@@ -138,7 +145,7 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
           <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
               <dt className="text-xs text-slate-500 font-semibold">Posted so far</dt>
-              <dd>{fmtMoney(folio.totals.charges + folio.totals.tax)}</dd>
+              <dd>{fmtMoney(postedSoFar)}</dd>
             </div>
             <div>
               <dt className="text-xs text-slate-500 font-semibold">Nights still to post</dt>
@@ -148,8 +155,14 @@ export default async function CheckOutPage({ params }: { params: Promise<{ id: s
             </div>
             <div>
               <dt className="text-xs text-slate-500 font-semibold">Paid</dt>
-              <dd>{fmtMoney(folio.totals.payments)}</dd>
+              <dd>{fmtMoney(paid)}</dd>
             </div>
+            {credits !== 0 && (
+              <div>
+                <dt className="text-xs text-slate-500 font-semibold">Allowances</dt>
+                <dd>−{fmtMoney(credits)}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs text-slate-500 font-semibold">Balance to settle</dt>
               <dd className={projected > 0 ? "text-rose-700 font-medium" : "text-emerald-700 font-medium"}>

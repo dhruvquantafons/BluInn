@@ -557,7 +557,8 @@ export function flashKpis(p: FlashPeriod | undefined): FlashKpis {
     occupancy: available > 0 ? round1((sold / available) * 100) : 0,
     adr: sold > 0 ? round2(roomRevenue / sold) : 0,
     revpar: available > 0 ? round2(roomRevenue / available) : 0,
-    totalRevenue: round2(Object.values(p.revenue ?? {}).reduce((s, v) => s + Number(v), 0)),
+    // The departments the report lists, and nothing else (0044).
+    totalRevenue: round2(FLASH_DEPARTMENTS.reduce((s, d) => s + Number(p.revenue?.[d] ?? 0), 0)),
   };
 }
 
