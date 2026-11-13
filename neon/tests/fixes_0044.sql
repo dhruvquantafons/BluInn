@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Assertions for 0044_numbers.sql: section 6 of
--- docs/interconnection-audit-2026-11-12.md (inconsistent numbers). Runs after
+-- docs/interconnection-audit-2026-11-13.md (inconsistent numbers). Runs after
 -- fixes_0043.sql and reuses its fixtures (H1, RST and its bottled water ...00e6,
 -- administrator ...01, the checked-in "V7 Diner").
 -- Every check is an ASSERT, so a clean exit means all passed.

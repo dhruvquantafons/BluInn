@@ -11,7 +11,7 @@ import { planAdjustmentProblem, overlappingSeason } from "../app/lib/rate-rules"
 import { leaveCancelProblem, attendanceProblem } from "../app/lib/hr";
 import { scheduleNeedsFinancial } from "../app/lib/reports";
 
-// Sections 1, 3 and 4 of docs/interconnection-audit-2026-11-12.md: the pieces
+// Sections 1, 3 and 4 of docs/interconnection-audit-2026-11-13.md: the pieces
 // that can be checked without a database.
 
 const role = (...permissions: string[]) => ({ isSuperuser: false, permissions });

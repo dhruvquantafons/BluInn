@@ -8,7 +8,7 @@ import { flashKpis, periodHasData } from "../app/lib/reports";
 import { NAV_GROUPS, allowedGroups } from "../app/(bluinn)/components/nav";
 import type { FolioEntry } from "../app/lib/types";
 
-// Sections 5 and 6 of docs/interconnection-audit-2026-11-12.md: orphan pages
+// Sections 5 and 6 of docs/interconnection-audit-2026-11-13.md: orphan pages
 // and figures that read differently from screen to screen (0044).
 
 const entry = (over: Partial<FolioEntry>): FolioEntry =>

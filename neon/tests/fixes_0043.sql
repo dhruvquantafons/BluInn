@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Assertions for 0043_validations_and_links.sql: the database half of
--- sections 1, 3 and 4 of docs/interconnection-audit-2026-11-12.md (missing
+-- sections 1, 3 and 4 of docs/interconnection-audit-2026-11-13.md (missing
 -- validations, dead buttons). Runs after fixes_0042.sql and reuses the fixtures
 -- of behaviour.sql and the earlier fix files (H1, DL, RST and its bottled water
 -- ...00e6, administrator ...01, rooms G01-G03).

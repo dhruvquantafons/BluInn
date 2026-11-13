@@ -1,19 +1,17 @@
-# BluInn module interconnection audit — 12 November 2026
-
-Updated 13 November 2026 for migration `0044` (sections 5 and 6).
+# BluInn module interconnection audit — 13 November 2026
 
 Where BluInn's modules stand on 13 November 2026:
 - What the 7 November audit found, and what has been fixed since.
 - The decisions taken on 12 and 13 November.
-- Every gap that is still open.
+- What is still open: the deferred security pass and the integrations not yet connected.
 
-This report replaces the 7 November version, which is in git history (commit `e9ae199`).
+This report replaces the 12 November version (commit `8a3b397`) and the 7 November version (commit `e9ae199`); both are in git history.
 
 Paths are relative to the `bluinn` repo. `M/` means `neon/migrations/`, `P/` means `app/(bluinn)/(protected)/`. Open findings name the file (and the function where useful). Line numbers are left out, because the files changed a great deal this week.
 
 ## Summary
 
-The 7 November audit found that the modules were mostly well connected at the database level but broken in the money chain (folio → invoice → GST), in stock, and around room moves, events and staff. Five migrations since then have fixed the gaps in sections 1–6:
+The 7 November audit found that the modules were mostly well connected at the database level but broken in the money chain (folio → invoice → GST), in stock, and around room moves, events and staff. Five migrations since then, with the app changes that go with them, have fixed every gap in sections 1–6 and 9:
 
 | Migration | What it fixed |
 |---|---|
@@ -36,7 +34,7 @@ All five are applied to the hosted Neon database, and the app code that goes wit
 | 6. Inconsistent numbers | 19 definitions | **Fixed** (0044 and app); two differences kept on purpose and labelled |
 | 7. Security (deferred pass) | 9 | 1 fixed (0040); 8 deferred |
 | 8. Integrations | — | Pending, by your decision |
-| 9. Found while loading demo data | 5 | **4 fixed** (0040, 0044, app); slow pages measured and not a problem on the deployed app |
+| 9. Found while loading demo data | 5 | **Closed:** 4 fixed (0040, 0044, app); the slow pages were measured on the deployed app and are not a problem |
 
 Five more problems turned up while fixing and are fixed too (see [Also found and fixed](#also-found-and-fixed)).
 
@@ -63,6 +61,8 @@ Five more problems turned up while fixing and are fixed too (see [Also found and
 
 ## Decisions, 12 November
 
+The 13 November decisions (revenue, paid-outs and tips, occupancy, lockout) are listed with [the 0044 fixes](#orphan-pages-and-inconsistent-numbers-0044).
+
 | Question | Decision |
 |---|---|
 | Events holding guest rooms | **Built** (0042), [described below](#event-room-blocks) |
@@ -72,7 +72,7 @@ Five more problems turned up while fixing and are fixed too (see [Also found and
 | Stay-over cleaning for the existing hotel | Left off. New hotels get it on. |
 | Overstay nights | Charged at the guest's last nightly rate |
 | Nightly jobs | Four separate jobs. Merge them into one endpoint only if Vercel refuses the deploy. |
-| Committing and pushing | Done by you |
+| Committing and pushing | Done by you. On 13 November you asked for the 0044 and section 9 work to be committed and pushed to `master`, which deployed it. |
 
 Earlier decisions that still stand:
 - **Declined 5 November:** corporate accounts and the city ledger, channel-allocation enforcement, priced meal plans, travel agents, the rate calendar, and a channel manager.
@@ -265,7 +265,7 @@ Decisions taken for this round, 13 November:
 
 ## Still open
 
-Sections 1, 3 and 4 are fixed by 0043, and sections 5 and 6 by 0044; see [above](#orphan-pages-and-inconsistent-numbers-0044). Section 2's four open items were not fixed, by decision (see [Not fixed, by decision](#not-fixed-by-decision)).
+Only sections 7 (security, deferred) and 8 (integrations, by your decision) are open. Sections 1, 3 and 4 are fixed by 0043, sections 5 and 6 by 0044, and section 9 is closed. Section 2's four open items were not fixed, by decision (see [Not fixed, by decision](#not-fixed-by-decision)).
 
 ### 7. Security (deferred pass)
 
@@ -297,7 +297,7 @@ Nothing open. Fixed:
 - same-day room turnover left the room marked available (0040)
 - company-billed invoices earned the guest loyalty points: folio invoices now carry the folio's company (0044)
 - night audit counted out-of-order rooms as available (0044)
-- **the flash report's "last year" columns showed 0** for a period with no trade. A last-year period with no rooms sold, no comp rooms and no revenue now shows "—", and a note says which columns have no figures and why (app, 13 Nov)
+- **the flash report's "last year" columns showed 0** for a period with no trade. A last-year period with no rooms sold, no comp rooms and no revenue now shows "—", and a note says which columns have no figures and why (app, commit `15ed966`). Two unit tests cover it; 527 unit tests pass.
 
 **Slow pages: measured, not a problem.** On the deployed app (13 November, demo data, signed in as the General Manager):
 - the dashboard took about 1 s
@@ -343,7 +343,7 @@ In the database the whole flash report builds in 0.5 s. The 44 s seen earlier wa
 | | State |
 |---|---|
 | Hosted database (Neon) | **Up to date.** 44 migrations (`0001`–`0044`); demo data intact and removable with `neon/demo/remove_demo.sql` |
-| App code for 0040–0044 | **Deployed** on 13 November (commit `905011c`, Vercel). |
+| App code for 0040–0044 and section 9 | **Deployed** on 13 November from `master` by Vercel: `905011c` (0044), `15ed966` (flash "last year" note), `8a3b397` (ignore browser-tool logs). |
 | Nightly jobs | Four in `vercel.json`: reports, maintenance, notifications, pricing |
 | Night audit | Days closed from 13 November on save their figures on the 0044 definition. |
 

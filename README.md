@@ -322,14 +322,46 @@ psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -f neon/demo/remove_demo.sql  #
 Use `psql`, not the Neon SQL editor (the script uses `\set`). On macOS, add `PGSSLROOTCERT=system` if psql
 asks for a root certificate.
 
-- **Logins:** demo staff sign in with `Demo@12345` (emails `@example.com`). The administrator is not touched.
+- **Logins:** one per role, listed under [Demo logins](#demo-logins) below. The administrator is not touched.
 - **Second run:** refused, because the seed records every row it adds in the `demo_seed` schema. The remove
   script deletes exactly those rows.
 - **Never** load it into a customer's live database.
 
-See [neon/demo/README.md](neon/demo/README.md) for the login list and known gaps.
+See [neon/demo/README.md](neon/demo/README.md) for known gaps.
 
 </details>
+
+### Demo logins
+
+Once the demo data is loaded, every role has its own login. Use one to see what that role sees.
+
+- **Password:** `Demo@12345` for every demo login.
+- **Two-factor code:** `123456` while `TWO_FACTOR_MODE=demo`.
+
+| Role | Email | What it shows |
+|---|---|---|
+| **Administrator** | The account you created with `db:create-admin` (on the local stack, `admin@bluinn.local` / `BluInn#Demo2026`) | Everything, including Admin: properties, roles, settings, system status, data export and the audit log |
+| **General Manager** | `rajesh.iyer@example.com` | Everything a hotel runs on, without the Admin section: front office, operations, billing, reports, revenue and HR |
+| Front Office Manager | `priya.nair@example.com` | The front desk plus overrides, night audit, voids and allowances, cash-shift audit |
+| **Front Desk Agent** (a typical user) | `ankit.sharma@example.com`, `sneha.kulkarni@example.com` | Bookings, check-in and check-out, payments and invoices, their cash shift |
+| Reservations Agent | `meera.joshi@example.com` | Bookings and groups end to end, and deposits. No check-in |
+| Night Auditor | `vikram.rathod@example.com` | The front desk at night, night audit, no-shows |
+| Guest Relations | `pooja.menon@example.com` | Guest profiles, requests, VIP arrivals, lost & found |
+| Housekeeping Supervisor | `sunita.devi@example.com` | Assigning and inspecting rooms, room blocks, team leave and timesheets |
+| Housekeeping Staff | `ramesh.yadav@example.com`, `lakshmi.pillai@example.com`, `imran.khan@example.com` | Their own cleaning tasks, minibar and laundry posting |
+| Maintenance / Engineering | `suresh.patil@example.com` | Working tickets, blocking rooms for repair |
+| F&B Manager | `arjun.malhotra@example.com` | Outlets, menus and prices, outlet takings, inventory |
+| POS Cashier | `kavita.singh@example.com` | Taking orders and settling bills, charging them to a room; their cash shift |
+| Banquet Manager | `farah.sheikh@example.com` | Enquiries, quotations, event orders and banquet billing |
+| Finance / Accounts | `nikhil.agarwal@example.com` | Folios, invoices and credit notes, refund approval, financial reports and the GST register |
+
+- **Finance:** this role requires 2FA. With `TWO_FACTOR_MODE=totp`, the first sign-in asks for an authenticator to be set up.
+- **New passwords:** demo logins don't have to change their password at first sign-in.
+
+> [!CAUTION]
+> These logins are public, because they are written in this README. Load the demo data only into a demo
+> database, never a customer's. Remove it with `neon/demo/remove_demo.sql`, or change the passwords, before
+> anyone outside the team can reach the deployment.
 
 > [!TIP]
 > **No cloud account?** `npm run dev:db` runs the whole backend on your machine, with no Docker.
@@ -590,12 +622,14 @@ Leave them alone unless you remove them on purpose in a new migration.
   timesheets and overtime, message templates, invoices, GST (GSTIN check, CGST/SGST split, deadlines) and the
   GSTR-1 register, currency conversion, loyalty points, POS lines and charge-to-room rules, cashier shifts,
   front-desk lists, inventory, hotel KPIs and the flash report, report periods, pricing rules and promo codes,
-  the audit log's security view, and the ZIP writer behind the data export.
+  the audit log's security view, and the ZIP writer behind the data export. They also check that every page
+  link and menu item is shown only to people its page admits, and that every menu permission opens a page.
 - **Database behaviour tests** (`neon/tests/`): apply every migration to a throwaway Postgres and check
   what only a real database can, which is row-level security, `SECURITY DEFINER` functions and trigger
   order. They cover overbooking, permissions, staff-only access, invoice immutability, refund approval,
   loyalty, the POS bill lifecycle, report access and property isolation, the night-audit lock, cashier
-  shifts, credit notes and the GST cancel window, timesheet approval and the attendance lock. **These matter most**: they have
+  shifts, credit notes and the GST cancel window, timesheet approval and the attendance lock, and that the
+  daily report, flash report and tax summary always agree on revenue. **These matter most**: they have
   caught a privilege escalation, and scheduled jobs that would have acted on every hotel in a group at
   once.
 
@@ -778,7 +812,7 @@ The full model, and the traps to know before changing database code, are in
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
 | [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
-| [Interconnection audit (12 Nov 2026, updated 13 Nov)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0044` fixed (including the broken links, missing validations, dead buttons, orphan pages and inconsistent numbers), the 12 and 13 Nov decisions, and every gap still open (the deferred security pass, and integrations not yet connected). The 7 Nov version is in git history |
+| [Interconnection audit (13 Nov 2026)](docs/interconnection-audit-2026-11-13.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0044` fixed (the money chain, data flow, broken links, missing validations, dead buttons, orphan pages and inconsistent numbers), the 12 and 13 Nov decisions, and what is still open (the deferred security pass, and integrations not yet connected). The 7 and 12 Nov versions are in git history |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 
