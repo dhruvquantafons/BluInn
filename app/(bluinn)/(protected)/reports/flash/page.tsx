@@ -3,18 +3,44 @@ import { requirePermission } from "../../../../lib/auth";
 import { getSettings } from "../../../../lib/settings";
 import { addDays, isIsoDate } from "../../../../lib/dates";
 import { REVENUE_DEPT_LABELS } from "../../../../lib/gst";
-import { FLASH_DEPARTMENTS, flashKpis, lastClosedDay, variancePct, type FlashPeriod, type FlashReport } from "../../../../lib/reports";
-import { Card, Notice, SectionTitle, StatCard, fmtDate, fmtMoney, inputClass, secondaryButtonClass, tableHeadClass } from "../../../components/ui";
+import {
+  FLASH_DEPARTMENTS,
+  flashKpis,
+  lastClosedDay,
+  periodHasData,
+  variancePct,
+  type FlashPeriod,
+  type FlashReport,
+} from "../../../../lib/reports";
+import {
+  Card,
+  Notice,
+  SectionTitle,
+  StatCard,
+  fmtDate,
+  fmtMoney,
+  inputClass,
+  secondaryButtonClass,
+  tableHeadClass,
+} from "../../../components/ui";
 import PrintButton from "../../../components/PrintButton";
 
 type Col = "day" | "mtd" | "ytd";
-const COLUMNS: { key: Col; ly: "ly_day" | "ly_mtd" | "ly_ytd"; label: string }[] = [
+const COLUMNS: {
+  key: Col;
+  ly: "ly_day" | "ly_mtd" | "ly_ytd";
+  label: string;
+}[] = [
   { key: "day", ly: "ly_day", label: "Day" },
   { key: "mtd", ly: "ly_mtd", label: "Month to date" },
   { key: "ytd", ly: "ly_ytd", label: "Year to date" },
 ];
 
-type Row = { label: string; value: (p: FlashPeriod) => number; format: (n: number) => string };
+type Row = {
+  label: string;
+  value: (p: FlashPeriod) => number;
+  format: (n: number) => string;
+};
 
 const pct = (n: number) => `${n}%`;
 const count = (n: number) => n.toLocaleString("en-IN");
@@ -22,17 +48,43 @@ const count = (n: number) => n.toLocaleString("en-IN");
 const KEY_FIGURES: Row[] = [
   { label: "Occupancy", value: (p) => flashKpis(p).occupancy, format: pct },
   { label: "Rooms sold", value: (p) => Number(p.rooms_sold), format: count },
-  { label: "Rooms available", value: (p) => Number(p.rooms_available), format: count },
+  {
+    label: "Rooms available",
+    value: (p) => Number(p.rooms_available),
+    format: count,
+  },
   { label: "ADR", value: (p) => flashKpis(p).adr, format: fmtMoney },
   { label: "RevPAR", value: (p) => flashKpis(p).revpar, format: fmtMoney },
-  { label: "Complimentary rooms", value: (p) => Number(p.comp_rooms), format: count },
-  { label: "House-use rooms", value: (p) => Number(p.house_rooms), format: count },
+  {
+    label: "Complimentary rooms",
+    value: (p) => Number(p.comp_rooms),
+    format: count,
+  },
+  {
+    label: "House-use rooms",
+    value: (p) => Number(p.house_rooms),
+    format: count,
+  },
 ];
 
-function Variance({ current, previous }: { current: number; previous: number }) {
+function Variance({
+  current,
+  previous,
+}: {
+  current: number;
+  previous: number;
+}) {
   const v = variancePct(current, previous);
   if (v === null) return <span className="text-slate-400">—</span>;
-  return <span className={v > 0 ? "text-emerald-700" : v < 0 ? "text-rose-700" : "text-slate-500"}>{v > 0 ? `+${v}` : v}%</span>;
+  return (
+    <span
+      className={
+        v > 0 ? "text-emerald-700" : v < 0 ? "text-rose-700" : "text-slate-500"
+      }
+    >
+      {v > 0 ? `+${v}` : v}%
+    </span>
+  );
 }
 
 function FigureTable({ rows, report }: { rows: Row[]; report: FlashReport }) {
@@ -43,7 +95,11 @@ function FigureTable({ rows, report }: { rows: Row[]; report: FlashReport }) {
           <tr className={tableHeadClass}>
             <th className="py-2 px-4 font-semibold" />
             {COLUMNS.map((c) => (
-              <th key={c.key} colSpan={3} className="py-2 pr-3 font-semibold text-center border-l border-slate-100">
+              <th
+                key={c.key}
+                colSpan={3}
+                className="py-2 pr-3 font-semibold text-center border-l border-slate-100"
+              >
                 {c.label}
               </th>
             ))}
@@ -64,16 +120,30 @@ function FigureTable({ rows, report }: { rows: Row[]; report: FlashReport }) {
         <tbody className="divide-y divide-slate-100 text-slate-700">
           {rows.map((r) => (
             <tr key={r.label}>
-              <td className="py-2 px-4 font-medium text-slate-900 whitespace-nowrap">{r.label}</td>
+              <td className="py-2 px-4 font-medium text-slate-900 whitespace-nowrap">
+                {r.label}
+              </td>
               {COLUMNS.map((c) => {
                 const cur = r.value(report.periods[c.key]);
                 const prev = r.value(report.periods[c.ly]);
+                // No trade last year: show "—" rather than zeros (section 9).
+                const lyKnown = periodHasData(report.periods[c.ly]);
                 return (
-                  <td key={c.key} colSpan={3} className="py-2 border-l border-slate-100">
+                  <td
+                    key={c.key}
+                    colSpan={3}
+                    className="py-2 border-l border-slate-100"
+                  >
                     <span className="grid grid-cols-3 gap-2 pr-3 text-right whitespace-nowrap">
                       <span className="text-slate-900">{r.format(cur)}</span>
-                      <span className="text-slate-500">{r.format(prev)}</span>
-                      <Variance current={cur} previous={prev} />
+                      <span className="text-slate-500">
+                        {lyKnown ? r.format(prev) : "—"}
+                      </span>
+                      {lyKnown ? (
+                        <Variance current={cur} previous={prev} />
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </span>
                   </td>
                 );
@@ -91,7 +161,11 @@ function FigureTable({ rows, report }: { rows: Row[]; report: FlashReport }) {
  * last year, with the month and financial year to date. Read it after night
  * audit has closed the day; until then the day's figures are still live.
  */
-export default async function FlashReportPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function FlashReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   await requirePermission("reports.financial");
   const settings = await getSettings();
   const supabase = await createClient();
@@ -109,9 +183,21 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
       value: (p: FlashPeriod) => Number(p.revenue?.[d] ?? 0),
       format: fmtMoney,
     })),
-    { label: "Total revenue", value: (p) => flashKpis(p).totalRevenue, format: fmtMoney },
-    { label: `${settings.tax_label} charged`, value: (p) => Number(p.tax), format: fmtMoney },
-    { label: "Credit notes issued", value: (p) => Number(p.credit_notes), format: fmtMoney },
+    {
+      label: "Total revenue",
+      value: (p) => flashKpis(p).totalRevenue,
+      format: fmtMoney,
+    },
+    {
+      label: `${settings.tax_label} charged`,
+      value: (p) => Number(p.tax),
+      format: fmtMoney,
+    },
+    {
+      label: "Credit notes issued",
+      value: (p) => Number(p.credit_notes),
+      format: fmtMoney,
+    },
   ];
 
   return (
@@ -119,8 +205,16 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <form className="flex flex-wrap items-end gap-3">
           <label className="block">
-            <span className="block text-[13px] font-medium text-slate-700 mb-1.5">Business date</span>
-            <input type="date" name="date" defaultValue={date} max={settings.business_date} className={inputClass} />
+            <span className="block text-[13px] font-medium text-slate-700 mb-1.5">
+              Business date
+            </span>
+            <input
+              type="date"
+              name="date"
+              defaultValue={date}
+              max={settings.business_date}
+              className={inputClass}
+            />
           </label>
           <button className={secondaryButtonClass}>Show</button>
         </form>
@@ -132,21 +226,38 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
           Flash report — {fmtDate(date)}
         </h2>
         <p className="text-xs text-slate-500">
-          {settings.name} · compared with {fmtDate(addDays(date, -365))} last year · revenue before tax
+          {settings.name} · compared with {fmtDate(addDays(date, -365))} last
+          year · revenue before tax
         </p>
       </div>
 
       {error && <Notice tone="error">{error.message}</Notice>}
       {report && report.periods.day.audited_days === 0 && (
         <Notice tone="warn">
-          Night audit has not closed {fmtDate(date)} yet, so these figures can still change.
+          Night audit has not closed {fmtDate(date)} yet, so these figures can
+          still change.
+        </Notice>
+      )}
+
+      {report && COLUMNS.some((c) => !periodHasData(report.periods[c.ly])) && (
+        <Notice tone="info">
+          No last-year figures for{" "}
+          {COLUMNS.filter((c) => !periodHasData(report.periods[c.ly]))
+            .map((c) => c.label.toLowerCase())
+            .join(", ")}
+          : nothing was sold or billed then (usually because the hotel was not
+          yet on BluInn), so those columns show — instead of zeros.
         </Notice>
       )}
 
       {report && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="In house" value={report.today.in_house_rooms} hint={`${report.today.in_house_guests} guests`} />
+            <StatCard
+              label="In house"
+              value={report.today.in_house_rooms}
+              hint={`${report.today.in_house_guests} guests`}
+            />
             <StatCard
               label="Arrivals · departures"
               value={`${report.today.arrivals} · ${report.today.departures}`}
@@ -157,7 +268,11 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
               value={`${report.today.no_shows} · ${report.today.cancellations}`}
               hint={`${report.today.rooms_off_sale} room${report.today.rooms_off_sale === 1 ? "" : "s"} off sale`}
             />
-            <StatCard label="Owed by in-house guests" value={fmtMoney(report.in_house_balance)} hint="Folio balances now" />
+            <StatCard
+              label="Owed by in-house guests"
+              value={fmtMoney(report.in_house_balance)}
+              hint="Folio balances now"
+            />
           </div>
 
           <Card>
@@ -173,8 +288,9 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
             </div>
             <FigureTable rows={revenueRows} report={report} />
             <p className="px-4 py-3 text-[11px] text-slate-500">
-              Folio charges by the night they belong to, outlet bills paid at the outlet, and events billed on their own —
-              less allowances and credit notes. ADR and RevPAR use room-night revenue only.
+              Folio charges by the night they belong to, outlet bills paid at
+              the outlet, and events billed on their own — less allowances and
+              credit notes. ADR and RevPAR use room-night revenue only.
             </p>
           </Card>
 
@@ -182,13 +298,24 @@ export default async function FlashReportPage({ searchParams }: { searchParams: 
             <SectionTitle>The week ahead, on the books</SectionTitle>
             <div className="grid grid-cols-7 gap-2 text-center text-xs">
               {report.ahead.map((d) => {
-                const occ = d.rooms_available > 0 ? Math.round((d.rooms_sold / d.rooms_available) * 100) : 0;
+                const occ =
+                  d.rooms_available > 0
+                    ? Math.round((d.rooms_sold / d.rooms_available) * 100)
+                    : 0;
                 return (
-                  <div key={d.day} className="rounded-lg border border-slate-200 p-2">
+                  <div
+                    key={d.day}
+                    className="rounded-lg border border-slate-200 p-2"
+                  >
                     <p className="text-[10px] text-slate-500">
-                      {new Date(`${d.day}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric" })}
+                      {new Date(`${d.day}T00:00:00`).toLocaleDateString(
+                        "en-IN",
+                        { weekday: "short", day: "numeric" },
+                      )}
                     </p>
-                    <p className="text-sm font-semibold text-slate-900">{occ}%</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {occ}%
+                    </p>
                     <p className="text-[10px] text-slate-500">
                       {d.rooms_sold}/{d.rooms_available}
                     </p>

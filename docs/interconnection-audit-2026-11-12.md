@@ -23,7 +23,7 @@ The 7 November audit found that the modules were mostly well connected at the da
 | `0043_validations_and_links.sql` | Broken links, missing validations and dead buttons (sections 1, 3 and 4), with the app changes that go with them |
 | `0044_numbers.sql` | Orphan pages and inconsistent numbers (sections 5 and 6): one definition of revenue, occupancy and arrivals everywhere, plus two items from section 9 |
 
-All five are applied to the hosted Neon database. **The app code that goes with them is not yet committed or deployed**; see [Deployment](#deployment).
+All five are applied to the hosted Neon database, and the app code that goes with them is deployed; see [Deployment](#deployment).
 
 | Area | Found 7 Nov | Status 13 Nov |
 |---|---|---|
@@ -36,7 +36,7 @@ All five are applied to the hosted Neon database. **The app code that goes with 
 | 6. Inconsistent numbers | 19 definitions | **Fixed** (0044 and app); two differences kept on purpose and labelled |
 | 7. Security (deferred pass) | 9 | 1 fixed (0040); 8 deferred |
 | 8. Integrations | — | Pending, by your decision |
-| 9. Found while loading demo data | 5 | 3 fixed (0040, 0044); 2 open |
+| 9. Found while loading demo data | 5 | **4 fixed** (0040, 0044, app); slow pages measured and not a problem on the deployed app |
 
 Five more problems turned up while fixing and are fixed too (see [Also found and fixed](#also-found-and-fixed)).
 
@@ -293,13 +293,18 @@ Until they are, each attempt is logged as "not configured". Nothing above depend
 
 ### 9. Found while loading demo data
 
-- **Some pages are slow.** In local dev against the hosted database, the flash report took about 44 s and the dashboard about 10 s. This needs measuring on the deployed app.
-- **The flash report's "last year" columns show 0** with no label saying there is no comparison data.
-
-Fixed:
+Nothing open. Fixed:
 - same-day room turnover left the room marked available (0040)
 - company-billed invoices earned the guest loyalty points: folio invoices now carry the folio's company (0044)
 - night audit counted out-of-order rooms as available (0044)
+- **the flash report's "last year" columns showed 0** for a period with no trade. A last-year period with no rooms sold, no comp rooms and no revenue now shows "—", and a note says which columns have no figures and why (app, 13 Nov)
+
+**Slow pages: measured, not a problem.** On the deployed app (13 November, demo data, signed in as the General Manager):
+- the dashboard took about 1 s
+- the flash report about 2 s
+- reports, front desk, night audit, invoices and the tape chart under 1.3 s
+
+In the database the whole flash report builds in 0.5 s. The 44 s seen earlier was the local dev server talking to the hosted database across the network.
 
 ### Not fixed, by decision
 
@@ -338,12 +343,11 @@ Fixed:
 | | State |
 |---|---|
 | Hosted database (Neon) | **Up to date.** 44 migrations (`0001`–`0044`); demo data intact and removable with `neon/demo/remove_demo.sql` |
-| App code for 0040–0044 | **In the working tree, not committed.** It has to be committed and deployed for the app-side fixes to go live. |
+| App code for 0040–0044 | **Deployed** on 13 November (commit `905011c`, Vercel). |
 | Nightly jobs | Four in `vercel.json`: reports, maintenance, notifications, pricing |
-| Until the code is deployed | The live app runs the old code against the new database. That works, and the database rules (closed bookings, settled bills, timesheet hours, refund and credit-note caps, promo limits) already apply. With 0044 the reports already agree with each other, but the old night audit code still saves a closed day in the old format, and the dashboard tiles and check-out figures are the old ones. Not live yet: the 0044 screens (night audit and invoices on the new definition, the reimbursements block, the dashboard's arrivals and occupancy, Paid at check-out, the penalty previews, the HR, POS and invoice-page totals, the group lockout), the menu and link changes, the check-out claim, penalties posted before the status change, the new messages, schedule editing, and the new screens from 0040–0042 (event rooms, the till's "n left", lost & found, cancelling tasks, the bill-to pre-fill, the nightly pricing job). |
+| Night audit | Days closed from 13 November on save their figures on the 0044 definition. |
 
 ## Suggested next steps
 
-1. **Deploy** the 0040–0044 code. Deploy soon: until then, each night audit on the old code saves its day in the old format.
-2. **Section 9:** the two items still open (slow pages, measured on the deployed app; a label for missing last-year figures on the flash report).
-3. **The security pass.**
+1. **The security pass** (section 7).
+2. **Integrations** (section 8): real 2FA and email before a real hotel goes live.

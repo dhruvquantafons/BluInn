@@ -778,7 +778,7 @@ The full model, and the traps to know before changing database code, are in
 | [How it works](docs/how-it-works.md) | The rules each area enforces and why: reservations, billing, revenue, multi-property, POS, events, loyalty, reports, the security model |
 | [Go-live checklist](docs/go-live-checklist.md) | What to set up and confirm before a hotel goes live |
 | [PMS review (Nov 2026)](docs/pms-review.md) | Database, roles, Front Office / Operations, Commercial and People / Admin review, what was built (migrations `0027`–`0038`) and what is still open |
-| [Interconnection audit (12 Nov 2026, updated 13 Nov)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0044` fixed (including the broken links, missing validations, dead buttons, orphan pages and inconsistent numbers), the 12 and 13 Nov decisions, and every gap still open (security, two items found in the demo data). The 7 Nov version is in git history |
+| [Interconnection audit (12 Nov 2026, updated 13 Nov)](docs/interconnection-audit-2026-11-12.md) | How the modules connect: what the 7 Nov audit found, what migrations `0040`–`0044` fixed (including the broken links, missing validations, dead buttons, orphan pages and inconsistent numbers), the 12 and 13 Nov decisions, and every gap still open (the deferred security pass, and integrations not yet connected). The 7 Nov version is in git history |
 | [Design system](app/%28bluinn%29/DESIGN.md) | Theme tokens, layout and components, for building or changing a page |
 | [Desktop build](desktop/README.md) | The Windows demo build, licensing and support |
 

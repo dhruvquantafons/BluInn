@@ -4,7 +4,7 @@ import { eventBalance } from "../app/lib/events";
 import { chargeWithTax } from "../app/lib/folio";
 import { folioCredits, depositReceived } from "../app/lib/policies";
 import { isToArrive, isToDepart } from "../app/lib/front-desk";
-import { flashKpis } from "../app/lib/reports";
+import { flashKpis, periodHasData } from "../app/lib/reports";
 import { NAV_GROUPS, allowedGroups } from "../app/(bluinn)/components/nav";
 import type { FolioEntry } from "../app/lib/types";
 
@@ -130,5 +130,21 @@ describe("menus — every permission on a menu item opens one of its pages (sect
   it("shows Night audit to someone who can only view folios, such as the POS cashier", () => {
     const shown = allowedGroups({ isSuperuser: false, permissions: ["folio.view"] }).flatMap((g) => g.items.map((i) => i.label));
     expect(shown).toContain("Night audit");
+  });
+});
+
+describe("flash report — a last-year period with no trade says so (section 9)", () => {
+  const empty = { rooms_available: 30, rooms_sold: 0, room_revenue: 0, comp_rooms: 0, house_rooms: 0, revenue: {} } as never;
+  const zeroDepts = { rooms_available: 30, rooms_sold: 0, room_revenue: 0, comp_rooms: 0, house_rooms: 0, revenue: { rooms: 0 } } as never;
+  const traded = { rooms_available: 30, rooms_sold: 4, room_revenue: 20000, comp_rooms: 0, house_rooms: 0, revenue: { rooms: 20000 } } as never;
+  const outletOnly = { rooms_available: 30, rooms_sold: 0, room_revenue: 0, comp_rooms: 0, house_rooms: 0, revenue: { fnb: 900 } } as never;
+  it("treats rooms available alone as no data", () => {
+    expect(periodHasData(empty)).toBe(false);
+    expect(periodHasData(zeroDepts)).toBe(false);
+    expect(periodHasData(undefined)).toBe(false);
+  });
+  it("counts rooms sold or any revenue as data", () => {
+    expect(periodHasData(traded)).toBe(true);
+    expect(periodHasData(outletOnly)).toBe(true);
   });
 });

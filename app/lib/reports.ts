@@ -70,7 +70,10 @@ const sum = (rows: DailyRow[], field: keyof DailyRow) =>
  * January and a 28-day February do not report wildly different GOPPAR for the
  * same trade. Zero means the hotel has not entered a cost.
  */
-export function proratedOperatingCost(monthlyCost: number, days: number): number | null {
+export function proratedOperatingCost(
+  monthlyCost: number,
+  days: number,
+): number | null {
   if (!(monthlyCost > 0) || !(days > 0)) return null;
   return round2((monthlyCost / 30.44) * days);
 }
@@ -90,14 +93,21 @@ export function kpisFrom(rows: DailyRow[], monthlyOperatingCost = 0): Kpis {
   const taxTotal = round2(sum(rows, "tax_total"));
   const totalRevenue = round2(sum(rows, "total_revenue"));
   const netRevenue = round2(totalRevenue - taxTotal);
-  const operatingCost = proratedOperatingCost(monthlyOperatingCost, rows.length);
+  const operatingCost = proratedOperatingCost(
+    monthlyOperatingCost,
+    rows.length,
+  );
 
   return {
     availableRoomNights,
     roomsSold,
-    occupancy: availableRoomNights > 0 ? round1((roomsSold / availableRoomNights) * 100) : 0,
+    occupancy:
+      availableRoomNights > 0
+        ? round1((roomsSold / availableRoomNights) * 100)
+        : 0,
     adr: roomsSold > 0 ? round2(roomRevenue / roomsSold) : 0,
-    revpar: availableRoomNights > 0 ? round2(roomRevenue / availableRoomNights) : 0,
+    revpar:
+      availableRoomNights > 0 ? round2(roomRevenue / availableRoomNights) : 0,
     goppar:
       operatingCost !== null && availableRoomNights > 0
         ? round2((netRevenue - operatingCost) / availableRoomNights)
@@ -137,7 +147,10 @@ export function bookingKpis(rows: BookingRow[]): BookingKpis {
 }
 
 /** The share of guests in a period who had stayed before. */
-export function repeatGuestRatio(distinctGuests: number, repeatGuests: number): number {
+export function repeatGuestRatio(
+  distinctGuests: number,
+  repeatGuests: number,
+): number {
   if (!(distinctGuests > 0)) return 0;
   return round1((repeatGuests / distinctGuests) * 100);
 }
@@ -175,14 +188,20 @@ const shift = (day: string, days: number) => {
   return at.toISOString().slice(0, 10);
 };
 
-const lastDayOfMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const lastDayOfMonth = (y: number, m: number) =>
+  new Date(Date.UTC(y, m, 0)).getUTCDate();
 
 /**
  * Turns a preset into a date range, relative to the property's today rather
  * than the server's — a hotel in India closes its day on its own clock.
  * The financial year runs 1 April to 31 March, matching invoice numbering.
  */
-export function resolveRange(preset: RangePreset, today: string, from = "", to = ""): { from: string; to: string } {
+export function resolveRange(
+  preset: RangePreset,
+  today: string,
+  from = "",
+  to = "",
+): { from: string; to: string } {
   const [y, m] = today.split("-").map(Number);
 
   switch (preset) {
@@ -209,7 +228,10 @@ export function resolveRange(preset: RangePreset, today: string, from = "", to =
     }
     case "custom":
       // Fall back to this month when a custom range is incomplete or inverted.
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(from) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(to)
+      ) {
         return { from: iso(y, m, 1), to: today };
       }
       return from <= to ? { from, to } : { from: to, to: from };
@@ -270,7 +292,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "daily_revenue",
     label: "Daily revenue",
-    description: "Rooms sold, occupancy and revenue for each day, from the closed night audit where there is one.",
+    description:
+      "Rooms sold, occupancy and revenue for each day, from the closed night audit where there is one.",
     fn: "report_daily",
     financial: true,
     ranged: true,
@@ -320,7 +343,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "outlet_sales",
     label: "Outlet-wise sales",
-    description: "Restaurant, bar, spa and the rest: bills, covers and takings per outlet.",
+    description:
+      "Restaurant, bar, spa and the rest: bills, covers and takings per outlet.",
     fn: "report_outlet_sales",
     financial: true,
     ranged: true,
@@ -339,7 +363,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "outlet_payments",
     label: "Outlet settlement",
-    description: "How outlet bills were settled — cash at the till against charged to a room.",
+    description:
+      "How outlet bills were settled — cash at the till against charged to a room.",
     fn: "report_outlet_payments",
     financial: true,
     ranged: true,
@@ -389,7 +414,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "bookings",
     label: "Bookings by source",
-    description: "Where the business came from, and how much of it cancelled or never arrived.",
+    description:
+      "Where the business came from, and how much of it cancelled or never arrived.",
     fn: "report_bookings",
     financial: false,
     ranged: true,
@@ -405,7 +431,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "housekeeping",
     label: "Housekeeping performance",
-    description: "Rooms cleaned per attendant, inspections passed and average turnaround.",
+    description:
+      "Rooms cleaned per attendant, inspections passed and average turnaround.",
     fn: "report_housekeeping",
     financial: false,
     ranged: true,
@@ -420,7 +447,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "maintenance",
     label: "Maintenance turnaround",
-    description: "Tickets raised and resolved by priority, and how many missed their target.",
+    description:
+      "Tickets raised and resolved by priority, and how many missed their target.",
     fn: "report_maintenance",
     financial: false,
     ranged: true,
@@ -435,7 +463,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "attendance",
     label: "Staff attendance",
-    description: "Days present, absences against the roster, approved leave and hours worked.",
+    description:
+      "Days present, absences against the roster, approved leave and hours worked.",
     fn: "report_attendance",
     financial: false,
     ranged: true,
@@ -451,7 +480,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     kind: "guests",
     label: "Guest and loyalty metrics",
-    description: "Repeat guest ratio, feedback scores and how the loyalty programme is performing.",
+    description:
+      "Repeat guest ratio, feedback scores and how the loyalty programme is performing.",
     fn: "report_guests",
     financial: false,
     ranged: true,
@@ -473,8 +503,13 @@ export function reportByKind(kind: string): ReportDefinition | null {
 }
 
 /** The reports a person may actually run, given their permissions. */
-export function reportsFor(options: { financial: boolean; view: boolean }): ReportDefinition[] {
-  return REPORTS.filter((r) => (r.financial ? options.financial : options.view || options.financial));
+export function reportsFor(options: {
+  financial: boolean;
+  view: boolean;
+}): ReportDefinition[] {
+  return REPORTS.filter((r) =>
+    r.financial ? options.financial : options.view || options.financial,
+  );
 }
 
 /**
@@ -525,7 +560,10 @@ export interface FlashPeriod {
 
 export interface FlashReport {
   date: string;
-  periods: Record<"day" | "mtd" | "ytd" | "ly_day" | "ly_mtd" | "ly_ytd", FlashPeriod>;
+  periods: Record<
+    "day" | "mtd" | "ytd" | "ly_day" | "ly_mtd" | "ly_ytd",
+    FlashPeriod
+  >;
   today: {
     arrivals: number;
     departures: number;
@@ -558,8 +596,28 @@ export function flashKpis(p: FlashPeriod | undefined): FlashKpis {
     adr: sold > 0 ? round2(roomRevenue / sold) : 0,
     revpar: available > 0 ? round2(roomRevenue / available) : 0,
     // The departments the report lists, and nothing else (0044).
-    totalRevenue: round2(FLASH_DEPARTMENTS.reduce((s, d) => s + Number(p.revenue?.[d] ?? 0), 0)),
+    totalRevenue: round2(
+      FLASH_DEPARTMENTS.reduce((s, d) => s + Number(p.revenue?.[d] ?? 0), 0),
+    ),
   };
+}
+
+/**
+ * Whether a period had any trade at all: rooms sold, comp or house-use
+ * rooms, or revenue in any department. Rooms available alone is not data: it
+ * is counted from today's rooms even for a year the hotel was not on BluInn,
+ * so a last-year column of zeros would read as a disastrous year rather than
+ * as no figures to compare with.
+ */
+export function periodHasData(p: FlashPeriod | undefined): boolean {
+  if (!p) return false;
+  if (
+    Number(p.rooms_sold) > 0 ||
+    Number(p.comp_rooms) > 0 ||
+    Number(p.house_rooms) > 0
+  )
+    return true;
+  return Object.values(p.revenue ?? {}).some((v) => Number(v) !== 0);
 }
 
 /**
@@ -572,7 +630,14 @@ export function variancePct(current: number, previous: number): number | null {
 }
 
 /** The departments in the order a flash report lists them. */
-export const FLASH_DEPARTMENTS = ["rooms", "fnb", "laundry", "spa", "events", "other"] as const;
+export const FLASH_DEPARTMENTS = [
+  "rooms",
+  "fnb",
+  "laundry",
+  "spa",
+  "events",
+  "other",
+] as const;
 
 /**
  * The last day night audit closed: the one before the open business date.
